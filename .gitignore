@@ -1,0 +1,33 @@
+.DS_Store
+**/.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+server/.venv/
+.venv/
+
+# Secrets
+.env
+*.env
+!.env.example
+
+# RAG local artifacts
+data/indexes/
+data/tmp/
+
+# Android / Gradle
+.gradle/
+build/
+client/android/**/build/
+local.properties
+*.iml
+.idea/
+
+# Generated media / recordings
+recordings/
+*.mp4
+*.mov
