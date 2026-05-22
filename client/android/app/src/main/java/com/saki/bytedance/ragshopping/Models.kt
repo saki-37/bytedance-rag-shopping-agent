@@ -10,6 +10,13 @@ data class ProductCard(
     val imagePath: String,
     val tags: List<String>,
     val reason: String,
+    val targetUsers: List<String> = emptyList(),
+    val useCases: List<String> = emptyList(),
+    val sellingPoints: List<String> = emptyList(),
+    val cautions: List<String> = emptyList(),
+    val suitableFor: List<String> = emptyList(),
+    val avoidFor: List<String> = emptyList(),
+    val description: String = "",
 )
 
 data class ChatMessage(

@@ -1,9 +1,11 @@
 package com.saki.bytedance.ragshopping
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,27 +19,40 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
+
+private const val AssetBaseUrl = "http://10.0.2.2:8000/assets"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -53,6 +68,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
+    var selectedProduct by remember { mutableStateOf<ProductCard?>(null) }
     Surface(color = Color(0xFFF3FBF6), modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             Header()
@@ -64,15 +80,19 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(state.messages) { message ->
-                    MessageBubble(message = message)
+                    MessageBubble(message = message, onProductClick = { selectedProduct = it })
                 }
             }
             InputBar(
                 value = state.input,
                 isLoading = state.isLoading,
+                statusText = state.statusText,
                 onValueChange = viewModel::updateInput,
                 onSend = viewModel::send,
             )
+        }
+        selectedProduct?.let { product ->
+            ProductDetailDialog(product = product, onDismiss = { selectedProduct = null })
         }
     }
 }
@@ -91,7 +111,7 @@ private fun Header() {
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessage) {
+private fun MessageBubble(message: ChatMessage, onProductClick: (ProductCard) -> Unit) {
     val alignment = if (message.role == Role.User) Alignment.End else Alignment.Start
     val background = when (message.role) {
         Role.User -> Color(0xFF0BAE5C)
@@ -111,7 +131,7 @@ private fun MessageBubble(message: ChatMessage) {
                 if (message.content.isNotBlank()) {
                     Text(message.content, color = textColor)
                 }
-                message.products.forEach { ProductCardView(it) }
+                message.products.forEach { ProductCardView(product = it, onClick = { onProductClick(it) }) }
             }
         }
     }
@@ -119,21 +139,26 @@ private fun MessageBubble(message: ChatMessage) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ProductCardView(product: ProductCard) {
+private fun ProductCardView(product: ProductCard, onClick: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FFFA)),
         shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
                     modifier = Modifier
                         .size(52.dp)
-                        .background(Color(0xFFDFF5E8), CircleShape),
-                    contentAlignment = Alignment.Center,
+                        .clip(CircleShape),
                 ) {
-                    Text(product.brand.take(1), fontWeight = FontWeight.Bold, color = Color(0xFF087A42))
+                    ProductImage(
+                        product = product,
+                        modifier = Modifier.fillMaxSize(),
+                        fallbackText = product.brand.take(1),
+                    )
                 }
                 Column(modifier = Modifier.weight(1f)) {
                     Text(product.brand, color = Color(0xFF087A42), fontWeight = FontWeight.Bold)
@@ -159,34 +184,141 @@ private fun ProductCardView(product: ProductCard) {
 }
 
 @Composable
+private fun ProductDetailDialog(product: ProductCard, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭", color = Color(0xFF087A42))
+            }
+        },
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(product.brand, color = Color(0xFF087A42), fontWeight = FontWeight.Bold)
+                Text(product.title, style = MaterialTheme.typography.titleSmall)
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                ProductImage(
+                    product = product,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(150.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    fallbackText = product.brand.take(1),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("¥${product.price.toInt()}", color = Color(0xFFE87800), fontWeight = FontWeight.Bold)
+                    Text("${product.category} / ${product.subCategory}", color = Color(0xFF53635A))
+                }
+                DetailSection("推荐理由", listOf(product.reason))
+                DetailSection("适合", product.suitableFor.ifEmpty { product.targetUsers })
+                DetailSection("使用场景", product.useCases)
+                DetailSection("卖点", product.sellingPoints)
+                DetailSection("注意事项", product.cautions)
+                DetailSection("不适合", product.avoidFor)
+                if (product.description.isNotBlank()) {
+                    Text("资料依据", color = Color(0xFF087A42), fontWeight = FontWeight.Bold)
+                    Text(product.description, color = Color(0xFF53635A), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        containerColor = Color.White,
+    )
+}
+
+@Composable
+private fun ProductImage(product: ProductCard, modifier: Modifier, fallbackText: String) {
+    SubcomposeAsyncImage(
+        model = product.imageUrl(),
+        contentDescription = product.title,
+        contentScale = ContentScale.Crop,
+        modifier = modifier.background(Color(0xFFDFF5E8)),
+        loading = { ProductImageFallback(fallbackText) },
+        error = { ProductImageFallback(fallbackText) },
+        success = { SubcomposeAsyncImageContent() },
+    )
+}
+
+@Composable
+private fun ProductImageFallback(text: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, fontWeight = FontWeight.Bold, color = Color(0xFF087A42))
+    }
+}
+
+private fun ProductCard.imageUrl(): String {
+    val encodedPath = imagePath
+        .split("/")
+        .joinToString("/") { segment -> Uri.encode(segment) }
+    return "$AssetBaseUrl/$encodedPath"
+}
+
+@Composable
+private fun DetailSection(title: String, values: List<String>) {
+    val visibleValues = values.filter { it.isNotBlank() }
+    if (visibleValues.isEmpty()) return
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(title, color = Color(0xFF087A42), fontWeight = FontWeight.Bold)
+        visibleValues.forEach { value ->
+            Text("• $value", color = Color(0xFF53635A), style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
 private fun InputBar(
     value: String,
     isLoading: Boolean,
+    statusText: String?,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(Color.White)
             .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.weight(1f),
-            minLines = 1,
-            maxLines = 3,
-            placeholder = { Text("例如：我是油皮，想要200元以内通勤防晒") },
-        )
-        Button(
-            onClick = onSend,
-            enabled = !isLoading && value.isNotBlank(),
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0BAE5C)),
+        if (statusText != null) {
+            Text(
+                text = statusText,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFE4F6EA), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                color = Color(0xFF087A42),
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(if (isLoading) "中" else "发")
+            OutlinedTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.weight(1f),
+                minLines = 1,
+                maxLines = 3,
+                placeholder = { Text("例如：我是油皮，想要200元以内通勤防晒") },
+            )
+            Button(
+                onClick = onSend,
+                enabled = !isLoading && value.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0BAE5C)),
+            ) {
+                Text(if (isLoading) "中" else "发")
+            }
         }
     }
     Spacer(modifier = Modifier.height(4.dp))

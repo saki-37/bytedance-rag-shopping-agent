@@ -16,6 +16,7 @@ data class ChatUiState(
         )
     ),
     val isLoading: Boolean = false,
+    val statusText: String? = null,
 )
 
 class ChatViewModel(
@@ -36,6 +37,7 @@ class ChatViewModel(
             it.copy(
                 input = "",
                 isLoading = true,
+                statusText = null,
                 messages = it.messages + ChatMessage(Role.User, message) + ChatMessage(Role.Assistant, ""),
             )
         }
@@ -47,7 +49,7 @@ class ChatViewModel(
                     is StreamEvent.Products -> attachProducts(event.value)
                     is StreamEvent.Token -> appendToken(event.value)
                     is StreamEvent.Error -> appendError(event.message)
-                    StreamEvent.Done -> _state.update { it.copy(isLoading = false) }
+                    StreamEvent.Done -> _state.update { it.copy(isLoading = false, statusText = null) }
                 }
             }
         }
@@ -59,7 +61,7 @@ class ChatViewModel(
             "generating" -> "正在生成推荐..."
             else -> status
         }
-        _state.update { it.copy(messages = it.messages + ChatMessage(Role.Status, text)) }
+        _state.update { it.copy(statusText = text) }
     }
 
     private fun attachProducts(products: List<ProductCard>) {
@@ -78,6 +80,7 @@ class ChatViewModel(
         _state.update {
             it.copy(
                 isLoading = false,
+                statusText = null,
                 messages = it.messages + ChatMessage(Role.Error, "请求失败：$message"),
             )
         }
