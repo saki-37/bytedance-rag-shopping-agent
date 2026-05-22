@@ -53,7 +53,14 @@ SSE 流式聊天接口。
       "price": 170.0,
       "image_path": "1_美妆护肤/images/p_beauty_006_live.jpg",
       "tags": ["油皮", "通勤", "防晒"],
-      "reason": "SPF50+ PA++++，质地轻薄，价格在200元以内。"
+      "reason": "SPF50+ PA++++，质地轻薄，价格在200元以内。",
+      "target_users": ["油皮", "混油皮", "通勤人群"],
+      "use_cases": ["日常通勤防晒", "妆前打底"],
+      "selling_points": ["SPF50+ PA++++", "水感轻薄"],
+      "cautions": ["敏感肌先做耳后测试"],
+      "suitable_for": ["油皮", "混油皮"],
+      "avoid_for": ["长时间大量出汗场景"],
+      "description": "商品资料中的营销描述片段。"
     }
   ]
 }
@@ -62,4 +69,25 @@ SSE 流式聊天接口。
 约束：
 
 - 商品卡片中的价格、品牌、标题、图片路径必须来自数据源。
+- 商品详情字段来自 `data/enriched` 或原始 `rag_knowledge`，不得由模型自由补全。
 - 模型只能解释已召回商品，不允许编造优惠、库存、价格或未提供功效。
+
+## GET `/assets/{image_path}`
+
+用于 Android 客户端加载商品图片。`image_path` 来自商品卡片字段，客户端需要对中文目录名进行 URL 编码。
+
+示例：
+
+```text
+GET /assets/1_%E7%BE%8E%E5%A6%86%E6%8A%A4%E8%82%A4/images/p_beauty_006_live.jpg
+```
+
+响应：
+
+- `200 image/jpeg`：返回商品图片。
+- `404`：图片路径不存在。
+
+约束：
+
+- 只暴露 `data/raw/ecommerce_agent_dataset` 下的官方数据集图片。
+- 客户端不应自行拼接非数据源路径。
