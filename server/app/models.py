@@ -22,6 +22,13 @@ class ProductCard(BaseModel):
     image_path: str
     tags: list[str] = Field(default_factory=list)
     reason: str
+    target_users: list[str] = Field(default_factory=list)
+    use_cases: list[str] = Field(default_factory=list)
+    selling_points: list[str] = Field(default_factory=list)
+    cautions: list[str] = Field(default_factory=list)
+    suitable_for: list[str] = Field(default_factory=list)
+    avoid_for: list[str] = Field(default_factory=list)
+    description: str = ""
 
 
 class HealthResponse(BaseModel):

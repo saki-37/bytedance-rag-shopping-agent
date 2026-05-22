@@ -107,6 +107,7 @@ def _sentence_model():
 def _to_card(item: dict, query: str) -> ProductCard:
     raw = item["raw"]
     attrs = item.get("attributes", {})
+    knowledge = raw.get("rag_knowledge", {})
     tags = list(dict.fromkeys(attrs.get("tags", [])[:5]))
     reason = item.get("card_reason") or "匹配本次需求，推荐理由来自商品资料和结构化标签。"
     if "防晒" in query and raw["sub_category"] == "防晒":
@@ -121,7 +122,20 @@ def _to_card(item: dict, query: str) -> ProductCard:
         image_path=raw["image_path"],
         tags=tags,
         reason=reason,
+        target_users=_string_list(attrs.get("target_users", [])),
+        use_cases=_string_list(attrs.get("use_cases", [])),
+        selling_points=_string_list(attrs.get("selling_points", [])),
+        cautions=_string_list(attrs.get("cautions", [])),
+        suitable_for=_string_list(attrs.get("suitable_for", [])),
+        avoid_for=_string_list(attrs.get("avoid_for", [])),
+        description=knowledge.get("marketing_description", ""),
     )
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item).strip()]
 
 
 def _context_block(item: dict) -> str:

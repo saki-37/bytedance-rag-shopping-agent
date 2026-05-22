@@ -1,9 +1,13 @@
 import asyncio
+import logging
 
 from openai import AsyncOpenAI
 
 from app.config import Settings
 from app.models import ChatMessage, ProductCard
+
+
+logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = """你是一个电商智能导购 Agent。
@@ -21,10 +25,12 @@ async def stream_answer(
     cards: list[ProductCard],
 ):
     if settings.mock_llm or not settings.ark_api_key or not settings.ark_model:
+        logger.info("Streaming mock LLM response")
         async for token in _mock_stream(user_message, cards):
             yield token
         return
 
+    logger.info("Streaming Ark response with model=%s", settings.ark_model)
     client = AsyncOpenAI(api_key=settings.ark_api_key, base_url=settings.ark_base_url)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -44,10 +50,12 @@ async def stream_answer(
         stream=True,
         temperature=0.2,
     )
+    logger.info("Ark stream connected")
     async for chunk in stream:
         delta = chunk.choices[0].delta.content
         if delta:
             yield delta
+    logger.info("Ark stream completed")
 
 
 async def _mock_stream(user_message: str, cards: list[ProductCard]):
