@@ -11,7 +11,9 @@
 - [API 契约](04_api_contract.md)
 - [Golden Queries](05_golden_queries.md)
 - [进度对照表](06_progress_tracker.md)
+- [评分点对照与推进工作流](07_scoring_alignment_workflow.md)
 - [每日推进记录](09_daily_log.md)
+- [安全与本地配置](13_security_and_config.md)
 
 ## 当前里程碑
 
