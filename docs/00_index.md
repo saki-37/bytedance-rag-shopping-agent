@@ -12,6 +12,7 @@
 - [Golden Queries](05_golden_queries.md)
 - [进度对照表](06_progress_tracker.md)
 - [评分点对照与推进工作流](07_scoring_alignment_workflow.md)
+- [RAG 检索策略调研与设计](08_rag_retrieval_strategy.md)
 - [每日推进记录](09_daily_log.md)
 - [安全与本地配置](13_security_and_config.md)
 

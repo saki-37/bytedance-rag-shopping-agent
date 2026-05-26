@@ -154,8 +154,8 @@
 
 需要补充：
 
-1. `docs/08_architecture.md`：整体架构和请求链路。
-2. `docs/10_rag_design.md`：数据治理、chunking、embedding、Chroma、过滤、Prompt。
+1. `docs/08_rag_retrieval_strategy.md`：RAG 检索调研、强约束处理和 benchmark 设计。
+2. `docs/10_architecture.md`：整体架构和请求链路。
 3. `docs/11_evaluation_report.md`：golden queries 评测结果。
 4. `docs/12_demo_script.md`：3-5 分钟 Demo 脚本。
 5. `docs/13_security_and_config.md`：API Key、`.env`、脱敏和提交注意事项。
