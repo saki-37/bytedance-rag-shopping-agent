@@ -1,3 +1,4 @@
+import asyncio
 import json
 from collections.abc import AsyncIterator
 
@@ -44,14 +45,18 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             result = retrieve(request.message, enriched_products, index_dir=settings.index_dir)
             yield _event("products", {"products": [card.model_dump() for card in result.cards]})
             yield _event("status", {"status": "generating"})
-            async for token in stream_answer(
-                settings=settings,
-                user_message=request.message,
-                history=request.history,
-                context=result.context,
-                cards=result.cards,
-            ):
-                yield _event("token", {"token": token})
+            if result.clarification_question:
+                async for token in _stream_text(result.clarification_question):
+                    yield _event("token", {"token": token})
+            else:
+                async for token in stream_answer(
+                    settings=settings,
+                    user_message=request.message,
+                    history=request.history,
+                    context=result.context,
+                    cards=result.cards,
+                ):
+                    yield _event("token", {"token": token})
             yield _event("done", {"ok": True})
         except Exception as exc:  # Keep SSE shape stable for the Android client.
             yield _event("error", {"message": str(exc)})
@@ -59,5 +64,21 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     return StreamingResponse(events(), media_type="text/event-stream")
 
 
+@app.post("/api/debug/retrieve")
+def debug_retrieve(request: ChatRequest) -> dict:
+    result = retrieve(request.message, enriched_products, index_dir=settings.index_dir)
+    return {
+        "products": [card.model_dump() for card in result.cards],
+        "clarification_question": result.clarification_question,
+        "trace": result.trace.model_dump(),
+    }
+
+
 def _event(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+async def _stream_text(text: str) -> AsyncIterator[str]:
+    for char in text:
+        yield char
+        await asyncio.sleep(0.005)

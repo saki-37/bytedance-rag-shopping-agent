@@ -91,3 +91,57 @@ GET /assets/1_%E7%BE%8E%E5%A6%86%E6%8A%A4%E8%82%A4/images/p_beauty_006_live.jpg
 
 - 只暴露 `data/raw/ecommerce_agent_dataset` 下的官方数据集图片。
 - 客户端不应自行拼接非数据源路径。
+
+## POST `/api/debug/retrieve`
+
+用于本地调试和评测，不是 Android MVP 必需接口。它只运行检索层，不调用大模型，方便检查 `QueryIntent`、硬过滤、召回通道和最终排序。
+
+请求：
+
+```json
+{
+  "message": "我是油皮，想要200元以内的通勤防晒"
+}
+```
+
+响应：
+
+```json
+{
+  "products": [
+    {
+      "product_id": "p_beauty_006",
+      "brand": "巴黎欧莱雅",
+      "price": 170.0
+    }
+  ],
+  "clarification_question": null,
+  "trace": {
+    "query": "我是油皮，想要200元以内的通勤防晒",
+    "parsed_intent": {
+      "category_candidates": ["beauty"],
+      "universal_constraints": {"budget_max": 200.0, "brand_exclude": []},
+      "facets": {"skin_type": ["油皮"], "effect": ["防晒"], "use_case": ["通勤"]},
+      "needs_clarification": false
+    },
+    "hard_filtered_out": [],
+    "retrieval_channels": {
+      "keyword": [],
+      "vector": [],
+      "graph": []
+    },
+    "final_ranking": [],
+    "guardrail_checks": {
+      "over_budget_candidates": 0,
+      "excluded_term_candidates": 0,
+      "needs_clarification": false
+    }
+  }
+}
+```
+
+约束：
+
+- 仅用于本地 debug / benchmark。
+- 不返回真实 API Key 或模型配置。
+- `trace` 是 V1 检索可解释性的核心证据，后续评测表应引用它。

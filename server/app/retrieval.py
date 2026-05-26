@@ -4,13 +4,68 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.data_loader import product_search_text
-from app.models import ProductCard
+from app.models import (
+    FilteredProduct,
+    GuardrailChecks,
+    ProductCard,
+    QueryIntent,
+    RetrievalChannels,
+    RetrievalHit,
+    RetrievalTrace,
+    UniversalConstraints,
+)
 
 
 @dataclass
 class RetrievalResult:
     cards: list[ProductCard]
     context: str
+    trace: RetrievalTrace
+    clarification_question: str | None = None
+
+
+FACET_LEXICON: dict[str, dict[str, list[str]]] = {
+    "skin_type": {
+        "油皮": ["油皮", "大油皮", "混油", "混油皮", "出油"],
+        "干皮": ["干皮", "混干", "混干皮", "干燥"],
+        "敏感肌": ["敏感肌", "敏感", "屏障", "泛红", "刺痛"],
+    },
+    "effect": {
+        "防晒": ["防晒", "spf", "pa", "晒黑", "晒伤"],
+        "修护": ["修护", "屏障", "舒缓", "维稳"],
+        "保湿": ["保湿", "补水", "滋润", "干燥"],
+        "控油": ["控油", "油脂", "出油", "清爽"],
+        "提亮": ["提亮", "亮肤", "美白", "暗沉"],
+        "抗初老": ["抗初老", "抗老", "淡纹", "紧致", "抗皱"],
+        "底妆": ["底妆", "粉底", "粉底液", "遮瑕"],
+        "定妆": ["定妆", "蜜粉", "散粉", "持妆"],
+    },
+    "use_case": {
+        "通勤": ["通勤", "上班", "日常"],
+        "户外": ["户外", "海边", "爬山", "旅行", "三亚"],
+        "运动": ["运动", "跑步", "健身", "防汗"],
+        "妆前": ["妆前", "打底", "上妆"],
+        "夜间": ["夜间", "晚上", "睡前"],
+    },
+}
+
+BEAUTY_TERMS = [
+    "美妆",
+    "护肤",
+    "护肤品",
+    "化妆品",
+    "防晒",
+    "面霜",
+    "精华",
+    "粉底",
+    "底妆",
+    "洗面奶",
+    "定妆",
+]
+
+GENERIC_RECOMMEND_TERMS = ["推荐", "买什么", "护肤品", "化妆品", "随便", "看看"]
+EXCLUDE_TERMS = ["酒精", "刺激", "刺痛", "太油", "油腻", "厚重", "拔干", "日系"]
+SOFT_PREFERENCE_TERMS = ["便宜", "清爽", "轻薄", "温和", "自然", "滋润", "高倍", "防水", "防汗"]
 
 
 def _query_terms(query: str) -> set[str]:
@@ -22,67 +77,218 @@ def _query_terms(query: str) -> set[str]:
     return terms
 
 
-def _max_budget(query: str) -> float | None:
-    match = re.search(r"(\d+(?:\.\d+)?)\s*元?以[内下]", query)
-    if match:
-        return float(match.group(1))
-    match = re.search(r"预算\s*(\d+(?:\.\d+)?)", query)
-    if match:
-        return float(match.group(1))
+def parse_query_intent(query: str) -> QueryIntent:
+    budget = _hard_budget(query)
+    facets = _extract_facets(query)
+    exclude_terms = _extract_exclude_terms(query)
+    soft_preferences = _extract_soft_preferences(query)
+    category_candidates = ["beauty"] if _looks_like_beauty_query(query, facets) or exclude_terms else []
+    hard_constraints: list[str] = []
+    if budget is not None:
+        hard_constraints.append(f"budget_max <= {budget:g}")
+    hard_constraints.extend(f"exclude:{term}" for term in exclude_terms)
+
+    signal_count = (
+        len(exclude_terms)
+        + len(soft_preferences)
+        + sum(len(values) for values in facets.values())
+        + (1 if budget is not None else 0)
+    )
+    needs_clarification = _needs_clarification(query, signal_count)
+    confidence = min(0.95, 0.2 + signal_count * 0.15 + (0.1 if category_candidates else 0.0))
+    return QueryIntent(
+        category_candidates=category_candidates,
+        universal_constraints=UniversalConstraints(budget_max=budget),
+        facets=facets,
+        hard_constraints=hard_constraints,
+        soft_preferences=soft_preferences,
+        exclude_terms=exclude_terms,
+        needs_clarification=needs_clarification,
+        clarification_question=(
+            "你更在意肤质、预算，还是防晒/修护/控油这类具体功效？"
+            if needs_clarification
+            else None
+        ),
+        confidence=round(confidence, 2),
+    )
+
+
+def _hard_budget(query: str) -> float | None:
+    patterns = [
+        r"(\d+(?:\.\d+)?)\s*元?\s*(?:以[内下]|以内|以下|之内|内)",
+        r"(?:预算|价格|价位)\s*(?:在|不超过|别超过|低于|小于|不高于|<=)?\s*(\d+(?:\.\d+)?)",
+        r"(?:不超过|别超过|低于|小于|不高于|<=)\s*(\d+(?:\.\d+)?)\s*元?",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, query)
+        if match:
+            return float(match.group(1))
     return None
 
 
-def _structured_bonus(query: str, item: dict) -> int:
-    text = product_search_text(item)
-    bonus = 0
-    intent_pairs = [
-        ("油皮", ["油皮", "混油", "控油", "清爽"]),
-        ("敏感", ["敏感肌", "舒缓", "修护", "屏障", "温和"]),
-        ("干皮", ["干皮", "保湿", "滋润", "补水"]),
-        ("防晒", ["防晒", "spf", "pa", "通勤", "户外"]),
-        ("抗初老", ["抗初老", "淡纹", "紧致", "抗皱"]),
-        ("提亮", ["提亮", "亮肤", "美白", "暗沉"]),
-        ("底妆", ["粉底", "蜜粉", "定妆", "持妆"]),
-        ("控油", ["控油", "清爽", "油皮", "定妆"]),
-    ]
-    for trigger, needles in intent_pairs:
-        if trigger in query:
-            bonus += sum(3 for needle in needles if needle.lower() in text.lower())
-    return bonus
+def _extract_facets(query: str) -> dict[str, list[str]]:
+    facets: dict[str, list[str]] = {}
+    query_lower = query.lower()
+    for facet_name, values in FACET_LEXICON.items():
+        matched: list[str] = []
+        for canonical, synonyms in values.items():
+            if any(synonym.lower() in query_lower for synonym in synonyms):
+                matched.append(canonical)
+        if matched:
+            facets[facet_name] = matched
+    return facets
+
+
+def _extract_exclude_terms(query: str) -> list[str]:
+    terms: list[str] = []
+    for term in EXCLUDE_TERMS:
+        if term in query and re.search(rf"(不要|不想|不含|避开|排除|别太|不能).*{re.escape(term)}", query):
+            terms.append(term)
+    return list(dict.fromkeys(terms))
+
+
+def _extract_soft_preferences(query: str) -> list[str]:
+    return [term for term in SOFT_PREFERENCE_TERMS if term in query]
+
+
+def _looks_like_beauty_query(query: str, facets: dict[str, list[str]]) -> bool:
+    if any(term in query for term in BEAUTY_TERMS):
+        return True
+    return any(key in facets for key in ["skin_type", "effect"])
+
+
+def _needs_clarification(query: str, signal_count: int) -> bool:
+    if signal_count > 0:
+        return False
+    return any(term in query for term in GENERIC_RECOMMEND_TERMS)
 
 
 def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path | None = None) -> RetrievalResult:
-    budget = _max_budget(query)
+    intent = parse_query_intent(query)
+    if intent.needs_clarification:
+        trace = RetrievalTrace(
+            query=query,
+            parsed_intent=intent,
+            guardrail_checks=GuardrailChecks(needs_clarification=True),
+        )
+        return RetrievalResult(
+            cards=[],
+            context="信息不足，先追问关键条件，不进入普通推荐。",
+            trace=trace,
+            clarification_question=intent.clarification_question,
+        )
+
+    budget = intent.universal_constraints.budget_max
     terms = _query_terms(query)
-    vector_rank = _vector_rank(query, index_dir)
-    scored: list[tuple[int, dict]] = []
+    vector_scores, vector_hits = _vector_scores(query, index_dir)
+    keyword_hits: list[RetrievalHit] = []
+    final_hits: list[RetrievalHit] = []
+    hard_filtered_out: list[FilteredProduct] = []
+    scored: list[tuple[float, dict, list[str]]] = []
 
     for item in products:
         raw = item["raw"]
         if budget is not None and float(raw["base_price"]) > budget:
+            hard_filtered_out.append(
+                FilteredProduct(product_id=raw["product_id"], reason=f"price {raw['base_price']} > budget {budget:g}")
+            )
+            continue
+        excluded_term = _matched_exclude_term(intent.exclude_terms, item)
+        if excluded_term is not None:
+            hard_filtered_out.append(
+                FilteredProduct(product_id=raw["product_id"], reason=f"matches excluded term: {excluded_term}")
+            )
             continue
         text = product_search_text(item).lower()
-        score = sum(1 for term in terms if term.lower() in text)
-        score += _structured_bonus(query, item)
-        if raw["product_id"] in vector_rank:
-            score += max(0, 20 - vector_rank[raw["product_id"]])
+        score = 0.0
+        reasons: list[str] = []
+        keyword_score = sum(1 for term in terms if len(term) >= 2 and term.lower() in text)
+        if keyword_score:
+            score += keyword_score
+            reasons.append(f"keyword_match:{keyword_score:g}")
+            keyword_hits.append(RetrievalHit(product_id=raw["product_id"], score=float(keyword_score), reasons=["keyword_match"]))
+        facet_score, facet_reasons = _facet_score(intent, item)
+        score += facet_score
+        reasons.extend(facet_reasons)
+        if raw["product_id"] in vector_scores:
+            vector_score = vector_scores[raw["product_id"]]
+            score += vector_score
+            reasons.append(f"vector_hit:{vector_score:g}")
+        if budget is not None:
+            score += 1.0
+            reasons.append("budget_match")
         if score > 0:
-            scored.append((score, item))
+            scored.append((score, item, reasons))
 
     if not scored:
-        scored = [(0, item) for item in products if budget is None or float(item["raw"]["base_price"]) <= budget]
+        scored = [
+            (0.1, item, ["fallback_after_hard_filters"])
+            for item in products
+            if not _is_hard_filtered(item, hard_filtered_out)
+        ]
 
     scored.sort(key=lambda pair: (pair[0], -float(pair[1]["raw"]["base_price"])), reverse=True)
-    selected = [item for _, item in scored[:limit]]
+    selected = [item for _, item, _ in scored[:limit]]
+    final_hits = [
+        RetrievalHit(product_id=item["raw"]["product_id"], score=round(score, 3), reasons=reasons)
+        for score, item, reasons in scored[:limit]
+    ]
 
     cards = [_to_card(item, query) for item in selected]
     context = "\n\n".join(_context_block(item) for item in selected)
-    return RetrievalResult(cards=cards, context=context)
+    trace = RetrievalTrace(
+        query=query,
+        parsed_intent=intent,
+        hard_filtered_out=hard_filtered_out,
+        retrieval_channels=RetrievalChannels(
+            keyword=sorted(keyword_hits, key=lambda hit: hit.score, reverse=True)[:8],
+            vector=vector_hits,
+            graph=[],
+        ),
+        final_ranking=final_hits,
+        guardrail_checks=GuardrailChecks(
+            over_budget_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("price")),
+            excluded_term_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("matches excluded")),
+            needs_clarification=False,
+        ),
+    )
+    return RetrievalResult(cards=cards, context=context, trace=trace)
 
 
-def _vector_rank(query: str, index_dir: Path | None) -> dict[str, int]:
+def _matched_exclude_term(exclude_terms: list[str], item: dict) -> str | None:
+    text = product_search_text(item).lower()
+    for term in exclude_terms:
+        if term.lower() in text:
+            return term
+    return None
+
+
+def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
+    text = product_search_text(item).lower()
+    score = 0.0
+    reasons: list[str] = []
+    weights = {"skin_type": 4.0, "effect": 3.0, "use_case": 2.0}
+    for facet_name, values in intent.facets.items():
+        weight = weights.get(facet_name, 1.0)
+        for value in values:
+            if value.lower() in text:
+                score += weight
+                reasons.append(f"{facet_name}_match:{value}")
+    for preference in intent.soft_preferences:
+        if preference.lower() in text:
+            score += 1.0
+            reasons.append(f"soft_preference:{preference}")
+    return score, reasons
+
+
+def _is_hard_filtered(item: dict, filtered: list[FilteredProduct]) -> bool:
+    product_id = item["raw"]["product_id"]
+    return any(entry.product_id == product_id for entry in filtered)
+
+
+def _vector_scores(query: str, index_dir: Path | None) -> tuple[dict[str, float], list[RetrievalHit]]:
     if index_dir is None or not index_dir.exists():
-        return {}
+        return {}, []
     try:
         import chromadb
 
@@ -92,9 +298,17 @@ def _vector_rank(query: str, index_dir: Path | None) -> dict[str, int]:
         collection = client.get_collection("beauty_products")
         result = collection.query(query_embeddings=[embedding], n_results=8)
         ids = result.get("ids", [[]])[0]
-        return {product_id: rank for rank, product_id in enumerate(ids)}
+        distances = result.get("distances", [[]])[0] if result.get("distances") else []
+        scores: dict[str, float] = {}
+        hits: list[RetrievalHit] = []
+        for rank, product_id in enumerate(ids):
+            distance = float(distances[rank]) if rank < len(distances) else float(rank)
+            score = max(0.0, 8.0 - rank) + max(0.0, 1.0 - distance)
+            scores[product_id] = score
+            hits.append(RetrievalHit(product_id=product_id, score=round(score, 3), reasons=[f"vector_rank:{rank}"]))
+        return scores, hits
     except Exception:
-        return {}
+        return {}, []
 
 
 @lru_cache(maxsize=1)
