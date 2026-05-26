@@ -55,7 +55,26 @@ server/.venv/bin/python scripts/check_generation_guardrails.py
 | 安全回答 | 通过 | PASS |
 | 编造未授权价格 | 触发兜底 | PASS |
 | 编造库存/优惠/下单承诺 | 触发兜底 | PASS |
+| 无证据断言“不含/不会刺激” | 触发兜底 | PASS |
 | 空回答 | 触发追问信息式兜底 | PASS |
+
+## 真实 Doubao 复验记录
+
+命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  server/.venv/bin/python <one-off-real-api-check>
+```
+
+本地结果：
+
+| ID | 真实 API | Guardrail | 备注 |
+| --- | --- | --- | --- |
+| GQ-01 | 成功 | 通过 | 油皮 200 元内通勤防晒，回答围绕召回商品 |
+| GQ-02 | 成功 | 通过 | 敏感肌屏障修护，回答围绕理肤泉/薇诺娜 |
+| GQ-03 | 成功 | 已拦截 | 模型断言“不会有酒精味和刺激感”，但商品资料没有明确支持；已加入 unsupported absence claim 校验，复验时触发安全兜底 |
 
 ## SSE 稳定性
 

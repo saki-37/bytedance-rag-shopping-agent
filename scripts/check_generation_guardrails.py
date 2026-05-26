@@ -41,6 +41,15 @@ def main() -> None:
     assert "库存" not in unsafe.answer and "优惠券" not in unsafe.answer, unsafe.answer
     assert "¥199" not in unsafe.answer, unsafe.answer
 
+    unsupported_absence = guard_answer(
+        "这款粉底不会有过重的酒精味和强烈刺激感。",
+        user_message="不要酒精味太重或者刺激感强的产品",
+        cards=cards,
+    )
+    assert not unsupported_absence.passed, unsupported_absence
+    assert unsupported_absence.fallback_used, unsupported_absence
+    assert "unsupported_absence_claims" in ",".join(unsupported_absence.issues), unsupported_absence.issues
+
     empty = guard_answer("", user_message="我想买护肤品", cards=[])
     assert not empty.passed, empty
     assert empty.fallback_used, empty

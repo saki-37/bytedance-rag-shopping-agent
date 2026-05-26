@@ -17,6 +17,8 @@ FORBIDDEN_COMMERCIAL_CLAIMS = [
 ]
 
 PRICE_PATTERN = re.compile(r"(?:[¥￥]\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*元)")
+ABSENCE_CLAIM_TERMS = ["酒精", "刺激", "香精", "致痘", "拔干"]
+ABSENCE_PREFIXES = ["不含", "无", "没有", "不会有", "不会", "不添加", "不含有"]
 
 
 @dataclass
@@ -40,6 +42,10 @@ def guard_answer(answer: str, user_message: str, cards: list[ProductCard]) -> Ge
     unsupported_prices = _unsupported_prices(stripped, user_message, cards)
     if unsupported_prices:
         issues.append(f"unsupported_prices:{','.join(unsupported_prices)}")
+
+    unsupported_absence_claims = _unsupported_absence_claims(stripped, cards)
+    if unsupported_absence_claims:
+        issues.append(f"unsupported_absence_claims:{','.join(unsupported_absence_claims)}")
 
     if issues:
         return GenerationGuardrailResult(
@@ -74,6 +80,52 @@ def _unsupported_prices(answer: str, user_message: str, cards: list[ProductCard]
     allowed = {_normalize_price(card.price) for card in cards}
     allowed.update(_extract_prices(user_message))
     return [price for price in _extract_prices(answer) if price not in allowed]
+
+
+def _unsupported_absence_claims(answer: str, cards: list[ProductCard]) -> list[str]:
+    evidence = _card_evidence_text(cards)
+    unsupported: list[str] = []
+    for term in ABSENCE_CLAIM_TERMS:
+        if not _claims_absence(answer, term):
+            continue
+        if not _evidence_supports_absence(evidence, term):
+            unsupported.append(term)
+    return unsupported
+
+
+def _claims_absence(text: str, term: str) -> bool:
+    return any(
+        re.search(rf"{prefix}[^。；，,.]{{0,12}}{re.escape(term)}", text)
+        for prefix in ABSENCE_PREFIXES
+    )
+
+
+def _evidence_supports_absence(evidence: str, term: str) -> bool:
+    return any(
+        re.search(rf"{prefix}[^。；，,.]{{0,12}}{re.escape(term)}", evidence)
+        for prefix in ABSENCE_PREFIXES
+    )
+
+
+def _card_evidence_text(cards: list[ProductCard]) -> str:
+    parts: list[str] = []
+    for card in cards:
+        parts.extend(
+            [
+                card.title,
+                card.brand,
+                card.reason,
+                card.description,
+                " ".join(card.tags),
+                " ".join(card.target_users),
+                " ".join(card.use_cases),
+                " ".join(card.selling_points),
+                " ".join(card.cautions),
+                " ".join(card.suitable_for),
+                " ".join(card.avoid_for),
+            ]
+        )
+    return " ".join(parts)
 
 
 def _extract_prices(text: str) -> list[str]:
