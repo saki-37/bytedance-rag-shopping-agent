@@ -11,10 +11,12 @@
 
 但当前版本仍然是 **可演示骨架**，还不是最终参赛版本。最需要补强的是：
 
-1. Chroma 向量数据库和 RAG 主链路需要稳定验证。
-2. 真实 Doubao 输出需要通过评测约束幻觉。
-3. 多轮追问、反选排除、多商品对比等复杂语义能力还没有做深。
-4. Demo、架构说明、RAG 设计和评测报告需要形成可提交材料。
+1. `QueryIntent`、硬约束、软偏好和信息不足追问需要从当前检索逻辑里拆出来。
+2. RAG 主链路需要有可解释 `RetrievalTrace`，能说明为什么推荐这些商品。
+3. Chroma 向量召回需要作为一个稳定通道进入主链路，但不能替代硬约束。
+4. 真实 Doubao 输出需要通过 evidence-bound prompt 和评测约束幻觉。
+5. 多轮追问、反选排除、多商品对比等复杂语义能力还没有做深。
+6. Demo、架构说明、RAG 设计和评测报告需要形成可提交材料。
 
 ## 评分维度对照
 
@@ -71,49 +73,81 @@
 
 ## 当前优先级
 
-### P0：把真实 RAG 闭环坐实
+### 当前实现顺序
 
-目标：从“能跑一个 Demo”升级为“能解释为什么推荐这些商品”。
+本阶段按 `docs/08_rag_retrieval_strategy.md` 的算法路线推进：
+
+1. `V0 当前 Baseline`：已有关键词/结构化 baseline，可跑 MVP。
+2. `V1 Constraint-Aware Hybrid Retrieval`：当前最优先。
+3. `V2 Graph-Aware Retrieval`：第二阶段加属性图关系分。
+4. `V3 Verifier + Benchmark Loop`：与 V1 并行起步，后续深化。
+
+### P0-A：Constraint-Aware Hybrid Retrieval
+
+目标：先把“硬约束、软偏好、信息不足、可解释 trace”从现有检索逻辑里拆清楚。Chroma 在这一阶段作为向量召回通道加入，但不是第一性约束来源。
+
+任务：
+
+1. 新增 `QueryIntent`：
+   - `category_candidates`
+   - `universal_constraints`
+   - `facets`
+   - `hard_constraints`
+   - `soft_preferences`
+   - `exclude_terms`
+   - `needs_clarification`
+   - `confidence`
+2. 明确处理边界：
+   - 明确预算：硬过滤。
+   - 明确排除：过滤或极强降权。
+   - 软偏好：排序加权。
+   - 信息不足：先追问，不进入普通推荐。
+3. 新增 `RetrievalTrace`：
+   - query parse
+   - hard filter
+   - keyword hits
+   - vector hits
+   - final scores
+   - guardrail checks
+4. 重构 `retrieve()`，让返回结果不仅有 `cards/context`，还有可 debug 的 trace。
+5. 继续确保商品卡片字段只来自 raw/enriched 数据源。
+
+完成标准：
+
+1. 至少 3 条 golden queries 能输出完整 trace。
+2. “200 元以内”不会返回超预算商品。
+3. “我想买护肤品”这类信息不足 query 会先追问。
+4. 后端返回的商品与 query 有可解释匹配关系。
+
+### P0-B：Chroma 向量召回进入主链路
+
+目标：让向量召回成为 V1 的一个稳定通道，并用 benchmark 比较它和结构化约束的关系。
 
 任务：
 
 1. 构建 Chroma 索引。
 2. 后端运行时真实使用向量召回。
-3. 日志或调试输出能看到召回商品、分数或排序理由。
-4. 商品卡片字段继续只来自数据源。
-5. Prompt 中只允许模型解释已召回商品。
+3. trace 中记录 vector hits。
+4. 对比：
+   - 当前 baseline。
+   - 纯 Chroma。
+   - Constraint-aware + Chroma。
 
 完成标准：
 
 1. `scripts/build_index.py` 能稳定完成。
-2. 至少 3 条 golden queries 经过 Chroma/RAG 路径。
-3. 后端返回的商品与 query 有可解释匹配关系。
+2. 至少 3 条 golden queries 经过 Chroma 通道。
+3. 能说明纯向量在哪些场景会违反硬约束，constraint-aware 为什么必要。
 
-### P0：真实 Doubao 流式复验
+### P0-C：Golden Query 评测表
 
-目标：确认真实模型不是只在后端接入点存在，而是能被 Android 端稳定消费。
-
-任务：
-
-1. 本地 `.env` 配置真实 `ARK_API_KEY`、`ARK_MODEL`，保持 `.env` 不提交。
-2. `MOCK_LLM=false` 后启动后端。
-3. Android 连续跑 3 条 query。
-4. 记录是否出现超时、空 token、卡 loading、幻觉输出。
-
-完成标准：
-
-1. Android 端能看到真实模型流式输出。
-2. loading 能正常结束。
-3. 商品卡片和模型文本一致，不出现明显编造价格、优惠、库存。
-
-### P0：Golden Query 评测表
-
-目标：让“效果可靠性”有证据，而不是只靠口头感觉。
+目标：让“效果可靠性”有证据，而不是只靠口头感觉。评测从 V1 开始就要同步建立，不等所有功能完成。
 
 任务：
 
 1. 建立评测表，字段包括：
    - query
+   - parsed intent
    - 期望召回
    - 实际召回
    - 是否超预算
@@ -121,6 +155,7 @@
    - 是否编造价格/库存/优惠/功效
    - 是否应该追问
    - 实际是否追问
+   - trace 是否完整
    - 备注和修正计划
 2. 先覆盖 8 条 golden queries。
 3. 每次修改检索或 prompt 后复跑。
@@ -131,16 +166,34 @@
 2. 能说明 1-2 个失败 case 如何被修正。
 3. Demo 中可展示评测表截图或摘要。
 
+### P0-D：真实 Doubao 流式复验
+
+目标：在检索候选和 trace 可靠后，确认真实模型能被 Android 端稳定消费，并且不破坏证据约束。
+
+任务：
+
+1. 本地 `.env` 配置真实 `ARK_API_KEY`、`ARK_MODEL`，保持 `.env` 不提交。
+2. `MOCK_LLM=false` 后启动后端。
+3. Android 连续跑 3 条 query。
+4. 记录是否出现超时、空 token、卡 loading、幻觉输出。
+5. 检查模型文本是否只解释候选商品。
+
+完成标准：
+
+1. Android 端能看到真实模型流式输出。
+2. loading 能正常结束。
+3. 商品卡片和模型文本一致，不出现明显编造价格、优惠、库存。
+
 ### P1：复杂语义能力
 
 目标：形成一个真正能讲的加分点。
 
 任务：
 
-1. 信息不足主动追问。
-2. 否定条件解析与排除。
-3. 多商品对比。
-4. 多轮补充条件，例如“再便宜点”“我其实是敏感肌”。
+1. 基于 V1 的 `needs_clarification` 做信息不足主动追问。
+2. 基于 `exclude_terms` 做否定条件解析与排除。
+3. 基于 V2 属性图做多商品对比。
+4. 支持多轮补充条件，例如“再便宜点”“我其实是敏感肌”。
 
 完成标准：
 
@@ -212,10 +265,10 @@
 
 当前最建议先做：
 
-> Chroma 索引 + 真实 Doubao 流式复验 + 3 条 Android golden query 记录。
+> V1 Constraint-Aware Hybrid Retrieval：`QueryIntent` + 硬约束/软偏好/追问 gate + `RetrievalTrace`。
 
 原因：
 
-1. 这三项直接对应基础功能完整性和效果可靠性。
-2. 做完后可以录第一版端到端 Demo。
-3. 它会暴露真实系统的主要问题，方便后续决定是补检索、补 Prompt，还是补 UI。
+1. 这是 RAG 可靠性的地基，比单独接 Chroma 或真实模型更先影响评分。
+2. 做完后，每次推荐都能解释“为什么召回、为什么过滤、为什么排序”。
+3. Chroma、Graph-aware、Doubao、评测表都可以挂在这个 trace 框架上继续迭代。
