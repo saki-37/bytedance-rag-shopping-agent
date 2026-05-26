@@ -18,3 +18,33 @@
 - 至少 3 个 query 端到端跑通 Android -> 后端 -> SSE -> 商品卡片。
 - 所有商品卡片字段来自数据源。
 - 无明显编造价格、库存或优惠。
+
+## 本地评测命令
+
+构建 Chroma 索引：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/build_index.py
+```
+
+运行检索层 benchmark：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/run_golden_queries.py --require-vector
+```
+
+输出：
+
+- 默认写入 `data/tmp/evals/golden_queries_latest.jsonl`，该目录已被 `.gitignore` 忽略。
+- 每条记录包含 `parsed_intent`、`final_ranking`、`vector_hits_count`、`guardrail_checks` 和失败原因。
+
+联调真实后端 SSE：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/run_golden_queries.py --mode http --check-stream --require-vector
+```
+
+当前 2026-05-26 本地结果：8 条 golden queries 在检索层全部通过；其中 GQ-08 会按预期先追问，不返回商品。

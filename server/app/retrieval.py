@@ -1,9 +1,11 @@
+import contextlib
+import io
 import re
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 
 from app.data_loader import product_search_text
+from app.embeddings import sentence_model
 from app.models import (
     FilteredProduct,
     GuardrailChecks,
@@ -291,12 +293,20 @@ def _vector_scores(query: str, index_dir: Path | None) -> tuple[dict[str, float]
         return {}, []
     try:
         import chromadb
+        from chromadb.config import Settings
 
-        model = _sentence_model()
+        model = sentence_model()
         embedding = model.encode([query], normalize_embeddings=True)[0].tolist()
-        client = chromadb.PersistentClient(path=str(index_dir))
-        collection = client.get_collection("beauty_products")
-        result = collection.query(query_embeddings=[embedding], n_results=8)
+        with contextlib.redirect_stderr(io.StringIO()):
+            client = chromadb.PersistentClient(
+                path=str(index_dir),
+                settings=Settings(anonymized_telemetry=False),
+            )
+            collection = client.get_collection("beauty_products")
+            collection_size = collection.count()
+            if collection_size == 0:
+                return {}, []
+            result = collection.query(query_embeddings=[embedding], n_results=min(8, collection_size))
         ids = result.get("ids", [[]])[0]
         distances = result.get("distances", [[]])[0] if result.get("distances") else []
         scores: dict[str, float] = {}
@@ -309,13 +319,6 @@ def _vector_scores(query: str, index_dir: Path | None) -> tuple[dict[str, float]
         return scores, hits
     except Exception:
         return {}, []
-
-
-@lru_cache(maxsize=1)
-def _sentence_model():
-    from sentence_transformers import SentenceTransformer
-
-    return SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
 
 def _to_card(item: dict, query: str) -> ProductCard:
