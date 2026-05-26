@@ -80,3 +80,32 @@ git status --short
 git diff --cached --name-only
 python3 scripts/scan_secrets.py --staged
 ```
+
+## 代理与真实 API 调试
+
+本地调用 Ark / Doubao API 时，如果需要走代理，优先只设置 HTTP/HTTPS 代理：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  server/.venv/bin/python <script>
+```
+
+暂时不要默认设置：
+
+```bash
+all_proxy=socks5://127.0.0.1:7897
+```
+
+原因：
+
+- OpenAI Python SDK 底层使用 `httpx`。
+- 如果环境里有 SOCKS 代理，`httpx` 需要额外安装 `socksio` 或 `httpx[socks]`。
+- 当前项目不依赖 SOCKS；用 `http_proxy` / `https_proxy` 已经能完成真实 Ark / Doubao 调用。
+
+调试配置时只能打印布尔状态，不打印真实 Key：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python -c 'import sys; sys.path.insert(0,"server"); from app.config import get_settings; s=get_settings(); print({"mock_llm": s.mock_llm, "has_key": bool(s.ark_api_key), "has_model": bool(s.ark_model), "base_url": s.ark_base_url})'
+```

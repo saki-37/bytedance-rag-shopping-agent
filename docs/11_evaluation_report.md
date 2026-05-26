@@ -76,6 +76,13 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 | GQ-02 | 成功 | 通过 | 敏感肌屏障修护，回答围绕理肤泉/薇诺娜 |
 | GQ-03 | 成功 | 已拦截 | 模型断言“不会有酒精味和刺激感”，但商品资料没有明确支持；已加入 unsupported absence claim 校验，复验时触发安全兜底 |
 
+复验要点：
+
+- `.env` 已被本地读取，`MOCK_LLM=false`、API Key 和模型名均存在。
+- 真实 API 调用通过 HTTP/HTTPS 代理成功；不要在当前环境默认使用 `all_proxy=socks5://...`，否则 `httpx` 会要求额外 SOCKS 依赖。
+- 当前最有价值的 failure case 是 GQ-03：用户说“不要酒精/刺激”时，模型容易把“没有明确风险提示”说成“不会刺激/没有酒精味”。这类断言已进入生成层 guardrail。
+- 目前完成的是后端真实 API 复验；Android 端真实流式展示仍需单独复验。
+
 ## SSE 稳定性
 
 命令：
