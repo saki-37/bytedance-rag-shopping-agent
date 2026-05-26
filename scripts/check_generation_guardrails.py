@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+"""Check that generated text stays bound to retrieved product evidence."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "server"))
+
+from app.config import get_settings
+from app.data_loader import load_enriched_products, load_raw_products
+from app.guardrails import guard_answer
+from app.retrieval import retrieve
+
+
+def main() -> None:
+    settings = get_settings()
+    raw_products = load_raw_products(settings.raw_data_dir)
+    products = load_enriched_products(settings.enriched_beauty_path, raw_products)
+    result = retrieve("我是油皮，想要 200 元以内的通勤防晒", products, index_dir=settings.index_dir)
+    cards = result.cards
+
+    safe = guard_answer(
+        "推荐巴黎欧莱雅，数据源价格 ¥170，适合通勤防晒，敏感肌先做耳后测试。",
+        user_message="我是油皮，想要 200 元以内的通勤防晒",
+        cards=cards,
+    )
+    assert safe.passed, safe
+    assert not safe.fallback_used, safe
+
+    unsafe = guard_answer(
+        "推荐巴黎欧莱雅，价格 ¥199，库存充足，还有优惠券，下单很划算。",
+        user_message="我是油皮，想要 200 元以内的通勤防晒",
+        cards=cards,
+    )
+    assert not unsafe.passed, unsafe
+    assert unsafe.fallback_used, unsafe
+    assert "库存" not in unsafe.answer and "优惠券" not in unsafe.answer, unsafe.answer
+    assert "¥199" not in unsafe.answer, unsafe.answer
+
+    empty = guard_answer("", user_message="我想买护肤品", cards=[])
+    assert not empty.passed, empty
+    assert empty.fallback_used, empty
+    assert "肤质" in empty.answer, empty.answer
+
+    print("Generation guardrails OK")
+
+
+if __name__ == "__main__":
+    main()

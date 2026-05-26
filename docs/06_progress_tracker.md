@@ -10,7 +10,7 @@
 
 > Android 文字输入 -> FastAPI `/api/chat/stream` -> 美妆商品检索 -> mock 流式回复 -> Android 展示回复与商品卡片。
 
-2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建和 8 条 golden query 检索层 benchmark。当前仍不是最终参赛版本，最主要的缺口是：真实 Doubao 调用后的推荐编排还需要评测约束，Graph-aware / hybrid retrieval 还没有进入主链路。
+2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。当前仍不是最终参赛版本，最主要的缺口是：真实 Doubao 效果还需要 Android 端复验，Graph-aware / hybrid retrieval 还没有进入主链路。
 
 ## 对照课题必做最小闭环
 
@@ -25,8 +25,8 @@
 | 流式 API | SSE 或 WebSocket | 已完成 | `POST /api/chat/stream` 返回 `status/products/token/done/error` |
 | 向量数据库 | 集成向量数据库 | 已完成 V1 | Chroma 索引已可构建，运行时 trace 能看到 vector hits；索引产物仅本地保留 |
 | RAG 基本链路 | 检索商品并基于资料回答 | 已完成 V1 | 结构化硬过滤 + 关键词/facet/Chroma 召回 + 可解释 trace；还不是最终 hybrid RAG 管线 |
-| 模型调用 | 调用大模型生成导购回复 | 部分完成 | OpenAI-compatible Doubao 接入点已有；当前 demo 使用 mock 回复 |
-| 反幻觉 | 不编造商品、价格、优惠、库存、功效 | 部分完成 | 商品卡片字段来自数据源；预算/排除条件已先在检索层硬过滤；真实模型输出还需要 prompt 和输出校验 |
+| 模型调用 | 调用大模型生成导购回复 | 部分完成 | OpenAI-compatible Doubao 接入点已有；真实调用失败时会走安全兜底 |
+| 反幻觉 | 不编造商品、价格、优惠、库存、功效 | 已完成 V1 | 商品卡片字段来自数据源；预算/排除条件在检索层硬过滤；生成层会拦截未授权价格和商业承诺 |
 
 ## 对照第一阶段计划
 
@@ -58,6 +58,10 @@
   - 当前入库 6 条 enriched 美妆商品。
   - 运行时 vector 通道能返回 6 个 hits。
   - `scripts/run_golden_queries.py --require-vector` 检索层 8 条全部通过。
+- 生成层 guardrail 已完成：
+  - 模型输出先在后端聚合并校验，再重新流式输出给客户端。
+  - 编造价格、库存、优惠、下单承诺会被兜底回答替换。
+  - Ark / Doubao 连接失败时返回基于商品卡片的保守回答，避免 SSE 直接报错。
 
 ## 接下来优先级
 
@@ -79,15 +83,16 @@
 
 ### P1：从 demo mock 走向真实 RAG
 
-1. 接入真实 Doubao / ARK OpenAI-compatible API 后，验证 prompt 是否严格使用召回商品。
-2. 扩展美妆增强数据：
+1. 用真实 Doubao / ARK OpenAI-compatible API 在 Android 端连续复验 3 条 query。
+2. 记录真实输出是否被 guardrail 拦截，以及是否需要调整 prompt。
+3. 扩展美妆增强数据：
    - 当前 6 条 -> 至少覆盖 25 条美妆。
    - 补全肤质、功效、成分/禁忌、使用场景、适合/不适合人群。
-3. 增加多轮上下文：
+4. 增加多轮上下文：
    - 用户先说模糊需求。
    - Agent 主动追问。
    - 用户补充后再推荐。
-4. 设计 Graph-aware / hybrid retrieval V2：
+5. 设计 Graph-aware / hybrid retrieval V2：
    - 保留通用字段：价格、品牌、类目、子类目。
    - 按品类扩展专属字段：肤质、成分、禁忌、材质、尺寸等。
    - 将硬约束、属性图召回、向量召回和重排 trace 放进同一评测框架。

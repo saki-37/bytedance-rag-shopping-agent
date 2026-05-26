@@ -48,3 +48,16 @@ server/.venv/bin/python scripts/run_golden_queries.py --mode http --check-stream
 ```
 
 当前 2026-05-26 本地结果：8 条 golden queries 在检索层全部通过；其中 GQ-08 会按预期先追问，不返回商品。
+
+运行生成层 guardrail 检查：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/check_generation_guardrails.py
+```
+
+检查内容：
+
+- 安全回答可以通过。
+- 编造价格、库存、优惠券、下单承诺会触发兜底回答。
+- 空回答会触发信息补充式兜底。
