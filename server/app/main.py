@@ -42,7 +42,8 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     async def events() -> AsyncIterator[str]:
         try:
             yield _event("status", {"status": "retrieving"})
-            result = retrieve(request.message, enriched_products, index_dir=settings.index_dir)
+            retrieval_message = _message_for_retrieval(request)
+            result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
             yield _event("products", {"products": [card.model_dump() for card in result.cards]})
             yield _event("status", {"status": "generating"})
             if result.clarification_question:
@@ -51,7 +52,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             else:
                 async for token in stream_answer(
                     settings=settings,
-                    user_message=request.message,
+                    user_message=retrieval_message,
                     history=request.history,
                     context=result.context,
                     cards=result.cards,
@@ -66,8 +67,10 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
 @app.post("/api/debug/retrieve")
 def debug_retrieve(request: ChatRequest) -> dict:
-    result = retrieve(request.message, enriched_products, index_dir=settings.index_dir)
+    retrieval_message = _message_for_retrieval(request)
+    result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
     return {
+        "retrieval_message": retrieval_message,
         "products": [card.model_dump() for card in result.cards],
         "clarification_question": result.clarification_question,
         "trace": result.trace.model_dump(),
@@ -82,3 +85,27 @@ async def _stream_text(text: str) -> AsyncIterator[str]:
     for char in text:
         yield char
         await asyncio.sleep(0.005)
+
+
+def _message_for_retrieval(request: ChatRequest) -> str:
+    previous_user_messages = [
+        item.content.strip()
+        for item in request.history
+        if item.role == "user" and item.content.strip()
+    ]
+    if not previous_user_messages:
+        return request.message
+
+    short_follow_up = len(request.message) <= 20
+    explicit_relaxation = any(term in request.message for term in ["放宽", "先看", "优先", "预算", "排除", "条件"])
+    if not short_follow_up and not explicit_relaxation:
+        return request.message
+
+    return "\n".join(
+        [
+            "上一轮用户需求：",
+            *previous_user_messages[-2:],
+            "本轮补充：",
+            request.message,
+        ]
+    )

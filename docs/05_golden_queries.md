@@ -61,3 +61,53 @@ server/.venv/bin/python scripts/check_generation_guardrails.py
 - 安全回答可以通过。
 - 编造价格、库存、优惠券、下单承诺会触发兜底回答。
 - 空回答会触发信息补充式兜底。
+
+## 多轮回归 Case
+
+多轮 case 用来固化真实调试中发现的问题，尤其是：
+
+- 用户已经给出肤质、预算、功效和排除条件时，不应重复追问同一批信息。
+- 用户说“先放宽预算”时，应继承上一轮需求，并取消预算硬约束。
+- 用户说“预算降到150元”时，应使用最新预算覆盖上一轮预算。
+- 当前商品池无同时满足项时，应解释约束冲突，而不是假装推荐。
+
+Case 定义在：
+
+```text
+data/eval/conversation_cases.json
+```
+
+运行命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/run_conversation_cases.py
+```
+
+输出：
+
+- 默认写入 `data/tmp/evals/conversation_cases_latest.jsonl`，该目录已被 `.gitignore` 忽略。
+- 每条记录包含每一轮的 `retrieval_message`、`parsed_intent`、商品 ID、追问文本和失败原因。
+
+## 单次快速 Probe
+
+如果只想快速看某条 query 或某组多轮对话的真实回复，不想启动 Uvicorn 和 Android，可以直接跑：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  server/.venv/bin/python scripts/probe_chat.py \
+  --turn "不要酒精味太重或者刺激感强的产品"
+```
+
+多轮调试：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  server/.venv/bin/python scripts/probe_chat.py \
+  --turn "我是油皮，想要200元以内通勤防晒。敏感肌最近屏障不稳定，想找修护面霜。不要酒精味太重或者刺激感强的产品。我想买护肤品，你推荐什么？" \
+  --turn "先放宽预算"
+```
+
+这个脚本直接使用同一个 FastAPI app 的 `/api/debug/retrieve` 和 `/api/chat/stream`，因此不需要重启后端，也不需要打开 Android；输出会包含召回商品、解析出的 intent、多轮合并后的检索文本，以及最终回答。

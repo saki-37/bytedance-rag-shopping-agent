@@ -6,6 +6,7 @@ from openai import AsyncOpenAI
 
 from app.config import Settings
 from app.guardrails import build_safe_answer, guard_answer
+from app.guardrails import GenerationGuardrailResult
 from app.models import ChatMessage, ProductCard
 
 
@@ -50,6 +51,14 @@ async def stream_answer(
     guardrail = guard_answer(raw_answer, user_message=user_message, cards=cards)
     if not guardrail.passed:
         logger.warning("LLM answer blocked by generation guardrails: %s", guardrail.issues)
+        guardrail = await _try_repair_answer(
+            settings=settings,
+            user_message=user_message,
+            context=context,
+            cards=cards,
+            raw_answer=raw_answer,
+            guardrail=guardrail,
+        )
     async for token in _stream_text(guardrail.answer):
         yield token
 
@@ -90,10 +99,74 @@ async def _collect_ark_answer(
     return "".join(chunks)
 
 
+async def _try_repair_answer(
+    settings: Settings,
+    user_message: str,
+    context: str,
+    cards: list[ProductCard],
+    raw_answer: str,
+    guardrail: GenerationGuardrailResult,
+) -> GenerationGuardrailResult:
+    if not raw_answer.strip() or not cards:
+        return guardrail
+    try:
+        repaired_answer = await _collect_ark_repair(
+            settings=settings,
+            user_message=user_message,
+            context=context,
+            raw_answer=raw_answer,
+            issues=guardrail.issues,
+        )
+    except Exception as exc:
+        logger.warning("Ark repair failed; using safe fallback: %s", exc)
+        return guardrail
+
+    repaired_guardrail = guard_answer(repaired_answer, user_message=user_message, cards=cards)
+    if repaired_guardrail.passed:
+        logger.info("LLM answer repaired after guardrail feedback")
+        return repaired_guardrail
+    logger.warning("LLM repaired answer still blocked: %s", repaired_guardrail.issues)
+    return guardrail
+
+
+async def _collect_ark_repair(
+    settings: Settings,
+    user_message: str,
+    context: str,
+    raw_answer: str,
+    issues: list[str],
+) -> str:
+    client = AsyncOpenAI(api_key=settings.ark_api_key, base_url=settings.ark_base_url)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                "下面是一版导购回答，但它触发了安全校验。"
+                "请只改写回答，不要新增商品、价格、库存、优惠、购买承诺或商品资料之外的功效。\n"
+                "如果校验问题包含 unsupported_absence_claims，必须删除所有“不会/没有/无/不含/不添加 + 酒精/刺激/香精/致痘/拔干”的句式；"
+                "不要说“无酒精”“没有刺激”“不会刺激”“不含酒精”。\n"
+                "可以改成：资料中有温和、舒缓、耳后测试等信息，但我不能确认具体成分或刺激风险；建议核对成分表并先局部测试。\n"
+                "输出时不要解释校验规则，只给用户可读的改写版回答。\n\n"
+                f"用户问题：{user_message}\n\n"
+                f"可用商品资料：\n{context}\n\n"
+                f"校验问题：{', '.join(issues)}\n\n"
+                f"待改写回答：\n{raw_answer}"
+            ),
+        },
+    ]
+    response = await client.chat.completions.create(
+        model=settings.ark_model,
+        messages=messages,
+        temperature=0.1,
+    )
+    return response.choices[0].message.content or ""
+
+
 def _mock_answer(user_message: str, cards: list[ProductCard]) -> str:
     if "护肤品" in user_message and not any(word in user_message for word in ["油皮", "干皮", "敏感", "预算", "防晒", "修护"]):
         return "我可以先帮你缩小范围：你更在意肤质适配、预算，还是防晒/修护/控油这类具体功效？"
-    return build_safe_answer(cards)
+    return build_safe_answer(cards, user_message=user_message)
 
 
 async def _stream_text(text: str) -> AsyncIterator[str]:

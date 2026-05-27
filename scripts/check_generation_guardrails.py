@@ -55,6 +55,20 @@ def main() -> None:
     assert empty.fallback_used, empty
     assert "肤质" in empty.answer, empty.answer
 
+    constrained_empty = guard_answer(
+        "",
+        user_message=(
+            "我是油皮，想要200元以内通勤防晒。"
+            "敏感肌最近屏障不稳定，想找修护面霜。"
+            "不要酒精味太重或者刺激感强的产品。"
+        ),
+        cards=[],
+    )
+    assert not constrained_empty.passed, constrained_empty
+    assert constrained_empty.fallback_used, constrained_empty
+    assert "我读到了你前面的条件" in constrained_empty.answer, constrained_empty.answer
+    assert "肤质、预算和主要功效需求分别是什么" not in constrained_empty.answer, constrained_empty.answer
+
     print("Generation guardrails OK")
 
 

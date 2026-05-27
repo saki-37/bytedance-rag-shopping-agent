@@ -80,9 +80,9 @@ def _query_terms(query: str) -> set[str]:
 
 
 def parse_query_intent(query: str) -> QueryIntent:
-    budget = _hard_budget(query)
+    budget = None if _relaxes_budget(query) else _hard_budget(query)
     facets = _extract_facets(query)
-    exclude_terms = _extract_exclude_terms(query)
+    exclude_terms = [] if _relaxes_exclusions(query) else _extract_exclude_terms(query)
     soft_preferences = _extract_soft_preferences(query)
     category_candidates = ["beauty"] if _looks_like_beauty_query(query, facets) or exclude_terms else []
     hard_constraints: list[str] = []
@@ -118,14 +118,38 @@ def parse_query_intent(query: str) -> QueryIntent:
 def _hard_budget(query: str) -> float | None:
     patterns = [
         r"(\d+(?:\.\d+)?)\s*元?\s*(?:以[内下]|以内|以下|之内|内)",
+        r"(?:预算|价格|价位)\s*(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:预算|价格|价位)\s*(?:在|不超过|别超过|低于|小于|不高于|<=)?\s*(\d+(?:\.\d+)?)",
+        r"(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:不超过|别超过|低于|小于|不高于|<=)\s*(\d+(?:\.\d+)?)\s*元?",
     ]
+    matches: list[tuple[int, float]] = []
     for pattern in patterns:
-        match = re.search(pattern, query)
-        if match:
-            return float(match.group(1))
-    return None
+        for match in re.finditer(pattern, query):
+            matches.append((match.start(), float(match.group(1))))
+    if not matches:
+        return None
+    return max(matches, key=lambda item: item[0])[1]
+
+
+def _relaxes_budget(query: str) -> bool:
+    return bool(
+        re.search(
+            r"(放宽|不限制|先不看|先不用管|可以超过|不限).{0,8}(预算|价格|价位)",
+            query,
+        )
+        or re.search(r"(预算|价格|价位).{0,8}(放宽|不限制|先不看|先不用管|可以超过|不限)", query)
+    )
+
+
+def _relaxes_exclusions(query: str) -> bool:
+    return bool(
+        re.search(
+            r"(放宽|先不看|先不用管|可以接受).{0,8}(排除|避开|酒精|刺激|成分)",
+            query,
+        )
+        or re.search(r"(排除|避开|酒精|刺激|成分).{0,8}(放宽|先不看|先不用管|可以接受)", query)
+    )
 
 
 def _extract_facets(query: str) -> dict[str, list[str]]:
@@ -228,6 +252,28 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
             for item in products
             if not _is_hard_filtered(item, hard_filtered_out)
         ]
+    if not scored:
+        trace = RetrievalTrace(
+            query=query,
+            parsed_intent=intent,
+            hard_filtered_out=hard_filtered_out,
+            retrieval_channels=RetrievalChannels(
+                keyword=sorted(keyword_hits, key=lambda hit: hit.score, reverse=True)[:8],
+                vector=vector_hits,
+                graph=[],
+            ),
+            guardrail_checks=GuardrailChecks(
+                over_budget_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("price")),
+                excluded_term_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("matches excluded")),
+                needs_clarification=True,
+            ),
+        )
+        return RetrievalResult(
+            cards=[],
+            context="硬约束过滤后没有可推荐商品。",
+            trace=trace,
+            clarification_question=_no_result_clarification(intent),
+        )
 
     scored.sort(key=lambda pair: (pair[0], -float(pair[1]["raw"]["base_price"])), reverse=True)
     selected = [item for _, item, _ in scored[:limit]]
@@ -260,9 +306,69 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
 def _matched_exclude_term(exclude_terms: list[str], item: dict) -> str | None:
     text = product_search_text(item).lower()
     for term in exclude_terms:
-        if term.lower() in text:
+        if _has_excluded_risk(text, term.lower()):
             return term
     return None
+
+
+def _has_excluded_risk(text: str, term: str) -> bool:
+    if term not in text:
+        return False
+    if term == "酒精":
+        return _has_risky_occurrence(
+            text,
+            term,
+            safe_patterns=[
+                r"(不含|无|没有|不添加)[^。；，,.]{0,8}酒精",
+                r"酒精[^。；，,.]{0,8}(不含|无|没有|不添加)",
+                r"(不含|无|没有|不添加)[^。；，,.]{0,16}酒精[^。；，,.]{0,16}刺激",
+            ],
+            risk_patterns=[
+                r"(含有|包含|添加|如|对|酒精味)[^。；，,.]{0,12}酒精",
+                r"酒精[^。；，,.]{0,12}(敏感|味|刺激|含量)",
+            ],
+        )
+    if term == "刺激":
+        return _has_risky_occurrence(
+            text,
+            term,
+            safe_patterns=[
+                r"(不含|无|没有|不添加)[^。；，,.]{0,12}刺激",
+                r"刺激[^。；，,.]{0,8}(不含|无|没有|不添加)",
+                r"(舒缓|缓解|改善|减少|降低)[^。；，,.]{0,12}刺激",
+                r"刺激[^。；，,.]{0,12}(舒缓|缓解|改善|减少|降低)",
+                r"刺激性产品",
+            ],
+            risk_patterns=[
+                r"(可能|容易|会|强烈|明显|产生|造成|导致|带来)[^。；，,.]{0,12}刺激",
+                r"刺激[^。；，,.]{0,12}(较强|明显|敏感|刺痛)",
+                r"刺激感",
+            ],
+        )
+    return term in text
+
+
+def _has_risky_occurrence(
+    text: str,
+    term: str,
+    safe_patterns: list[str],
+    risk_patterns: list[str],
+) -> bool:
+    safe_spans = [match.span() for pattern in safe_patterns for match in re.finditer(pattern, text)]
+    for pattern in risk_patterns:
+        for risk_match in re.finditer(pattern, text):
+            term_match = re.search(re.escape(term), risk_match.group(0))
+            if term_match is None:
+                return True
+            term_start = risk_match.start() + term_match.start()
+            term_end = risk_match.start() + term_match.end()
+            if not any(safe_start <= term_start and term_end <= safe_end for safe_start, safe_end in safe_spans):
+                return True
+    for match in re.finditer(re.escape(term), text):
+        start, end = match.span()
+        if not any(safe_start <= start and end <= safe_end for safe_start, safe_end in safe_spans):
+            return False
+    return False
 
 
 def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
@@ -286,6 +392,32 @@ def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
 def _is_hard_filtered(item: dict, filtered: list[FilteredProduct]) -> bool:
     product_id = item["raw"]["product_id"]
     return any(entry.product_id == product_id for entry in filtered)
+
+
+def _no_result_clarification(intent: QueryIntent) -> str:
+    constraints: list[str] = []
+    budget = intent.universal_constraints.budget_max
+    if budget is not None:
+        constraints.append(f"{budget:g}元以内")
+    skin_types = intent.facets.get("skin_type", [])
+    if skin_types:
+        constraints.append(f"肤质：{'、'.join(skin_types)}")
+    effects = intent.facets.get("effect", [])
+    if effects:
+        constraints.append(f"功效：{'、'.join(effects)}")
+    use_cases = intent.facets.get("use_case", [])
+    if use_cases:
+        constraints.append(f"场景：{'、'.join(use_cases)}")
+    if intent.exclude_terms:
+        constraints.append(f"避开：{'、'.join(intent.exclude_terms)}")
+
+    if constraints:
+        joined = "；".join(constraints)
+        return (
+            f"当前商品池里没有同时满足「{joined}」的商品。"
+            "你想优先放宽哪一项：预算、排除条件，还是先只看其中一个功效/场景？"
+        )
+    return "当前商品池里没有足够匹配的商品。你想优先补充预算、肤质，还是主要功效？"
 
 
 def _vector_scores(query: str, index_dir: Path | None) -> tuple[dict[str, float], list[RetrievalHit]]:

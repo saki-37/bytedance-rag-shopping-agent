@@ -29,13 +29,17 @@ class ShoppingAgentClient(
 ) {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    suspend fun streamChat(message: String, onEvent: suspend (StreamEvent) -> Unit) {
+    suspend fun streamChat(
+        message: String,
+        history: List<ChatMessage> = emptyList(),
+        onEvent: suspend (StreamEvent) -> Unit,
+    ) {
         withContext(Dispatchers.IO) {
             try {
                 val payload = JSONObject()
                     .put("message", message)
                     .put("conversation_id", "android-demo")
-                    .put("history", JSONArray())
+                    .put("history", history.toPayloadHistory())
                     .toString()
                 val request = Request.Builder()
                     .url("$baseUrl/api/chat/stream")
@@ -96,6 +100,25 @@ class ShoppingAgentClient(
             "error" -> StreamEvent.Error(json.optString("message", "Unknown error"))
             else -> null
         }
+    }
+
+    private fun List<ChatMessage>.toPayloadHistory(): JSONArray {
+        val array = JSONArray()
+        takeLast(8)
+            .filter { it.content.isNotBlank() && it.role in setOf(Role.User, Role.Assistant) }
+            .forEach { message ->
+                val role = when (message.role) {
+                    Role.User -> "user"
+                    Role.Assistant -> "assistant"
+                    else -> return@forEach
+                }
+                array.put(
+                    JSONObject()
+                        .put("role", role)
+                        .put("content", message.content)
+                )
+            }
+        return array
     }
 
     private fun parseProducts(array: JSONArray): List<ProductCard> {

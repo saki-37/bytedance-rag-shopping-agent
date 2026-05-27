@@ -32,6 +32,9 @@ class ChatViewModel(
     fun send() {
         val message = state.value.input.trim()
         if (message.isEmpty() || state.value.isLoading) return
+        val history = state.value.messages
+            .filter { it.content.isNotBlank() && it.role in setOf(Role.User, Role.Assistant) }
+            .drop(1)
 
         _state.update {
             it.copy(
@@ -43,7 +46,7 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            client.streamChat(message) { event ->
+            client.streamChat(message, history) { event ->
                 when (event) {
                     is StreamEvent.Status -> appendStatus(event.value)
                     is StreamEvent.Products -> attachProducts(event.value)
