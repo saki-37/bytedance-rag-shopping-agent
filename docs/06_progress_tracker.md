@@ -10,7 +10,7 @@
 
 > Android 快捷问题/文字输入 -> FastAPI `/api/chat/stream` -> 美妆商品检索 -> Doubao 流式回复 -> Android 展示回复、商品卡片、图片和详情弹窗。
 
-2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明。当前仍不是最终参赛版本，最主要的缺口是：全量美妆 25 条数据尚未增强、Graph-aware / hybrid retrieval 还没有进入主链路、最终提交说明和材料包尚未整理。
+2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明；根目录 `README.md` 和 `docs/14_submission_package.md` 已整理成提交入口。当前仍不是最终参赛版本，最主要的缺口是：全量美妆 25 条数据尚未增强、Graph-aware / hybrid retrieval 还没有进入主链路、Demo 录屏还需要按平台要求裁剪或单独上传。
 
 ## 对照课题必做最小闭环
 
@@ -79,24 +79,28 @@
 
 ## 接下来优先级
 
-### P0：把当前闭环变成可录屏版本
+### P0：提交前材料收口
 
-1. 为 demo 加基本错误状态：
-   - 后端断开时显示可理解错误。
-   - 空输入不能发送。
-2. 整理提交材料：
-   - README 运行说明。
-   - 架构说明。
-   - Demo 录屏说明。
-   - 评测摘要。
+1. 检查 README 和提交材料清单是否能独立说明项目。
+2. 按平台要求处理 `demo/录屏v1.mov`：
+   - 如需 1 分钟版本，裁剪到 60-90 秒。
+   - 确认录屏中没有 API Key 或敏感终端信息。
+   - 作为平台附件单独上传，不进入 Git。
+3. 提交前运行：
+   - `git diff --check`
+   - `python3 scripts/scan_secrets.py --all`
+4. 如需最终代码提交，确认只提交 README、docs 和必要代码，不提交 `.env`、索引产物或录屏文件。
 
-### P1：从 demo mock 走向真实 RAG
+### P1：扩展数据与复测
 
-1. 把 2026-05-28 真实 Doubao probe 和 Android 端复验结果写入评测报告。
-2. 继续记录 Android 端真实输出是否被 guardrail 拦截、是否有 loading/超时/排版问题。
-3. 扩展美妆增强数据：
+1. 扩展美妆增强数据：
    - 当前 6 条 -> 至少覆盖 25 条美妆。
    - 补全肤质、功效、成分/禁忌、使用场景、适合/不适合人群。
+2. 重建 Chroma 索引并复跑：
+   - `scripts/run_golden_queries.py --require-vector`
+   - `scripts/run_conversation_cases.py`
+   - `scripts/check_generation_guardrails.py`
+3. 继续记录 Android 端真实输出是否被 guardrail 拦截、是否有 loading/超时/排版问题。
 4. 增加多轮上下文：
    - 用户先说模糊需求。
    - Agent 主动追问。

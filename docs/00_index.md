@@ -18,12 +18,14 @@
 - [评测记录](11_evaluation_report.md)
 - [Demo 脚本](12_demo_script.md)
 - [安全与本地配置](13_security_and_config.md)
+- [提交材料清单](14_submission_package.md)
 
 ## 当前里程碑
 
 第一阶段交付美妆文字闭环：
 
-1. 数据检查与 5 条增强样例。
+1. 数据检查与 6 条增强样例。
 2. FastAPI SSE 聊天接口。
 3. Android Kotlin 原生聊天页、演示快捷问题、商品卡片与详情弹窗。
 4. Golden queries、真实 Doubao probe 和 Android 端闭环复验。
+5. README 提交入口、架构说明、评测记录、Demo 脚本和提交材料清单。

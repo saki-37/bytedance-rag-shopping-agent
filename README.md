@@ -1,10 +1,29 @@
 # ByteDance RAG Shopping Agent
 
-字节 AI 全栈挑战赛项目：基于 RAG 的多模态电商智能导购 AI Agent。
+字节跳动 AI 全栈挑战赛项目：基于 RAG 的多模态电商智能导购 AI Agent。
 
-第一阶段目标是跑通美妆文字导购闭环：
+当前版本聚焦 **美妆护肤文字导购闭环**：Android Kotlin 原生 App 输入需求，FastAPI 后端解析意图并检索商品，Doubao / Ark 生成 evidence-bound 导购回复，Android 端流式展示回答、商品卡片、图片和详情弹窗。
 
-Android Kotlin 原生客户端输入文字 -> FastAPI 后端检索美妆商品数据 -> 调用大模型流式生成回复 -> 客户端展示回复和商品卡片。
+## 当前完成能力
+
+- Android Kotlin + Jetpack Compose 原生聊天界面。
+- FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve` 和图片静态服务。
+- SSE 流式协议：`status`、`products`、`token`、`done`、`error`。
+- 美妆商品 RAG：结构化硬过滤 + keyword/facet 匹配 + Chroma 向量召回 + 可解释 `RetrievalTrace`。
+- Doubao / Ark OpenAI-compatible API 接入；本地无 Key 时可用 mock / safe fallback 跑通闭环。
+- 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
+- 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
+- Golden queries、conversation cases、真实 Doubao probe 和 Android 模拟器复验证据已整理在文档中。
+
+## Demo 与提交入口
+
+- Demo 脚本：[docs/12_demo_script.md](docs/12_demo_script.md)
+- 系统架构：[docs/10_architecture.md](docs/10_architecture.md)
+- 评测记录：[docs/11_evaluation_report.md](docs/11_evaluation_report.md)
+- 提交材料清单：[docs/14_submission_package.md](docs/14_submission_package.md)
+- 文档总入口：[docs/00_index.md](docs/00_index.md)
+
+本地录屏文件位于 `demo/录屏v1.mov`，属于生成媒体文件，已被 `.gitignore` 忽略；提交时建议作为单独附件上传。
 
 ## Repository Layout
 
@@ -13,36 +32,75 @@ client/android/   Android Kotlin + Jetpack Compose 客户端
 server/           FastAPI 后端服务
 data/raw/         官方原始数据集，不直接修改
 data/enriched/    结构化增强数据
-docs/             项目文档、技术决策、API 契约、推进记录
-scripts/          数据检查、增强、索引构建、评测脚本
+data/eval/        多轮评测样例
+docs/             项目文档、技术决策、评测记录、提交材料
+scripts/          数据检查、增强、索引构建、评测和安全扫描脚本
 ```
 
 ## Quick Start
 
-### Backend
+### 1. Backend
+
+```bash
+cd bytedance-rag-shopping-agent
+python3 -m venv server/.venv
+source server/.venv/bin/activate
+pip install -r server/requirements.txt
+cp .env.example .env
+```
+
+本地 `.env` 只放真实配置，不提交到 Git。真实模型调用示例：
+
+```env
+ARK_API_KEY=YOUR_LOCAL_KEY
+ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/
+ARK_MODEL=YOUR_MODEL_ENDPOINT
+MOCK_LLM=false
+```
+
+如果只是验证端到端链路，可以保持：
+
+```env
+MOCK_LLM=true
+```
+
+启动前建议先检查数据并构建本地索引：
+
+```bash
+python scripts/check_data.py
+python scripts/build_enriched_beauty.py
+python scripts/build_index.py
+```
+
+启动后端：
 
 ```bash
 cd server
-python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-cp ../.env.example ../.env
-python ../scripts/check_data.py
-python ../scripts/build_enriched_beauty.py
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-如果没有配置真实 `ARK_API_KEY`，后端会使用本地 mock 流式回复，方便先验证端到端链路。
-
-### Android
+如果真实 Ark / Doubao 调用需要代理：
 
 ```bash
+export https_proxy=http://127.0.0.1:7897
+export http_proxy=http://127.0.0.1:7897
+```
+
+### 2. Android
+
+```bash
+cd bytedance-rag-shopping-agent
 ./gradlew :client:android:app:assembleDebug
 ```
 
-默认后端地址是 Android 模拟器访问宿主机的 `http://10.0.2.2:8000`。
+也可以用 Android Studio 打开仓库根目录，选择 `client/android/app` 对应的 app 运行。默认后端地址是 Android 模拟器访问宿主机的：
 
-如果 Gradle 需要走本地代理：
+```text
+http://10.0.2.2:8000
+```
+
+如果 Gradle 下载依赖需要走本地代理：
 
 ```bash
 ./gradlew :client:android:app:assembleDebug \
@@ -50,8 +108,69 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
   -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7897
 ```
 
-## Current MVP Scope
+## Evaluation
 
-- 只做美妆护肤文字导购。
-- 暂不做图片、语音、购物车、下单。
-- 商品价格、品牌、图片和卡片字段必须来自数据源，不由模型自由生成。
+检索层 golden queries：
+
+```bash
+cd bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/run_golden_queries.py --require-vector
+```
+
+多轮对话样例：
+
+```bash
+server/.venv/bin/python scripts/run_conversation_cases.py
+```
+
+生成层 guardrail：
+
+```bash
+server/.venv/bin/python scripts/check_generation_guardrails.py
+```
+
+真实 Doubao 快速 probe：
+
+```bash
+https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  server/.venv/bin/python scripts/probe_chat.py \
+  --turn 我是油皮，想要200元以内通勤防晒 \
+  --turn 我想买护肤品，你推荐什么？ \
+  --turn 敏感肌，最近屏障不稳定，想找修护面霜，不要酒精味太重或者刺激感强的产品
+```
+
+## Security
+
+真实 API Key 只允许放在本地 `.env`。提交前建议启用本地 hook：
+
+```bash
+git config core.hooksPath .githooks
+chmod +x .githooks/pre-commit scripts/scan_secrets.py
+```
+
+手动扫描：
+
+```bash
+python3 scripts/scan_secrets.py --all
+```
+
+更多说明见 [docs/13_security_and_config.md](docs/13_security_and_config.md)。
+
+## Current Scope
+
+当前版本重点是 **文字美妆导购主线**，用于证明移动端、后端、RAG、模型生成、商品卡片和评测闭环可以端到端运行。
+
+当前边界：
+
+- enriched 美妆数据目前是 6 条样例，尚未覆盖完整 25 条美妆商品。
+- 图片输入、语音、购物车、下单不在当前版本。
+- Graph-aware retrieval、多商品对比和用户反馈闭环是下一阶段增强项。
+- Guardrail 是规则版，不是完整 groundedness judge。
+
+## Recommended Reading Order
+
+1. [docs/14_submission_package.md](docs/14_submission_package.md)：提交材料和评审入口。
+2. [docs/10_architecture.md](docs/10_architecture.md)：系统架构和端到端链路。
+3. [docs/11_evaluation_report.md](docs/11_evaluation_report.md)：当前评测证据。
+4. [docs/12_demo_script.md](docs/12_demo_script.md)：Demo 展示脚本。
+5. [docs/08_rag_retrieval_strategy.md](docs/08_rag_retrieval_strategy.md)：RAG 策略调研与后续路线。
