@@ -7,9 +7,9 @@
 
 ## 当前结论
 
-当前版本完成四层评测，并已在 25 条美妆增强数据上复跑：
+当前版本完成四层评测，并已在 25 条美妆增强数据和 5 条服饰运动样例上复跑：
 
-1. 检索层：8 条 golden queries、6 条美妆子类 queries 和 5 条服饰运动 V2-B queries 全部通过，Chroma 当前索引 25 条 enriched 美妆商品。
+1. 检索层：8 条 golden queries、6 条美妆子类 queries 和 5 条服饰运动 V2-B queries 全部通过，Chroma 当前使用统一 `products` collection，索引 30 条 enriched 商品，并通过 metadata filter 限定类目、子类和预算。
 2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠、下单承诺和无证据的绝对断言。
 3. SSE 层：真实 Ark / Doubao 暂时不可用时，8 条 golden queries 仍能返回完整 `products/token/done` 事件。
 4. Android 层：真实 Doubao 主线回复、商品卡片、图片、详情弹窗、信息不足追问已完成模拟器复验；新增子类抽样在 `MOCK_LLM=true` 下完成，重点验证检索、卡片和布局。
@@ -43,9 +43,10 @@ server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 
 2026-05-28 数据扩展后复跑结果：
 
-- `server/.venv/bin/python scripts/run_golden_queries.py --require-vector --output /private/tmp/bytedance-rag-golden.jsonl`
+- `server/.venv/bin/python scripts/run_golden_queries.py --require-vector --output /private/tmp/bytedance-rag-golden-metadata-final.jsonl`
 - 8 条全部 PASS。
 - 每条非追问 query 均有 vector hits，`GQ-08` 信息不足仍保持先追问。
+- 本轮 vector hits 来自统一 `products` collection，并通过 `canonical_category=beauty` 等 metadata filter 限定召回范围。
 
 ## 子类 Query Benchmark
 
@@ -85,7 +86,8 @@ server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 cd /Users/jia/Developer/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_subcategory_queries.py \
   --cases data/eval/apparel_queries.json \
-  --output /private/tmp/bytedance-rag-apparel-v2b.jsonl
+  --require-vector \
+  --output /private/tmp/bytedance-rag-apparel-metadata-final.jsonl
 ```
 
 2026-05-28 本地结果：
@@ -102,8 +104,9 @@ server/.venv/bin/python scripts/run_subcategory_queries.py \
 
 - 后端现在从 `data/enriched/*_products.jsonl` 加载多份 enriched 数据。
 - `product_search_text` 纳入 `display`、`variants`、`category_attributes`、`retrieval` 和 `source`，使第二品类样例能参与关键词/字段检索。
-- Query parser 增加 `apparel` 类目边界和 `sub_category` 硬约束，避免服饰 query 被美妆向量召回抢分。
-- 当前 apparel benchmark 不要求 vector hits，因为 Chroma collection 仍是美妆专用；后续若做全品类向量索引，需要新增分品类 collection 或统一 collection metadata filter。
+- `build_index.py` 现在索引所有 enriched 商品到统一 Chroma `products` collection，并写入 `canonical_category`、`sub_category`、`base_price` 等 metadata。
+- Query parser 增加 `apparel` 类目边界和 `sub_category` 硬约束；向量召回也带同样的 metadata filter，避免服饰 query 被美妆向量召回抢分。
+- 本轮 apparel benchmark 已加 `--require-vector`，5 条均有 vector hits。
 
 ## 多轮对话 Regression
 
@@ -257,11 +260,11 @@ server/.venv/bin/python scripts/run_golden_queries.py --check-stream --require-v
 1. Guardrail V1 是规则校验，不是完整 groundedness judge。
 2. 目前只校验价格和明显商业承诺，尚未对所有功效声明做细粒度证据匹配。
 3. Android 端真实 Doubao 已完成第一轮复验；自动滚动已完成一轮模拟器复验，后续录屏前仍需做一次人工检查。
-4. Chroma 当前已索引 25 条 enriched 美妆商品；服饰 V2-B 当前走类目/子类/关键词检索，后续如果继续扩到全品类，需要重新建立分品类向量评测。
+4. Chroma 当前已索引 30 条 enriched 商品，其中美妆 25 条、服饰 5 条；数码和食品仍未进入 enriched。
 
 ## 下一步
 
-1. 决定全品类向量索引策略：分品类 collection，或统一 collection + metadata filter。
-2. 增加多商品对比评测样例。
+1. 增加多商品对比评测样例。
+2. 把 `RetrievalTrace` 进一步扩展为可展示 metadata filter / graph relation 命中。
 3. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
 4. 设计用户反馈闭环的最小记录结构。

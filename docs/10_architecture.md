@@ -93,7 +93,7 @@ flowchart TD
 | 层级 | 路径 | 是否提交 | 用途 |
 | --- | --- | --- | --- |
 | 官方原始数据 | `data/raw/ecommerce_agent_dataset/` | 提交 | 商品 JSON、图片、RAG 文本素材 |
-| 增强商品数据 | `data/enriched/beauty_products.jsonl` | 提交 | 肤质、功效、使用场景、注意事项、推荐理由等结构化字段 |
+| 增强商品数据 | `data/enriched/*_products.jsonl` | 提交 | 肤质、功效、材质、尺码、使用场景、注意事项、推荐理由、证据来源等结构化字段 |
 | 本地索引产物 | `data/indexes/` | 不提交 | Chroma 持久化向量库 |
 
 设计原则：
@@ -114,7 +114,7 @@ flowchart TD
     GATE -->|"不足"| ASK["返回澄清问题"]
     GATE -->|"足够"| HF["硬约束过滤<br/>预算/明确排除/必要功效"]
     HF --> KW["关键词/Facet 匹配"]
-    HF --> VE["Chroma 向量召回"]
+    HF --> VE["Chroma products collection<br/>+ metadata filter 向量召回"]
     KW --> RANK["融合排序"]
     VE --> RANK
     RANK --> CTX["组装候选商品卡片<br/>和证据上下文"]
@@ -219,9 +219,9 @@ SSE 事件：
 ## 当前边界
 
 1. 主线仍是美妆文字导购，不包含图片输入、语音、购物车或下单。
-2. enriched 美妆数据已覆盖完整 25 条美妆商品，但当前主线仍只做美妆垂类。
+2. enriched 数据已覆盖完整 25 条美妆商品和 5 条服饰运动样例，但当前 Android 演示主线仍以美妆垂类为主。
 3. Guardrail 是规则版，不是完整 groundedness judge。
-4. Chroma 当前作为轻量向量召回通道，还没有做 embedding 对比 benchmark。
+4. Chroma 当前作为轻量向量召回通道，已使用统一 `products` collection 和 metadata filter；还没有做 embedding 模型对比 benchmark。
 5. Graph-aware retrieval、多商品对比和反馈闭环还没有进入主链路。
 
 ## 后续演进

@@ -19,7 +19,7 @@ from app.retrieval import retrieve
 def main() -> None:
     settings = get_settings()
     raw_products = load_raw_products(settings.raw_data_dir)
-    products = load_enriched_products(settings.enriched_beauty_path, raw_products)
+    products = load_enriched_products(settings.enriched_data_dir, raw_products)
     result = retrieve("我是油皮，想要 200 元以内的通勤防晒", products, index_dir=settings.index_dir)
     cards = result.cards
 

@@ -18,7 +18,7 @@
 | V0 | 可跑端到端闭环 | 已完成 | Android、FastAPI、SSE、商品卡片、图片和详情弹窗都已跑通 |
 | V1 | Constraint-Aware Hybrid RAG | 基本完成 | 25 条美妆 enriched 数据、Chroma、QueryIntent、RetrievalTrace、golden/subcategory/conversation benchmark、guardrail 已有 |
 | V1.5 | 提交材料和 Demo 稳定性 | 第一版完成 | README、架构、评测、Demo 脚本、提交材料、安全说明、1 分钟录屏均已有 |
-| V2 | 多品类 / Graph-aware Retrieval | V2-A 完成，V2-B 服饰 5 条样例已进后端检索 | raw 总库 100 条；25 条美妆 + 5 条服饰进入 enriched，Android Demo 仍以美妆主线为主 |
+| V2 | 多品类 / Graph-aware Retrieval | V2-A 完成，V2-B 服饰 5 条样例已进统一向量索引 | raw 总库 100 条；25 条美妆 + 5 条服饰进入 enriched，Android Demo 仍以美妆主线为主 |
 | V3 | Verifier / Feedback Loop | 有雏形，未完整闭环 | 生成后 guardrail 和 failure case 有了，但用户反馈、失败 query 自动记录、groundedness judge 未完成 |
 
 一句话说：**我们已经有保底可提交版本，接下来要做的是提高层次，而不是继续证明“能不能跑”。**
@@ -131,7 +131,7 @@ V1 下一步如果继续补强：
 
 目标：证明当前系统不是只为美妆写死，而是可以扩展到多类目电商导购；同时让“为什么推荐”从字段匹配升级到关系匹配。
 
-当前状态：**V2-A 多品类 schema 与外部电商字段参考第一版已完成，V2-B 服饰运动 5 条样例已进入后端检索链路**。
+当前状态：**V2-A 多品类 schema 与外部电商字段参考第一版已完成，V2-B 服饰运动 5 条样例已进入统一 Chroma `products` collection 和后端检索链路**。
 
 现状：
 
@@ -141,8 +141,9 @@ V1 下一步如果继续补强：
    - 服饰运动 25 条。
    - 食品饮料 25 条。
 2. enriched 当前覆盖 25 条美妆和 5 条服饰运动样例。
-3. RAG 主 Demo 仍聚焦美妆；服饰运动样例已可通过 debug retrieval 和本地 benchmark 验证。
-4. `docs/08_rag_retrieval_strategy.md` 已设计 V2 图结构：
+3. Chroma 当前统一索引 30 条 enriched 商品，并通过 metadata filter 限定 `canonical_category`、`sub_category` 和 `base_price`。
+4. RAG 主 Demo 仍聚焦美妆；服饰运动样例已可通过 debug retrieval 和本地 benchmark 验证。
+5. `docs/08_rag_retrieval_strategy.md` 已设计 V2 图结构：
    - product -> brand。
    - product -> category。
    - product -> sub_category。
@@ -212,33 +213,33 @@ V3 建议拆成两层：
 
 ## 当前推荐优先级
 
-### 第一优先级：全品类向量索引策略
+### 第一优先级：多商品对比
 
 原因：
 
-1. 服饰 5 条样例已经通过类目/子类/关键词检索。
-2. 当前 Chroma collection 仍只索引美妆，如果继续扩品类，需要避免不同品类互相抢分。
-3. 这是 V2-C graph-aware / 多品类检索前最关键的工程边界。
-
-完成标准：
-
-1. 决定使用分品类 collection，还是统一 collection + metadata filter。
-2. `build_index.py` 或新脚本支持多品类索引。
-3. 美妆 golden / subcategory 与 apparel benchmark 都能稳定通过。
-4. `RetrievalTrace` 能区分 keyword/vector/category/sub_category 各自贡献。
-
-### 第二优先级：多商品对比
-
-原因：
-
-1. 对比是“辅助决策”的强展示点。
-2. 如果先有 graph/schema，对比会更自然，不只是 prompt 模板。
+1. 统一 `products` collection + metadata filter 已完成，服饰样例也有 vector hits。
+2. 对比是“辅助决策”的强展示点，能直接体现导购不是单品推荐。
+3. 现在已有 `variants`、`specifications`、`attribute_provenance`，对比会比纯 prompt 模板更扎实。
 
 完成标准：
 
 1. 增加 1-2 条对比型 benchmark。
 2. 回答按价格、适合人群、场景、注意事项给出选择建议。
 3. Android 展示多张相关商品卡片。
+
+### 第二优先级：RetrievalTrace 可解释性增强
+
+原因：
+
+1. metadata filter 已经参与召回，但当前 trace 主要通过 vector hit reason 间接展示。
+2. 答辩时如果能清楚展示“先按类目/子类/预算过滤，再向量召回，再 rerank”，会更容易讲清楚工程深度。
+3. 后续 graph-aware relation score 也需要 trace 结构先留位置。
+
+完成标准：
+
+1. Trace 中显式展示 metadata filter。
+2. Trace 中区分 category/sub_category/budget filter、keyword、vector、facet score。
+3. debug 接口和评测 JSONL 能看到这些字段。
 
 ### 第三优先级：反馈闭环
 

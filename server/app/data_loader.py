@@ -2,6 +2,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+CATEGORY_TO_CANONICAL = {
+    "美妆护肤": "beauty",
+    "服饰运动": "apparel",
+    "数码电子": "digital",
+    "食品饮料": "food",
+}
+
 
 def read_json(path: Path) -> dict[str, Any]:
     with path.open(encoding="utf-8") as f:
@@ -90,3 +97,18 @@ def product_search_text(item: dict[str, Any]) -> str:
             structured,
         ]
     )
+
+
+def product_index_metadata(item: dict[str, Any]) -> dict[str, str | float | int | bool]:
+    raw = item["raw"]
+    raw_category = str(raw.get("category", ""))
+    canonical_category = item.get("canonical_category") or CATEGORY_TO_CANONICAL.get(raw_category, "unknown")
+    return {
+        "raw_product_id": str(raw.get("product_id", "")),
+        "canonical_category": str(canonical_category),
+        "raw_category": raw_category,
+        "sub_category": str(raw.get("sub_category", "")),
+        "base_price": float(raw.get("base_price", 0)),
+        "schema_version": str(item.get("schema_version", "1.0")),
+        "enriched_source": str(Path(item.get("_enriched_path", "")).name),
+    }

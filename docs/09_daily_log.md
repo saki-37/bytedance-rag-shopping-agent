@@ -34,3 +34,4 @@
 - 新增 [电商 Schema 外部参考调研](16_ecommerce_schema_references.md)，对照 Amazon、Google Merchant Center、Schema.org、淘宝开放平台和电商属性抽取研究，补回 `variants`、`attributes.specifications` 和 `source.attribute_provenance` 三个 V2-B 标注关键字段。
 - 新增 `data/enriched/apparel_products.jsonl`，完成 5 条服饰运动 V2-B enriched 样例；后端改为加载 `data/enriched/*_products.jsonl`，并让检索文本纳入 `display`、`variants`、`category_attributes`、`retrieval` 和 `source`。
 - 新增 `data/eval/apparel_queries.json`，服饰 5 条 query 全部 PASS；同步复跑美妆 golden、subcategory、conversation 和 generation guardrail，均 PASS。
+- 将 Chroma 从旧的 `beauty_products` collection 升级为统一 `products` collection；`build_index.py` 现在索引全部 enriched 商品，并写入 `canonical_category`、`sub_category`、`base_price` metadata；服饰 benchmark 已可用 `--require-vector` 通过。

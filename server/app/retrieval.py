@@ -290,7 +290,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
 
     budget = intent.universal_constraints.budget_max
     terms = _query_terms(query)
-    vector_scores, vector_hits = _vector_scores(query, index_dir, intent.category_candidates)
+    vector_scores, vector_hits = _vector_scores(query, index_dir, intent)
     keyword_hits: list[RetrievalHit] = []
     final_hits: list[RetrievalHit] = []
     hard_filtered_out: list[FilteredProduct] = []
@@ -562,9 +562,7 @@ def _no_result_clarification(intent: QueryIntent) -> str:
     return "当前商品池里没有足够匹配的商品。你想优先补充预算、肤质，还是主要功效？"
 
 
-def _vector_scores(query: str, index_dir: Path | None, category_candidates: list[str]) -> tuple[dict[str, float], list[RetrievalHit]]:
-    if category_candidates and "beauty" not in category_candidates:
-        return {}, []
+def _vector_scores(query: str, index_dir: Path | None, intent: QueryIntent) -> tuple[dict[str, float], list[RetrievalHit]]:
     if index_dir is None or not index_dir.exists():
         return {}, []
     try:
@@ -573,28 +571,77 @@ def _vector_scores(query: str, index_dir: Path | None, category_candidates: list
 
         model = sentence_model()
         embedding = model.encode([query], normalize_embeddings=True)[0].tolist()
+        where = _metadata_where(intent)
         with contextlib.redirect_stderr(io.StringIO()):
             client = chromadb.PersistentClient(
                 path=str(index_dir),
                 settings=Settings(anonymized_telemetry=False),
             )
-            collection = client.get_collection("beauty_products")
+            collection = _get_products_collection(client)
             collection_size = collection.count()
             if collection_size == 0:
                 return {}, []
-            result = collection.query(query_embeddings=[embedding], n_results=min(8, collection_size))
+            query_kwargs = {
+                "query_embeddings": [embedding],
+                "n_results": min(8, collection_size),
+            }
+            if where is not None:
+                query_kwargs["where"] = where
+            result = collection.query(**query_kwargs)
         ids = result.get("ids", [[]])[0]
         distances = result.get("distances", [[]])[0] if result.get("distances") else []
         scores: dict[str, float] = {}
         hits: list[RetrievalHit] = []
+        filter_reason = f"metadata_filter:{where}" if where is not None else "metadata_filter:none"
         for rank, product_id in enumerate(ids):
             distance = float(distances[rank]) if rank < len(distances) else float(rank)
             score = max(0.0, 8.0 - rank) + max(0.0, 1.0 - distance)
             scores[product_id] = score
-            hits.append(RetrievalHit(product_id=product_id, score=round(score, 3), reasons=[f"vector_rank:{rank}"]))
+            hits.append(
+                RetrievalHit(
+                    product_id=product_id,
+                    score=round(score, 3),
+                    reasons=[f"vector_rank:{rank}", filter_reason],
+                )
+            )
         return scores, hits
     except Exception:
         return {}, []
+
+
+def _get_products_collection(client):
+    try:
+        return client.get_collection("products")
+    except Exception:
+        return client.get_collection("beauty_products")
+
+
+def _metadata_where(intent: QueryIntent) -> dict | None:
+    clauses: list[dict] = []
+    category_candidates = intent.category_candidates
+    if category_candidates:
+        clauses.append(_field_filter("canonical_category", category_candidates))
+
+    sub_categories = intent.facets.get("sub_category", [])
+    if sub_categories:
+        clauses.append(_field_filter("sub_category", sub_categories))
+
+    budget = intent.universal_constraints.budget_max
+    if budget is not None:
+        clauses.append({"base_price": {"$lte": budget}})
+
+    if not clauses:
+        return None
+    if len(clauses) == 1:
+        return clauses[0]
+    return {"$and": clauses}
+
+
+def _field_filter(field: str, values: list[str]) -> dict:
+    unique_values = list(dict.fromkeys(values))
+    if len(unique_values) == 1:
+        return {field: unique_values[0]}
+    return {field: {"$in": unique_values}}
 
 
 def _to_card(item: dict, query: str) -> ProductCard:
