@@ -12,6 +12,8 @@
 
 2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明；根目录 `README.md` 和 `docs/14_submission_package.md` 已整理成提交入口。2026-05-28 继续将 enriched 美妆数据从 6 条扩展到完整 25 条，重建 Chroma 索引并复跑 golden queries、conversation cases、subcategory queries 和 generation guardrails；Android 端已抽样复验眼霜、蜜粉、卸妆三个新增子类。当前仍不是最终参赛版本，最主要的缺口是：Graph-aware / hybrid retrieval 还没有进入主链路，多商品对比和用户反馈闭环尚未实现。
 
+补充更新：多商品对比第一版已在同日完成，新增 comparison benchmark 并通过两款防晒、两件 T 恤、跑步鞋/徒步鞋三类对比测试。RetrievalTrace 可解释性增强第一版也已完成，debug 接口和评测 JSONL 现在可直接看到 `metadata_filter`、`filter_summary`、`ranking_signals`。当前最主要的缺口更新为：Graph-aware / hybrid retrieval 还没有进入主链路，trace 尚未展示 graph relation，用户反馈闭环尚未实现。
+
 ## 对照课题必做最小闭环
 
 | 模块 | 课题要求 | 当前状态 | 说明 |
@@ -61,10 +63,12 @@
   - `我想买护肤品` 这类信息不足 query 会先追问。
   - `不要酒精/刺激` 能进入排除条件，并写入 `RetrievalTrace`。
 - Chroma 索引已构建：
-  - 当前入库 25 条 enriched 美妆商品。
+  - 当前统一 `products` collection 入库 30 条 enriched 商品：25 条美妆 + 5 条服饰。
   - 运行时 vector 通道能返回 8 个 hits。
   - `scripts/run_golden_queries.py --require-vector` 检索层 8 条全部通过。
   - `scripts/run_subcategory_queries.py --require-vector` 子类 query 6 条全部通过。
+  - `scripts/run_subcategory_queries.py --cases data/eval/apparel_queries.json --require-vector` 服饰 query 5 条全部通过。
+  - `scripts/run_comparison_queries.py --require-vector` 对比 query 3 条全部通过。
   - `scripts/run_conversation_cases.py` 多轮对话 4 条全部通过。
 - 生成层 guardrail 已完成：
   - 模型输出先在后端聚合并校验，再重新流式输出给客户端。
@@ -143,17 +147,19 @@
 
 ## 当前最应该做的下一步
 
-先做 **多商品对比设计与最小实现**。
+下一步做 **Graph-aware relation score 或轻量反馈闭环**。
 
 原因：
 
 - README、提交材料清单和架构文档已经形成第一版入口。
 - 25 条 enriched 美妆数据、Chroma 索引和脚本评测已经更新。
 - Android 端新增子类抽样已经跑过眼霜、蜜粉、卸妆，展示稳定。
-- 下一条主线应补一个能体现“多候选选择/对比”的展示点。
+- 多商品对比第一版已经完成并通过 benchmark。
+- RetrievalTrace 已经能显式展示 metadata filter、过滤摘要和 ranking signals。
+- 下一条主线可以二选一：继续把 product-attribute relation score 放进 trace，或者先做有用/不准确反馈记录。
 
 完成标准：
 
-- 设计一个“防晒对比”或“定妆产品对比”的最小实现方案。
-- 增加 1-2 条对比型 benchmark，检查回答是否引用价格、肤质、注意事项等结构化证据。
-- Android 端能展示对比型回复和相关商品卡片。
+- 如果走 graph-aware：trace 中新增 graph relation 命中和 relation score。
+- 如果走反馈闭环：后端记录 query、intent、products、trace、feedback 到本地 JSONL。
+- 两条路线都要保持 benchmark 可回归。

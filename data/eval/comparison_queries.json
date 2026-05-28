@@ -1,0 +1,32 @@
+[
+  {
+    "id": "CMP-01",
+    "title": "两款防晒怎么选",
+    "query": "欧莱雅防晒和安热沙防晒怎么选？",
+    "expect": {
+      "expected_product_ids": ["p_beauty_006", "p_beauty_010"],
+      "allowed_sub_categories": ["防晒"],
+      "min_products": 2
+    }
+  },
+  {
+    "id": "CMP-02",
+    "title": "AIRism 和 DRY-EX 两件 T 恤怎么选",
+    "query": "AIRism和DRY-EX两件T恤哪个更适合夏天通勤和运动？",
+    "expect": {
+      "expected_product_ids": ["p_clothes_001", "p_clothes_002"],
+      "allowed_sub_categories": ["短袖T恤"],
+      "min_products": 2
+    }
+  },
+  {
+    "id": "CMP-03",
+    "title": "跑步鞋和徒步鞋场景选择",
+    "query": "跑步鞋和徒步鞋我该买哪个？我周末近郊走路，也偶尔慢跑",
+    "expect": {
+      "expected_product_ids": ["p_clothes_007", "p_clothes_014"],
+      "allowed_sub_categories": ["跑步鞋", "徒步鞋"],
+      "min_products": 2
+    }
+  }
+]

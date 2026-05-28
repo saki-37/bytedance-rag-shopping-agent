@@ -234,7 +234,10 @@ def evaluate(spec: GoldenQuery, debug: dict[str, Any], require_vector: bool) -> 
         "products": product_ids,
         "clarification_question": debug["clarification_question"],
         "parsed_intent": intent,
+        "metadata_filter": trace.get("metadata_filter", {}),
+        "filter_summary": trace.get("filter_summary", {}),
         "final_ranking": trace["final_ranking"],
+        "ranking_signals": trace.get("ranking_signals", {}),
         "vector_hits_count": vector_hits_count,
         "guardrail_checks": trace["guardrail_checks"],
     }

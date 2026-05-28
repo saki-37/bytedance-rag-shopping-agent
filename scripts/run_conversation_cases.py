@@ -113,6 +113,9 @@ def run_case(case: dict[str, Any], client: Any) -> dict[str, Any]:
                 "products": [product["product_id"] for product in debug["products"]],
                 "clarification_question": debug["clarification_question"],
                 "parsed_intent": debug["trace"]["parsed_intent"],
+                "metadata_filter": debug["trace"].get("metadata_filter", {}),
+                "filter_summary": debug["trace"].get("filter_summary", {}),
+                "ranking_signals": debug["trace"].get("ranking_signals", {}),
                 "guardrail_checks": debug["trace"]["guardrail_checks"],
             }
         )

@@ -240,7 +240,67 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 - `/private/tmp/ragshopping_mifen.png`
 - `/private/tmp/ragshopping_xiezhuang.png`
 
+## 多商品对比 Benchmark
+
+命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/run_comparison_queries.py \
+  --require-vector \
+  --output /private/tmp/bytedance-rag-comparison.jsonl
+```
+
+当前结果：**3 / 3 PASS**。
+
+| Case | 场景 | 期望 | 当前结果 |
+| --- | --- | --- | --- |
+| CMP-01 | 欧莱雅防晒和安热沙防晒怎么选 | 召回两款防晒，进入 comparison mode | PASS：召回 `p_beauty_010`、`p_beauty_023`、`p_beauty_006`，vector hits=8 |
+| CMP-02 | AIRism 和 DRY-EX 两件 T 恤怎么选 | 召回两件 T 恤，进入 comparison mode | PASS：召回 `p_clothes_001`、`p_clothes_002`，vector hits=2 |
+| CMP-03 | 跑步鞋和徒步鞋该买哪个 | 召回跑步鞋和徒步鞋，进入 comparison mode | PASS：召回 `p_clothes_014`、`p_clothes_007`，vector hits=2 |
+
+说明：
+
+1. 第一版不新增复杂 UI，继续复用聊天回复和多商品卡片。
+2. Query parser 会识别 `对比`、`比较`、`怎么选`、`选哪个`、`买哪个`、`该买哪个`、`哪个更`、`哪款更`、`更适合`、`二选一`、`区别` 等触发词。
+3. 真实 LLM prompt 已要求对比时围绕价格、适合对象/场景、优势、注意事项和保守选择建议回答。
+4. 如果真实 LLM 输出被 guardrail 拦截，安全兜底回答也会生成对比式结构，并坚持只基于召回商品资料。
+
 ## SSE 稳定性
+
+## RetrievalTrace 可解释性字段
+
+目标：让 debug 接口和离线 JSONL 不只给最终商品列表，还能解释“为什么进入这个候选集、哪些商品被过滤、最终 ranking 靠哪些信号”。
+
+新增字段：
+
+| 字段 | 含义 | 示例 |
+| --- | --- | --- |
+| `metadata_filter` | 传给 Chroma `products` collection 的 metadata filter | `{"canonical_category": "beauty"}` |
+| `filter_summary` | 后端硬过滤原因计数 | `{"category": 5, "required_effect": 16}` |
+| `ranking_signals` | 每个最终商品的排序信号分桶 | `keyword`、`vector`、`facet`、`budget`、`soft_preference` |
+
+当前已覆盖的输出：
+
+1. `/api/debug/retrieve` 的 `trace`。
+2. `scripts/run_golden_queries.py` 输出 JSONL。
+3. `scripts/run_subcategory_queries.py` 输出 JSONL。
+4. `scripts/run_comparison_queries.py` 输出 JSONL。
+5. `scripts/run_conversation_cases.py` 输出 JSONL。
+
+复验命令：
+
+```bash
+server/.venv/bin/python scripts/run_comparison_queries.py \
+  --require-vector \
+  --output /private/tmp/bytedance-rag-comparison-final.jsonl
+```
+
+抽样结果：CMP-01 的 JSONL 中可直接看到：
+
+- `metadata_filter`: `{"canonical_category": "beauty"}`
+- `filter_summary`: `{"category": 5, "required_effect": 16}`
+- `ranking_signals`: 防晒候选商品分别包含 `vector` / `facet` / `keyword` 等信号。
 
 命令：
 
@@ -264,7 +324,7 @@ server/.venv/bin/python scripts/run_golden_queries.py --check-stream --require-v
 
 ## 下一步
 
-1. 增加多商品对比评测样例。
-2. 把 `RetrievalTrace` 进一步扩展为可展示 metadata filter / graph relation 命中。
-3. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
+1. 把 `RetrievalTrace` 进一步扩展为可展示 graph relation 命中。
+2. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
+3. 扩展多商品对比到更多品类和更复杂约束。
 4. 设计用户反馈闭环的最小记录结构。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run sub-category retrieval regression cases for the expanded beauty catalog."""
+"""Run comparison-query retrieval regression cases."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 
-DEFAULT_CASES = ROOT / "data" / "eval" / "subcategory_queries.json"
+DEFAULT_CASES = ROOT / "data" / "eval" / "comparison_queries.json"
 DEFAULT_BASE_URL = "http://127.0.0.1:8000"
-DEFAULT_OUTPUT = ROOT / "data" / "tmp" / "evals" / "subcategory_queries_latest.jsonl"
+DEFAULT_OUTPUT = ROOT / "data" / "tmp" / "evals" / "comparison_queries_latest.jsonl"
 
 
 def main() -> None:
@@ -33,7 +33,7 @@ def main() -> None:
         status = "PASS" if record["passed"] else "FAIL"
         print(
             f"[{status}] {record['id']} products={record['products']} "
-            f"sub_categories={record['sub_categories']} vector_hits={record['vector_hits_count']}"
+            f"comparison={record['comparison_mode']} vector_hits={record['vector_hits_count']}"
         )
         for failure in record["failures"]:
             print(f"  - {failure}")
@@ -44,7 +44,7 @@ def main() -> None:
     print(f"Wrote {len(records)} records to {args.output}")
 
     if failures:
-        raise SystemExit(f"Subcategory query failures: {', '.join(failures)}")
+        raise SystemExit(f"Comparison query failures: {', '.join(failures)}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -103,31 +103,20 @@ def evaluate(case: dict[str, Any], debug: dict[str, Any], require_vector: bool) 
 
     if debug["clarification_question"]:
         failures.append(f"unexpected_clarification_question={debug['clarification_question']}")
-    if not products:
-        failures.append("expected_products")
+    if not intent.get("comparison_mode"):
+        failures.append("expected_comparison_mode")
 
-    expected_budget = expectation.get("expected_budget_max")
-    if expected_budget is not None:
-        parsed_budget = intent["universal_constraints"]["budget_max"]
-        if parsed_budget != expected_budget:
-            failures.append(f"budget_parse_mismatch expected={expected_budget} got={parsed_budget}")
-        over_budget = [product["product_id"] for product in products if product["price"] > expected_budget]
-        if over_budget:
-            failures.append(f"over_budget_products={over_budget} budget={expected_budget}")
+    min_products = expectation.get("min_products", 2)
+    if len(products) < min_products:
+        failures.append(f"expected_at_least_{min_products}_products got={len(products)}")
 
-    for facet_name, expected_values in expectation.get("expected_facets", {}).items():
-        actual_values = intent["facets"].get(facet_name, [])
-        missing = [value for value in expected_values if value not in actual_values]
-        if missing:
-            failures.append(f"missing_facet {facet_name}={missing} actual={actual_values}")
-
-    for term in expectation.get("expected_exclude_terms", []):
-        if term not in intent["exclude_terms"]:
-            failures.append(f"missing_exclude_term={term} actual={intent['exclude_terms']}")
-
-    expected_any = expectation.get("expected_any_product_ids", [])
-    if expected_any and not set(expected_any).intersection(product_ids):
-        failures.append(f"missing_expected_product any_of={expected_any} got={product_ids}")
+    missing_products = [
+        product_id
+        for product_id in expectation.get("expected_product_ids", [])
+        if product_id not in product_ids
+    ]
+    if missing_products:
+        failures.append(f"missing_expected_products={missing_products} got={product_ids}")
 
     allowed_sub_categories = expectation.get("allowed_sub_categories", [])
     if allowed_sub_categories:
@@ -146,6 +135,7 @@ def evaluate(case: dict[str, Any], debug: dict[str, Any], require_vector: bool) 
         "failures": failures,
         "products": product_ids,
         "sub_categories": sub_categories,
+        "comparison_mode": intent.get("comparison_mode"),
         "parsed_intent": intent,
         "metadata_filter": trace.get("metadata_filter", {}),
         "filter_summary": trace.get("filter_summary", {}),

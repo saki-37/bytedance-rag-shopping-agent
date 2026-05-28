@@ -35,3 +35,6 @@
 - 新增 `data/enriched/apparel_products.jsonl`，完成 5 条服饰运动 V2-B enriched 样例；后端改为加载 `data/enriched/*_products.jsonl`，并让检索文本纳入 `display`、`variants`、`category_attributes`、`retrieval` 和 `source`。
 - 新增 `data/eval/apparel_queries.json`，服饰 5 条 query 全部 PASS；同步复跑美妆 golden、subcategory、conversation 和 generation guardrail，均 PASS。
 - 将 Chroma 从旧的 `beauty_products` collection 升级为统一 `products` collection；`build_index.py` 现在索引全部 enriched 商品，并写入 `canonical_category`、`sub_category`、`base_price` metadata；服饰 benchmark 已可用 `--require-vector` 通过。
+- 进入多商品对比切片：先复用现有聊天回复和多商品卡片，不新增复杂 UI；目标是支持“怎么选/哪个更适合/对比”类 query，并沉淀对比型 benchmark。
+- 完成多商品对比第一版：新增 `data/eval/comparison_queries.json` 和 `scripts/run_comparison_queries.py`，覆盖两款防晒、两件 T 恤、跑步鞋/徒步鞋三类对比；3 条 comparison benchmark 全部 PASS，并同步复跑 apparel、subcategory、golden、conversation 和 generation guardrail，均 PASS。
+- 完成 RetrievalTrace 可解释性增强第一版：trace 新增 `metadata_filter`、`filter_summary`、`ranking_signals`，并同步写入 golden、subcategory、comparison、conversation 的 JSONL 评测输出；完整回归通过。

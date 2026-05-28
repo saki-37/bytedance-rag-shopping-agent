@@ -16,12 +16,14 @@
 | 阶段 | 名称 | 当前状态 | 判断 |
 | --- | --- | --- | --- |
 | V0 | 可跑端到端闭环 | 已完成 | Android、FastAPI、SSE、商品卡片、图片和详情弹窗都已跑通 |
-| V1 | Constraint-Aware Hybrid RAG | 基本完成 | 25 条美妆 enriched 数据、Chroma、QueryIntent、RetrievalTrace、golden/subcategory/conversation benchmark、guardrail 已有 |
+| V1 | Constraint-Aware Hybrid RAG | 基本完成 | 25 条美妆 enriched 数据、Chroma、QueryIntent、显式 RetrievalTrace、golden/subcategory/conversation/comparison benchmark、guardrail 已有 |
 | V1.5 | 提交材料和 Demo 稳定性 | 第一版完成 | README、架构、评测、Demo 脚本、提交材料、安全说明、1 分钟录屏均已有 |
 | V2 | 多品类 / Graph-aware Retrieval | V2-A 完成，V2-B 服饰 5 条样例已进统一向量索引 | raw 总库 100 条；25 条美妆 + 5 条服饰进入 enriched，Android Demo 仍以美妆主线为主 |
 | V3 | Verifier / Feedback Loop | 有雏形，未完整闭环 | 生成后 guardrail 和 failure case 有了，但用户反馈、失败 query 自动记录、groundedness judge 未完成 |
 
 一句话说：**我们已经有保底可提交版本，接下来要做的是提高层次，而不是继续证明“能不能跑”。**
+
+最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`。下一步建议转入 graph-aware relation score 或轻量反馈闭环。
 
 ## 评分维度对照
 
@@ -29,8 +31,8 @@
 | --- | --- | --- | --- | --- |
 | 基础功能完整性 | 35% | 客户端对话 -> 后端 RAG -> 模型生成 -> 流式返回 -> 商品卡片 | V0 已完成，并有 Android 端复验证据 | 保持稳定，必要时重录更干净 Demo |
 | 工程质量 | 25% | 代码结构、接口设计、错误处理、文档、安全配置 | monorepo、API 契约、README、架构、评测、安全、提交材料已有 | 每次新增能力后同步文档和评测证据 |
-| 效果与可靠性 | 20% | 检索准确、无幻觉、复杂场景处理 | V1 基本完成；预算、排除、追问、trace、guardrail 已有 | 补对比型 query 和更细 groundedness |
-| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace | 先做多品类 schema / graph-aware，再做多商品对比或反馈闭环 |
+| 效果与可靠性 | 20% | 检索准确、无幻觉、复杂场景处理 | V1 基本完成；预算、排除、追问、对比、显式 trace、guardrail 已有 | 补更细 groundedness |
+| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace；多商品对比已有第一版 | 先做 graph-aware relation score，再做反馈闭环 |
 
 ## V0：可跑闭环
 
@@ -80,6 +82,7 @@ V0 风险：
    - 8 条 golden queries。
    - 6 条 subcategory queries。
    - 4 条 conversation cases。
+   - 3 条 comparison queries。
    - 生成层 guardrail regression。
 4. Android 端复验：
    - 油皮通勤防晒。
@@ -94,13 +97,13 @@ V0 风险：
 尚未完成：
 
 1. 对所有功效声明做细粒度 groundedness 校验。
-2. 对比型 query 还没有独立 benchmark 和实现策略。
+2. 对比型 query 已有第一版 benchmark 和实现策略，但 Android 端真实演示还可继续复验。
 3. 真实 Doubao 下的所有子类 query 尚未系统复验。
 4. 纯向量、约束混合、graph-aware 三种检索版本的指标对比还没形成。
 
 V1 下一步如果继续补强：
 
-1. 增加对比型 benchmark。
+1. 扩展对比型 benchmark 到更多品类和更复杂约束。
 2. 给真实 Doubao 输出继续沉淀 failure cases。
 3. 把 guardrail 从“明显违规”推进到“声明是否有证据支持”。
 
@@ -215,6 +218,8 @@ V3 建议拆成两层：
 
 ### 第一优先级：多商品对比
 
+状态：**第一版已完成**。
+
 原因：
 
 1. 统一 `products` collection + metadata filter 已完成，服饰样例也有 vector hits。
@@ -227,7 +232,23 @@ V3 建议拆成两层：
 2. 回答按价格、适合人群、场景、注意事项给出选择建议。
 3. Android 展示多张相关商品卡片。
 
+当前验证：
+
+1. 新增 `data/eval/comparison_queries.json`，覆盖两款防晒、两件 T 恤、跑步鞋/徒步鞋三类对比。
+2. 新增 `scripts/run_comparison_queries.py`，检查 comparison mode、期望商品召回、子类范围和 vector hits。
+3. `server/.venv/bin/python scripts/run_comparison_queries.py --require-vector` 已通过，3 条 case 全部 PASS。
+4. 生成兜底回答已支持对比式结构：价格、适合对象、理由、注意事项和保守选择建议。
+
+实现边界：
+
+1. 第一版不新增复杂 UI；继续复用聊天回复和多商品卡片。
+2. 优先支持同品类对比，例如两款防晒、两件 T 恤、跑步鞋/徒步鞋选择。
+3. 若用户明确点名商品或品牌，召回必须覆盖被点名对象；若没有点名，则以同子类或相近用途商品做对比。
+4. 回答必须使用商品卡片和 enriched 字段，不输出资料外价格、库存、优惠或功效。
+
 ### 第二优先级：RetrievalTrace 可解释性增强
+
+状态：**第一版已完成**。
 
 原因：
 
@@ -240,6 +261,12 @@ V3 建议拆成两层：
 1. Trace 中显式展示 metadata filter。
 2. Trace 中区分 category/sub_category/budget filter、keyword、vector、facet score。
 3. debug 接口和评测 JSONL 能看到这些字段。
+
+当前验证：
+
+1. `RetrievalTrace` 新增 `metadata_filter`、`filter_summary`、`ranking_signals`。
+2. `scripts/run_golden_queries.py`、`scripts/run_subcategory_queries.py`、`scripts/run_comparison_queries.py`、`scripts/run_conversation_cases.py` 的 JSONL 输出已包含上述字段。
+3. comparison、golden、subcategory、apparel、conversation 和 generation guardrail 回归均 PASS。
 
 ### 第三优先级：反馈闭环
 

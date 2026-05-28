@@ -66,6 +66,9 @@ def build_safe_answer(cards: list[ProductCard], user_message: str | None = None)
             )
         return "我需要先补充一点关键信息：你的肤质、预算和主要功效需求分别是什么？"
 
+    if len(cards) >= 2 and user_message and _is_comparison_request(user_message):
+        return _build_comparison_answer(cards, user_message)
+
     if len(cards) == 1:
         card = cards[0]
         lines = [
@@ -85,6 +88,29 @@ def build_safe_answer(cards: list[ProductCard], user_message: str | None = None)
             line += f" 注意：{card.cautions[0]}。"
         lines.append(line)
     lines.append("上面只使用已召回商品资料，暂时不补资料外的商业承诺或额外功效。")
+    return "\n".join(lines)
+
+
+def _build_comparison_answer(cards: list[ProductCard], user_message: str) -> str:
+    lines = ["我先按商品资料做一个保守对比："]
+    for index, card in enumerate(cards[:3], start=1):
+        fit = "、".join(card.suitable_for[:2] or card.target_users[:2] or card.use_cases[:2])
+        caution = "；".join(card.cautions[:1] or card.avoid_for[:1])
+        parts = [
+            f"{index}. {card.brand}｜¥{card.price:g}",
+            f"适合：{fit or '资料中主要匹配本次需求'}",
+            f"理由：{card.reason or '商品资料里有对应匹配点'}",
+        ]
+        if caution:
+            parts.append(f"注意：{caution}")
+        lines.append("；".join(parts) + "。")
+
+    best = cards[0]
+    lines.append(
+        f"如果只能先选一个，我会先看 {best.brand}：它在当前检索里和你的问题匹配更靠前；"
+        "但最终仍要按你的预算、场景和不能接受的风险来定。"
+    )
+    lines.append("我这里只按已召回商品资料比较，不补资料外的价格、库存、优惠或额外功效。")
     return "\n".join(lines)
 
 
@@ -179,6 +205,25 @@ def _has_specific_constraints(user_message: str) -> bool:
             "不含",
             "酒精",
             "刺激",
+        ]
+    )
+
+
+def _is_comparison_request(user_message: str) -> bool:
+    return any(
+        term in user_message
+        for term in [
+            "对比",
+            "比较",
+            "怎么选",
+            "选哪个",
+            "买哪个",
+            "该买哪个",
+            "哪个更",
+            "哪款更",
+            "更适合",
+            "二选一",
+            "区别",
         ]
     )
 

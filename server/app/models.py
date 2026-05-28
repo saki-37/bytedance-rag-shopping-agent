@@ -43,6 +43,7 @@ class QueryIntent(BaseModel):
     hard_constraints: list[str] = Field(default_factory=list)
     soft_preferences: list[str] = Field(default_factory=list)
     exclude_terms: list[str] = Field(default_factory=list)
+    comparison_mode: bool = False
     needs_clarification: bool = False
     clarification_question: str | None = None
     confidence: float = 0.0
@@ -74,9 +75,12 @@ class GuardrailChecks(BaseModel):
 class RetrievalTrace(BaseModel):
     query: str
     parsed_intent: QueryIntent
+    metadata_filter: dict[str, object] = Field(default_factory=dict)
     hard_filtered_out: list[FilteredProduct] = Field(default_factory=list)
+    filter_summary: dict[str, int] = Field(default_factory=dict)
     retrieval_channels: RetrievalChannels = Field(default_factory=RetrievalChannels)
     final_ranking: list[RetrievalHit] = Field(default_factory=list)
+    ranking_signals: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
     guardrail_checks: GuardrailChecks = Field(default_factory=GuardrailChecks)
 
 

@@ -135,6 +135,20 @@ SOFT_PREFERENCE_TERMS = [
     "不晕染",
     "防晕染",
 ]
+COMPARISON_TERMS = [
+    "对比",
+    "比较",
+    "怎么选",
+    "选哪个",
+    "买哪个",
+    "该买哪个",
+    "哪个更",
+    "哪款更",
+    "更适合",
+    "二选一",
+    "还是",
+    "区别",
+]
 
 
 def _query_terms(query: str) -> set[str]:
@@ -151,6 +165,7 @@ def parse_query_intent(query: str) -> QueryIntent:
     facets = _extract_facets(query)
     exclude_terms = [] if _relaxes_exclusions(query) else _extract_exclude_terms(query)
     soft_preferences = _extract_soft_preferences(query)
+    comparison_mode = _is_comparison_query(query)
     category_candidates = _extract_category_candidates(query, facets, exclude_terms)
     hard_constraints: list[str] = []
     if budget is not None:
@@ -172,6 +187,7 @@ def parse_query_intent(query: str) -> QueryIntent:
         hard_constraints=hard_constraints,
         soft_preferences=soft_preferences,
         exclude_terms=exclude_terms,
+        comparison_mode=comparison_mode,
         needs_clarification=needs_clarification,
         clarification_question=(
             "你更在意肤质、预算，还是防晒/修护/控油这类具体功效？"
@@ -244,6 +260,10 @@ def _extract_soft_preferences(query: str) -> list[str]:
     return [term for term in SOFT_PREFERENCE_TERMS if term in query]
 
 
+def _is_comparison_query(query: str) -> bool:
+    return any(term in query for term in COMPARISON_TERMS)
+
+
 def _extract_category_candidates(
     query: str,
     facets: dict[str, list[str]],
@@ -290,7 +310,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
 
     budget = intent.universal_constraints.budget_max
     terms = _query_terms(query)
-    vector_scores, vector_hits = _vector_scores(query, index_dir, intent)
+    vector_scores, vector_hits, metadata_filter = _vector_scores(query, index_dir, intent)
     keyword_hits: list[RetrievalHit] = []
     final_hits: list[RetrievalHit] = []
     hard_filtered_out: list[FilteredProduct] = []
@@ -357,7 +377,9 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         trace = RetrievalTrace(
             query=query,
             parsed_intent=intent,
+            metadata_filter=metadata_filter,
             hard_filtered_out=hard_filtered_out,
+            filter_summary=_filter_summary(hard_filtered_out),
             retrieval_channels=RetrievalChannels(
                 keyword=sorted(keyword_hits, key=lambda hit: hit.score, reverse=True)[:8],
                 vector=vector_hits,
@@ -388,13 +410,16 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
     trace = RetrievalTrace(
         query=query,
         parsed_intent=intent,
+        metadata_filter=metadata_filter,
         hard_filtered_out=hard_filtered_out,
+        filter_summary=_filter_summary(hard_filtered_out),
         retrieval_channels=RetrievalChannels(
             keyword=sorted(keyword_hits, key=lambda hit: hit.score, reverse=True)[:8],
             vector=vector_hits,
             graph=[],
         ),
         final_ranking=final_hits,
+        ranking_signals=_ranking_signals(final_hits),
         guardrail_checks=GuardrailChecks(
             over_budget_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("price")),
             excluded_term_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("matches excluded")),
@@ -402,6 +427,60 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         ),
     )
     return RetrievalResult(cards=cards, context=context, trace=trace)
+
+
+def _filter_summary(filtered: list[FilteredProduct]) -> dict[str, int]:
+    counts = {
+        "category": 0,
+        "sub_category": 0,
+        "budget": 0,
+        "exclude_terms": 0,
+        "required_effect": 0,
+        "other": 0,
+    }
+    for entry in filtered:
+        reason = entry.reason
+        if reason.startswith("category"):
+            counts["category"] += 1
+        elif reason.startswith("sub_category"):
+            counts["sub_category"] += 1
+        elif reason.startswith("price"):
+            counts["budget"] += 1
+        elif reason.startswith("matches excluded"):
+            counts["exclude_terms"] += 1
+        elif reason.startswith("missing required effect"):
+            counts["required_effect"] += 1
+        else:
+            counts["other"] += 1
+    return {key: value for key, value in counts.items() if value}
+
+
+def _ranking_signals(final_hits: list[RetrievalHit]) -> dict[str, dict[str, list[str]]]:
+    signals: dict[str, dict[str, list[str]]] = {}
+    for hit in final_hits:
+        buckets: dict[str, list[str]] = {
+            "keyword": [],
+            "vector": [],
+            "facet": [],
+            "budget": [],
+            "soft_preference": [],
+            "other": [],
+        }
+        for reason in hit.reasons:
+            if reason.startswith("keyword_match"):
+                buckets["keyword"].append(reason)
+            elif reason.startswith("vector_hit"):
+                buckets["vector"].append(reason)
+            elif reason == "budget_match":
+                buckets["budget"].append(reason)
+            elif reason.startswith("soft_preference"):
+                buckets["soft_preference"].append(reason)
+            elif "_match:" in reason:
+                buckets["facet"].append(reason)
+            else:
+                buckets["other"].append(reason)
+        signals[hit.product_id] = {key: value for key, value in buckets.items() if value}
+    return signals
 
 
 def _matched_exclude_term(exclude_terms: list[str], item: dict) -> str | None:
@@ -562,16 +641,20 @@ def _no_result_clarification(intent: QueryIntent) -> str:
     return "当前商品池里没有足够匹配的商品。你想优先补充预算、肤质，还是主要功效？"
 
 
-def _vector_scores(query: str, index_dir: Path | None, intent: QueryIntent) -> tuple[dict[str, float], list[RetrievalHit]]:
+def _vector_scores(
+    query: str,
+    index_dir: Path | None,
+    intent: QueryIntent,
+) -> tuple[dict[str, float], list[RetrievalHit], dict]:
+    where = _metadata_where(intent)
     if index_dir is None or not index_dir.exists():
-        return {}, []
+        return {}, [], where or {}
     try:
         import chromadb
         from chromadb.config import Settings
 
         model = sentence_model()
         embedding = model.encode([query], normalize_embeddings=True)[0].tolist()
-        where = _metadata_where(intent)
         with contextlib.redirect_stderr(io.StringIO()):
             client = chromadb.PersistentClient(
                 path=str(index_dir),
@@ -580,7 +663,7 @@ def _vector_scores(query: str, index_dir: Path | None, intent: QueryIntent) -> t
             collection = _get_products_collection(client)
             collection_size = collection.count()
             if collection_size == 0:
-                return {}, []
+                return {}, [], where or {}
             query_kwargs = {
                 "query_embeddings": [embedding],
                 "n_results": min(8, collection_size),
@@ -604,9 +687,9 @@ def _vector_scores(query: str, index_dir: Path | None, intent: QueryIntent) -> t
                     reasons=[f"vector_rank:{rank}", filter_reason],
                 )
             )
-        return scores, hits
+        return scores, hits, where or {}
     except Exception:
-        return {}, []
+        return {}, [], where or {}
 
 
 def _get_products_collection(client):
