@@ -190,8 +190,9 @@ python3 scripts/scan_secrets.py --all
 - 服饰运动已有 5 条 V2-B 样例，并已进入统一 `products` 向量索引；Android 演示仍以美妆主线为主。
 - 多商品对比已有第一版 benchmark 和后端回答策略；当前仍复用聊天回复和多商品卡片，不新增复杂对比 UI。
 - `RetrievalTrace` 已显式输出 `metadata_filter`、`filter_summary` 和 `ranking_signals`，便于解释过滤和排序过程。
+- Graph-aware relation score 已有第一版：运行时派生 category、sub_category、budget、facet、preference 关系，并以小权重参与 rerank。
 - 图片输入、语音、购物车、下单不在当前版本。
-- Graph-aware retrieval 和用户反馈闭环是下一阶段增强项。
+- 用户反馈闭环和更细 groundedness judge 是下一阶段增强项。
 - Guardrail 是规则版，不是完整 groundedness judge。
 
 ## Recommended Reading Order

@@ -302,6 +302,41 @@ server/.venv/bin/python scripts/run_comparison_queries.py \
 - `filter_summary`: `{"category": 5, "required_effect": 16}`
 - `ranking_signals`: 防晒候选商品分别包含 `vector` / `facet` / `keyword` 等信号。
 
+## Graph-aware Relation Score
+
+目标：在不接重型图数据库的前提下，让检索不只是向量相似度，而是能显式利用商品和属性之间的结构化关系。
+
+第一版实现：
+
+1. 从 enriched 商品运行时派生轻量关系：
+   - `graph_category:<canonical_category>`
+   - `graph_sub_category:<sub_category>`
+   - `graph_price_within_budget`
+   - `graph_skin_type:<value>`
+   - `graph_effect:<value>`
+   - `graph_use_case:<value>`
+   - `graph_soft_preference:<value>`
+2. graph score 只作为 rerank 的小权重信号。
+3. 硬约束仍由预算、排除项和子类过滤控制，不被 graph score 覆盖。
+4. `RetrievalTrace.retrieval_channels.graph` 记录 graph hits；`ranking_signals.graph` 记录最终商品的 graph 信号。
+
+抽样结果：CMP-01 的最终排序中可看到：
+
+- `p_beauty_010`: `graph_category:beauty`、`graph_effect:防晒`
+- `p_beauty_023`: `graph_category:beauty`、`graph_effect:防晒`
+- `p_beauty_006`: `graph_category:beauty`、`graph_effect:防晒`
+
+回归结果：
+
+| Benchmark | Result |
+| --- | --- |
+| comparison queries | 3 / 3 PASS |
+| golden queries | 8 / 8 PASS |
+| beauty subcategory queries | 6 / 6 PASS |
+| apparel queries | 5 / 5 PASS |
+| conversation cases | 4 / 4 PASS |
+| generation guardrails | PASS |
+
 命令：
 
 ```bash
@@ -324,7 +359,7 @@ server/.venv/bin/python scripts/run_golden_queries.py --check-stream --require-v
 
 ## 下一步
 
-1. 把 `RetrievalTrace` 进一步扩展为可展示 graph relation 命中。
+1. 设计用户反馈闭环的最小记录结构。
 2. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
 3. 扩展多商品对比到更多品类和更复杂约束。
-4. 设计用户反馈闭环的最小记录结构。
+4. 进一步设计 groundedness judge，对功效声明做更细粒度证据校验。

@@ -18,12 +18,12 @@
 | V0 | 可跑端到端闭环 | 已完成 | Android、FastAPI、SSE、商品卡片、图片和详情弹窗都已跑通 |
 | V1 | Constraint-Aware Hybrid RAG | 基本完成 | 25 条美妆 enriched 数据、Chroma、QueryIntent、显式 RetrievalTrace、golden/subcategory/conversation/comparison benchmark、guardrail 已有 |
 | V1.5 | 提交材料和 Demo 稳定性 | 第一版完成 | README、架构、评测、Demo 脚本、提交材料、安全说明、1 分钟录屏均已有 |
-| V2 | 多品类 / Graph-aware Retrieval | V2-A 完成，V2-B 服饰 5 条样例已进统一向量索引 | raw 总库 100 条；25 条美妆 + 5 条服饰进入 enriched，Android Demo 仍以美妆主线为主 |
+| V2 | 多品类 / Graph-aware Retrieval | V2-A、V2-B、V2-C 第一版完成 | raw 总库 100 条；25 条美妆 + 5 条服饰进入 enriched；统一向量索引 + 轻量 graph relation score 已进主链路 |
 | V3 | Verifier / Feedback Loop | 有雏形，未完整闭环 | 生成后 guardrail 和 failure case 有了，但用户反馈、失败 query 自动记录、groundedness judge 未完成 |
 
 一句话说：**我们已经有保底可提交版本，接下来要做的是提高层次，而不是继续证明“能不能跑”。**
 
-最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`。下一步建议转入 graph-aware relation score 或轻量反馈闭环。
+最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`；**Graph-aware relation score** 第一版已进入主链路，trace 可展示 `graph_category`、`graph_sub_category`、`graph_effect`、`graph_price_within_budget` 等关系命中。下一步建议转入轻量反馈闭环或 groundedness judge。
 
 ## 评分维度对照
 
@@ -32,7 +32,7 @@
 | 基础功能完整性 | 35% | 客户端对话 -> 后端 RAG -> 模型生成 -> 流式返回 -> 商品卡片 | V0 已完成，并有 Android 端复验证据 | 保持稳定，必要时重录更干净 Demo |
 | 工程质量 | 25% | 代码结构、接口设计、错误处理、文档、安全配置 | monorepo、API 契约、README、架构、评测、安全、提交材料已有 | 每次新增能力后同步文档和评测证据 |
 | 效果与可靠性 | 20% | 检索准确、无幻觉、复杂场景处理 | V1 基本完成；预算、排除、追问、对比、显式 trace、guardrail 已有 | 补更细 groundedness |
-| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace；多商品对比已有第一版 | 先做 graph-aware relation score，再做反馈闭环 |
+| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace；多商品对比和 graph-aware 第一版已有 | 下一步做反馈闭环或 groundedness judge |
 
 ## V0：可跑闭环
 
@@ -173,6 +173,7 @@ V2 建议不要一步做全品类。建议拆成三步：
    - 不接 Neo4j，不接重型 GraphRAG。
    - 用本地 dict/JSON 构建 product-attribute relations。
    - 在 `RetrievalTrace` 中新增 `graph_hits` / `graph_relation_score`。
+   - 当前已完成第一版：运行时派生 category、sub_category、budget、facet、soft preference 关系命中，作为小权重 rerank 信号，并写入 `retrieval_channels.graph` 与 `ranking_signals.graph`。
 
 V2 完成标准：
 
@@ -280,6 +281,29 @@ V3 建议拆成两层：
 1. 用户能标记推荐是否有用。
 2. 后端记录 feedback JSONL。
 3. 文档中能展示如何用失败 query 反哺 prompt 或数据增强。
+
+### 已完成：Graph-aware Relation Score
+
+状态：**第一版已完成**。
+
+实现边界：
+
+1. 不接 Neo4j，不接重型 GraphRAG 框架。
+2. 运行时从 `canonical_category`、`sub_category`、`attributes`、`category_attributes` 派生轻量关系。
+3. 只把 graph relation score 作为 rerank 的小权重信号，不覆盖预算、排除项和子类硬过滤。
+4. `RetrievalTrace.retrieval_channels.graph` 展示 graph hits；`ranking_signals` 展示 graph 信号分桶。
+
+完成标准：
+
+1. 对当前 golden、subcategory、apparel、comparison query 不造成回归。
+2. 对服饰/美妆 query 能看到 category、sub_category、facet、budget 等关系命中。
+3. 评测 JSONL 可用于答辩解释“这不是纯向量召回，而是结构化关系 + 向量 + 关键词/facet 的混合检索”。
+
+当前验证：
+
+1. `retrieval_channels.graph` 已输出 graph hits。
+2. `ranking_signals.graph` 已显示最终商品的关系信号。
+3. comparison、golden、subcategory、apparel、conversation 和 generation guardrail 回归均 PASS。
 
 ## 当前不建议优先做
 

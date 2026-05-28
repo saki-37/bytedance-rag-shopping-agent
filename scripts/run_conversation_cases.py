@@ -116,6 +116,8 @@ def run_case(case: dict[str, Any], client: Any) -> dict[str, Any]:
                 "metadata_filter": debug["trace"].get("metadata_filter", {}),
                 "filter_summary": debug["trace"].get("filter_summary", {}),
                 "ranking_signals": debug["trace"].get("ranking_signals", {}),
+                "graph_hits_count": len(debug["trace"]["retrieval_channels"]["graph"]),
+                "graph_hits": debug["trace"]["retrieval_channels"]["graph"],
                 "guardrail_checks": debug["trace"]["guardrail_checks"],
             }
         )

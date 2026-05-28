@@ -12,7 +12,7 @@
 
 2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明；根目录 `README.md` 和 `docs/14_submission_package.md` 已整理成提交入口。2026-05-28 继续将 enriched 美妆数据从 6 条扩展到完整 25 条，重建 Chroma 索引并复跑 golden queries、conversation cases、subcategory queries 和 generation guardrails；Android 端已抽样复验眼霜、蜜粉、卸妆三个新增子类。当前仍不是最终参赛版本，最主要的缺口是：Graph-aware / hybrid retrieval 还没有进入主链路，多商品对比和用户反馈闭环尚未实现。
 
-补充更新：多商品对比第一版已在同日完成，新增 comparison benchmark 并通过两款防晒、两件 T 恤、跑步鞋/徒步鞋三类对比测试。RetrievalTrace 可解释性增强第一版也已完成，debug 接口和评测 JSONL 现在可直接看到 `metadata_filter`、`filter_summary`、`ranking_signals`。当前最主要的缺口更新为：Graph-aware / hybrid retrieval 还没有进入主链路，trace 尚未展示 graph relation，用户反馈闭环尚未实现。
+补充更新：多商品对比第一版已在同日完成，新增 comparison benchmark 并通过两款防晒、两件 T 恤、跑步鞋/徒步鞋三类对比测试。RetrievalTrace 可解释性增强第一版也已完成，debug 接口和评测 JSONL 现在可直接看到 `metadata_filter`、`filter_summary`、`ranking_signals`。Graph-aware relation score 第一版已进入主链路，trace 可展示 category、sub_category、budget、facet、preference 等关系命中。当前最主要的缺口更新为：用户反馈闭环尚未实现，功效声明 groundedness judge 还不够细。
 
 ## 对照课题必做最小闭环
 
@@ -147,7 +147,7 @@
 
 ## 当前最应该做的下一步
 
-下一步做 **Graph-aware relation score 或轻量反馈闭环**。
+下一步做 **轻量反馈闭环或 groundedness judge**。
 
 原因：
 
@@ -155,11 +155,11 @@
 - 25 条 enriched 美妆数据、Chroma 索引和脚本评测已经更新。
 - Android 端新增子类抽样已经跑过眼霜、蜜粉、卸妆，展示稳定。
 - 多商品对比第一版已经完成并通过 benchmark。
-- RetrievalTrace 已经能显式展示 metadata filter、过滤摘要和 ranking signals。
-- 下一条主线可以二选一：继续把 product-attribute relation score 放进 trace，或者先做有用/不准确反馈记录。
+- RetrievalTrace 已经能显式展示 metadata filter、过滤摘要、ranking signals 和 graph relation hits。
+- 下一条主线可以二选一：先做有用/不准确反馈记录，或者继续细化功效声明 groundedness judge。
 
 完成标准：
 
-- 如果走 graph-aware：trace 中新增 graph relation 命中和 relation score。
 - 如果走反馈闭环：后端记录 query、intent、products、trace、feedback 到本地 JSONL。
+- 如果走 groundedness：对功效、成分、禁忌、适合人群等声明做更细粒度证据校验。
 - 两条路线都要保持 benchmark 可回归。

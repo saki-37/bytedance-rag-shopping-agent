@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.data_loader import product_search_text
+from app.data_loader import CATEGORY_TO_CANONICAL, product_search_text
 from app.embeddings import sentence_model
 from app.models import (
     FilteredProduct,
@@ -312,6 +312,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
     terms = _query_terms(query)
     vector_scores, vector_hits, metadata_filter = _vector_scores(query, index_dir, intent)
     keyword_hits: list[RetrievalHit] = []
+    graph_hits: list[RetrievalHit] = []
     final_hits: list[RetrievalHit] = []
     hard_filtered_out: list[FilteredProduct] = []
     scored: list[tuple[float, dict, list[str]]] = []
@@ -357,6 +358,17 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         facet_score, facet_reasons = _facet_score(intent, item)
         score += facet_score
         reasons.extend(facet_reasons)
+        graph_score, graph_reasons = _graph_score(intent, item)
+        if graph_score:
+            score += graph_score
+            reasons.extend(graph_reasons)
+            graph_hits.append(
+                RetrievalHit(
+                    product_id=raw["product_id"],
+                    score=round(graph_score, 3),
+                    reasons=graph_reasons,
+                )
+            )
         if raw["product_id"] in vector_scores:
             vector_score = vector_scores[raw["product_id"]]
             score += vector_score
@@ -383,7 +395,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
             retrieval_channels=RetrievalChannels(
                 keyword=sorted(keyword_hits, key=lambda hit: hit.score, reverse=True)[:8],
                 vector=vector_hits,
-                graph=[],
+                graph=sorted(graph_hits, key=lambda hit: hit.score, reverse=True)[:8],
             ),
             guardrail_checks=GuardrailChecks(
                 over_budget_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("price")),
@@ -416,7 +428,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         retrieval_channels=RetrievalChannels(
             keyword=sorted(keyword_hits, key=lambda hit: hit.score, reverse=True)[:8],
             vector=vector_hits,
-            graph=[],
+            graph=sorted(graph_hits, key=lambda hit: hit.score, reverse=True)[:8],
         ),
         final_ranking=final_hits,
         ranking_signals=_ranking_signals(final_hits),
@@ -461,6 +473,7 @@ def _ranking_signals(final_hits: list[RetrievalHit]) -> dict[str, dict[str, list
         buckets: dict[str, list[str]] = {
             "keyword": [],
             "vector": [],
+            "graph": [],
             "facet": [],
             "budget": [],
             "soft_preference": [],
@@ -471,6 +484,8 @@ def _ranking_signals(final_hits: list[RetrievalHit]) -> dict[str, dict[str, list
                 buckets["keyword"].append(reason)
             elif reason.startswith("vector_hit"):
                 buckets["vector"].append(reason)
+            elif reason.startswith("graph_"):
+                buckets["graph"].append(reason)
             elif reason == "budget_match":
                 buckets["budget"].append(reason)
             elif reason.startswith("soft_preference"):
@@ -602,6 +617,49 @@ def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
         if preference.lower() in text:
             score += 1.0
             reasons.append(f"soft_preference:{preference}")
+    return score, reasons
+
+
+def _graph_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
+    raw = item["raw"]
+    text = product_search_text(item).lower()
+    score = 0.0
+    reasons: list[str] = []
+
+    canonical_category = str(
+        item.get("canonical_category")
+        or CATEGORY_TO_CANONICAL.get(str(raw.get("category", "")), "unknown")
+    )
+    if intent.category_candidates and canonical_category in intent.category_candidates:
+        score += 0.4
+        reasons.append(f"graph_category:{canonical_category}")
+
+    for sub_category in intent.facets.get("sub_category", []):
+        if str(raw.get("sub_category", "")) == sub_category:
+            score += 0.8
+            reasons.append(f"graph_sub_category:{sub_category}")
+
+    budget = intent.universal_constraints.budget_max
+    if budget is not None and float(raw.get("base_price", 0)) <= budget:
+        score += 0.3
+        reasons.append("graph_price_within_budget")
+
+    facet_weights = {
+        "skin_type": 0.5,
+        "effect": 0.5,
+        "use_case": 0.4,
+    }
+    for facet_name, weight in facet_weights.items():
+        for value in intent.facets.get(facet_name, []):
+            if value.lower() in text:
+                score += weight
+                reasons.append(f"graph_{facet_name}:{value}")
+
+    for preference in intent.soft_preferences:
+        if preference.lower() in text:
+            score += 0.2
+            reasons.append(f"graph_soft_preference:{preference}")
+
     return score, reasons
 
 

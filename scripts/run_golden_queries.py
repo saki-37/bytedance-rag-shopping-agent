@@ -187,6 +187,7 @@ def evaluate(spec: GoldenQuery, debug: dict[str, Any], require_vector: bool) -> 
     intent = trace["parsed_intent"]
     product_ids = [product["product_id"] for product in products]
     vector_hits_count = len(trace["retrieval_channels"]["vector"])
+    graph_hits_count = len(trace["retrieval_channels"]["graph"])
     failures: list[str] = []
 
     if spec.must_clarify:
@@ -239,6 +240,8 @@ def evaluate(spec: GoldenQuery, debug: dict[str, Any], require_vector: bool) -> 
         "final_ranking": trace["final_ranking"],
         "ranking_signals": trace.get("ranking_signals", {}),
         "vector_hits_count": vector_hits_count,
+        "graph_hits_count": graph_hits_count,
+        "graph_hits": trace["retrieval_channels"]["graph"],
         "guardrail_checks": trace["guardrail_checks"],
     }
 

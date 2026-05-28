@@ -38,3 +38,5 @@
 - 进入多商品对比切片：先复用现有聊天回复和多商品卡片，不新增复杂 UI；目标是支持“怎么选/哪个更适合/对比”类 query，并沉淀对比型 benchmark。
 - 完成多商品对比第一版：新增 `data/eval/comparison_queries.json` 和 `scripts/run_comparison_queries.py`，覆盖两款防晒、两件 T 恤、跑步鞋/徒步鞋三类对比；3 条 comparison benchmark 全部 PASS，并同步复跑 apparel、subcategory、golden、conversation 和 generation guardrail，均 PASS。
 - 完成 RetrievalTrace 可解释性增强第一版：trace 新增 `metadata_filter`、`filter_summary`、`ranking_signals`，并同步写入 golden、subcategory、comparison、conversation 的 JSONL 评测输出；完整回归通过。
+- 开始 Graph-aware relation score 第一版：先用运行时派生的属性关系做小权重 rerank 和 trace 展示，不接重型图数据库。
+- 完成 Graph-aware relation score 第一版：`retrieval_channels.graph` 和 `ranking_signals.graph` 已展示 category、sub_category、budget、facet、preference 等关系命中；comparison、golden、subcategory、apparel、conversation 和 generation guardrail 回归均 PASS。
