@@ -89,5 +89,5 @@ export http_proxy=http://127.0.0.1:7897
 ## 当前边界
 
 1. 当前 Demo 主线是美妆文字导购，不展示图片输入、语音或购物车。
-2. 当前 enriched 数据为 6 条美妆样例，后续需要扩展到完整 25 条美妆商品。
+2. 当前 enriched 数据已覆盖完整 25 条美妆商品，但 Demo 主线仍聚焦文字导购。
 3. Guardrail 是规则版，不是完整 groundedness judge；后续需要继续沉淀 failure cases。

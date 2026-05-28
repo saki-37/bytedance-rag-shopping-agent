@@ -38,9 +38,14 @@ FACET_LEXICON: dict[str, dict[str, list[str]]] = {
         "保湿": ["保湿", "补水", "滋润", "干燥"],
         "控油": ["控油", "油脂", "出油", "清爽"],
         "提亮": ["提亮", "亮肤", "美白", "暗沉"],
+        "淡斑": ["淡斑", "斑点", "色斑", "痘印", "色沉", "色素"],
         "抗初老": ["抗初老", "抗老", "淡纹", "紧致", "抗皱"],
+        "清洁": ["清洁", "洁面", "洗面奶", "卸妆", "毛孔污垢"],
+        "眼周护理": ["眼霜", "眼周", "干纹", "卡粉"],
         "底妆": ["底妆", "粉底", "粉底液", "遮瑕"],
         "定妆": ["定妆", "蜜粉", "散粉", "持妆"],
+        "唇妆": ["唇釉", "口红", "唇妆", "显色", "沾杯"],
+        "眉妆": ["眉笔", "画眉", "眉妆", "眉尾", "野生眉"],
     },
     "use_case": {
         "通勤": ["通勤", "上班", "日常"],
@@ -48,6 +53,8 @@ FACET_LEXICON: dict[str, dict[str, list[str]]] = {
         "运动": ["运动", "跑步", "健身", "防汗"],
         "妆前": ["妆前", "打底", "上妆"],
         "夜间": ["夜间", "晚上", "睡前"],
+        "约会": ["约会", "聚会", "拍照", "妆造"],
+        "出差": ["出差", "旅行装", "便携", "随身"],
     },
 }
 
@@ -61,13 +68,39 @@ BEAUTY_TERMS = [
     "精华",
     "粉底",
     "底妆",
+    "化妆水",
+    "爽肤水",
     "洗面奶",
+    "洁面",
+    "卸妆",
     "定妆",
+    "眼霜",
+    "唇釉",
+    "眉笔",
+    "面膜",
+    "蜜粉",
+    "散粉",
 ]
 
 GENERIC_RECOMMEND_TERMS = ["推荐", "买什么", "护肤品", "化妆品", "随便", "看看"]
 EXCLUDE_TERMS = ["酒精", "刺激", "刺痛", "太油", "油腻", "厚重", "拔干", "日系"]
-SOFT_PREFERENCE_TERMS = ["便宜", "清爽", "轻薄", "温和", "自然", "滋润", "高倍", "防水", "防汗"]
+SOFT_PREFERENCE_TERMS = [
+    "便宜",
+    "清爽",
+    "轻薄",
+    "温和",
+    "自然",
+    "滋润",
+    "高倍",
+    "防水",
+    "防汗",
+    "便携",
+    "持久",
+    "显色",
+    "不沾杯",
+    "不晕染",
+    "防晕染",
+]
 
 
 def _query_terms(query: str) -> set[str]:
@@ -225,6 +258,12 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
                 FilteredProduct(product_id=raw["product_id"], reason=f"matches excluded term: {excluded_term}")
             )
             continue
+        missing_effect = _missing_required_effect(intent, item)
+        if missing_effect is not None:
+            hard_filtered_out.append(
+                FilteredProduct(product_id=raw["product_id"], reason=f"missing required effect: {missing_effect}")
+            )
+            continue
         text = product_search_text(item).lower()
         score = 0.0
         reasons: list[str] = []
@@ -309,6 +348,16 @@ def _matched_exclude_term(exclude_terms: list[str], item: dict) -> str | None:
         if _has_excluded_risk(text, term.lower()):
             return term
     return None
+
+
+def _missing_required_effect(intent: QueryIntent, item: dict) -> str | None:
+    required_effects = intent.facets.get("effect", [])
+    if not required_effects:
+        return None
+    text = product_search_text(item).lower()
+    if any(effect.lower() in text for effect in required_effects):
+        return None
+    return ",".join(required_effects)
 
 
 def _has_excluded_risk(text: str, term: str) -> bool:

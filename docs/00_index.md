@@ -24,7 +24,7 @@
 
 第一阶段交付美妆文字闭环：
 
-1. 数据检查与 6 条增强样例。
+1. 数据检查与 25 条美妆增强数据。
 2. FastAPI SSE 聊天接口。
 3. Android Kotlin 原生聊天页、演示快捷问题、商品卡片与详情弹窗。
 4. Golden queries、真实 Doubao probe 和 Android 端闭环复验。

@@ -73,6 +73,7 @@ def validate_raw(products: dict[str, dict]) -> None:
 
 def validate_enriched(products: dict[str, dict]) -> None:
     rows = []
+    enriched_ids = set()
     for line_number, line in enumerate(ENRICHED_PATH.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
@@ -84,9 +85,17 @@ def validate_enriched(products: dict[str, dict]) -> None:
             if field not in row:
                 raise AssertionError(f"Line {line_number}: missing {field}")
         rows.append(row)
+        enriched_ids.add(raw_id)
 
-    if len(rows) < 5:
-        raise AssertionError(f"Expected at least 5 enriched beauty rows, got {len(rows)}")
+    beauty_ids = {product_id for product_id, item in products.items() if item.get("category") == "美妆护肤"}
+    missing = sorted(beauty_ids - enriched_ids)
+    extra = sorted(enriched_ids - beauty_ids)
+    if missing:
+        raise AssertionError(f"Missing enriched beauty rows: {missing}")
+    if extra:
+        raise AssertionError(f"Unexpected non-beauty enriched rows: {extra}")
+    if len(rows) != len(beauty_ids):
+        raise AssertionError(f"Expected {len(beauty_ids)} enriched beauty rows, got {len(rows)}")
 
 
 if __name__ == "__main__":

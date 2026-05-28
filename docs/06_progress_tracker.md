@@ -10,7 +10,7 @@
 
 > Android 快捷问题/文字输入 -> FastAPI `/api/chat/stream` -> 美妆商品检索 -> Doubao 流式回复 -> Android 展示回复、商品卡片、图片和详情弹窗。
 
-2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明；根目录 `README.md` 和 `docs/14_submission_package.md` 已整理成提交入口。当前仍不是最终参赛版本，最主要的缺口是：全量美妆 25 条数据尚未增强、Graph-aware / hybrid retrieval 还没有进入主链路、Demo 录屏还需要按平台要求裁剪或单独上传。
+2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明；根目录 `README.md` 和 `docs/14_submission_package.md` 已整理成提交入口。2026-05-28 继续将 enriched 美妆数据从 6 条扩展到完整 25 条，重建 Chroma 索引并复跑 golden queries、conversation cases 和 generation guardrails。当前仍不是最终参赛版本，最主要的缺口是：Graph-aware / hybrid retrieval 还没有进入主链路，多商品对比和用户反馈闭环尚未实现。
 
 ## 对照课题必做最小闭环
 
@@ -33,7 +33,7 @@
 | 阶段项 | 原计划 | 当前状态 | 备注 |
 | --- | --- | --- | --- |
 | Repo Bootstrap | 独立 monorepo、README、文档、`.env.example`、数据复制 | 已完成 | GitHub 远程已由用户创建并推送 |
-| Data MVP | 校验 100 条商品、100 张图片、5 条美妆增强样例 | 已完成第一版 | 已有 6 条美妆增强样例；全量美妆 25 条尚未增强 |
+| Data MVP | 校验 100 条商品、100 张图片、5 条美妆增强样例 | 已完成 V1 | 已覆盖完整 25 条美妆增强数据；`check_data.py` 会校验 25 条全部回连 raw 数据 |
 | Backend MVP | `/health`、`/api/chat/stream`、SSE 事件、检索、模型流式 | 已完成第一版 | mock、真实 Doubao 和安全兜底均可跑 |
 | Android MVP | Kotlin Compose 聊天、输入、流式回复、商品卡片 | 已完成第一版 | 卡片详情、真实图片、演示快捷问题已做第一版 |
 | Closed-loop Demo | 8 个 golden queries，至少 3 个端到端演示 | 已完成第一轮证据 | 后端真实 Doubao 三轮 probe 已保存；Android 端已复验油皮防晒、信息不足追问和商品详情 |
@@ -60,9 +60,10 @@
   - `我想买护肤品` 这类信息不足 query 会先追问。
   - `不要酒精/刺激` 能进入排除条件，并写入 `RetrievalTrace`。
 - Chroma 索引已构建：
-  - 当前入库 6 条 enriched 美妆商品。
-  - 运行时 vector 通道能返回 6 个 hits。
+  - 当前入库 25 条 enriched 美妆商品。
+  - 运行时 vector 通道能返回 8 个 hits。
   - `scripts/run_golden_queries.py --require-vector` 检索层 8 条全部通过。
+  - `scripts/run_conversation_cases.py` 多轮对话 4 条全部通过。
 - 生成层 guardrail 已完成：
   - 模型输出先在后端聚合并校验，再重新流式输出给客户端。
   - 编造价格、库存、优惠、下单承诺会被兜底回答替换。
@@ -91,12 +92,12 @@
    - `python3 scripts/scan_secrets.py --all`
 4. 如需最终代码提交，确认只提交 README、docs 和必要代码，不提交 `.env`、索引产物或录屏文件。
 
-### P1：扩展数据与复测
+### P1：数据扩展后复测与体验补强
 
-1. 扩展美妆增强数据：
-   - 当前 6 条 -> 至少覆盖 25 条美妆。
-   - 补全肤质、功效、成分/禁忌、使用场景、适合/不适合人群。
-2. 重建 Chroma 索引并复跑：
+1. 已扩展美妆增强数据：
+   - 当前 25 条覆盖完整美妆商品池。
+   - 已补全肤质、功效、成分/禁忌、使用场景、适合/不适合人群。
+2. 已重建 Chroma 索引并复跑：
    - `scripts/run_golden_queries.py --require-vector`
    - `scripts/run_conversation_cases.py`
    - `scripts/check_generation_guardrails.py`
@@ -131,16 +132,16 @@
 
 ## 当前最应该做的下一步
 
-先做 **Demo 录屏收口 + 数据扩展准备**。
+先做 **25 条数据版本的 Android 端抽样复验 + 多商品对比设计**。
 
 原因：
 
 - README、提交材料清单和架构文档已经形成第一版入口。
-- 本地录屏 `demo/录屏v1.mov` 已完成，但原始文件约 162 秒、196MB，需要裁剪或压缩成更适合上传的附件。
-- Demo 收口后，下一条主线应转向 enriched 美妆数据扩展和复测。
+- 25 条 enriched 美妆数据、Chroma 索引和脚本评测已经更新。
+- 数据池扩大后，下一条主线应确认 Android 端展示是否仍然稳定，并补一个能体现“多候选选择/对比”的展示点。
 
 完成标准：
 
-- 生成 60-90 秒可上传版本，并确认录屏中不包含 API Key 或敏感终端信息。
-- 提交材料清单中说明 Demo 作为平台附件上传，不进入 Git。
-- 开始扩展 `data/enriched/beauty_products.jsonl`，目标从 6 条覆盖到 25 条美妆商品。
+- 选 3-5 个新子类 query 做 Android 端抽样：洁面、眼霜、蜜粉、唇釉/眉笔。
+- 记录是否出现无关低价商品乱入、卡片排版或 guardrail 误拦截。
+- 设计一个“防晒对比”或“定妆产品对比”的最小实现方案。

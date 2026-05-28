@@ -112,7 +112,7 @@ flowchart TD
     M["用户消息 + 必要历史"] --> P["QueryIntent 解析"]
     P --> GATE{"信息是否足够？"}
     GATE -->|"不足"| ASK["返回澄清问题"]
-    GATE -->|"足够"| HF["硬约束过滤<br/>预算/明确排除"]
+    GATE -->|"足够"| HF["硬约束过滤<br/>预算/明确排除/必要功效"]
     HF --> KW["关键词/Facet 匹配"]
     HF --> VE["Chroma 向量召回"]
     KW --> RANK["融合排序"]
@@ -139,8 +139,9 @@ flowchart TD
 1. 明确预算直接硬过滤，不用模型猜。
 2. 泛泛说“我想买护肤品”时先追问，不直接推荐。
 3. “不要酒精/刺激”等排除条件进入检索和生成层约束。
-4. Chroma 作为语义召回通道，但不替代结构化约束。
-5. `/api/debug/retrieve` 可查看 `RetrievalTrace`，用于解释为什么推荐这些商品。
+4. 用户明确提出防晒、修护、定妆、淡斑等功效时，预算内但完全不匹配功效的商品不会靠低价乱入。
+5. Chroma 作为语义召回通道，但不替代结构化约束。
+6. `/api/debug/retrieve` 可查看 `RetrievalTrace`，用于解释为什么推荐这些商品。
 
 ## 生成与反幻觉
 
@@ -218,7 +219,7 @@ SSE 事件：
 ## 当前边界
 
 1. 主线仍是美妆文字导购，不包含图片输入、语音、购物车或下单。
-2. enriched 美妆数据目前是 6 条样例，尚未覆盖完整 25 条美妆商品。
+2. enriched 美妆数据已覆盖完整 25 条美妆商品，但当前主线仍只做美妆垂类。
 3. Guardrail 是规则版，不是完整 groundedness judge。
 4. Chroma 当前作为轻量向量召回通道，还没有做 embedding 对比 benchmark。
 5. Graph-aware retrieval、多商品对比和反馈闭环还没有进入主链路。
@@ -227,10 +228,10 @@ SSE 事件：
 
 ### V1 收口
 
-1. 扩展 `data/enriched/beauty_products.jsonl` 到 25 条美妆商品。
-2. 重建 Chroma 索引并复跑 golden queries。
-3. 把更多真实模型 failure cases 沉淀到 guardrail / benchmark。
-4. 补最终 README 运行说明和提交材料。
+1. 用 25 条美妆数据抽样复验 Android 端展示和推荐稳定性。
+2. 把更多真实模型 failure cases 沉淀到 guardrail / benchmark。
+3. 补一个轻量多商品对比能力，增强导购“决策辅助”感。
+4. 继续同步 README、评测记录和提交材料。
 
 ### V2 增强
 

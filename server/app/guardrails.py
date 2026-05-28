@@ -95,12 +95,15 @@ def _unsupported_prices(answer: str, user_message: str, cards: list[ProductCard]
 
 
 def _unsupported_absence_claims(answer: str, cards: list[ProductCard]) -> list[str]:
-    evidence = _card_evidence_text(cards)
+    relevant_cards = _mentioned_cards(answer, cards) or cards
     unsupported: list[str] = []
     for term in ABSENCE_CLAIM_TERMS:
         if not _claims_absence(answer, term):
             continue
-        if not _evidence_supports_absence(evidence, term):
+        if not relevant_cards or not all(
+            _evidence_supports_absence(_card_evidence_text([card]), term)
+            for card in relevant_cards
+        ):
             unsupported.append(term)
     return unsupported
 
@@ -117,6 +120,18 @@ def _evidence_supports_absence(evidence: str, term: str) -> bool:
         re.search(rf"{prefix}[^。；，,.]{{0,12}}{re.escape(term)}", evidence)
         for prefix in ABSENCE_PREFIXES
     )
+
+
+def _mentioned_cards(answer: str, cards: list[ProductCard]) -> list[ProductCard]:
+    mentioned: list[ProductCard] = []
+    for card in cards:
+        if card.brand and card.brand in answer:
+            mentioned.append(card)
+            continue
+        compact_title = card.title[:12]
+        if compact_title and compact_title in answer:
+            mentioned.append(card)
+    return mentioned
 
 
 def _card_evidence_text(cards: list[ProductCard]) -> str:

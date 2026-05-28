@@ -9,7 +9,7 @@
 - Android Kotlin + Jetpack Compose 原生聊天界面。
 - FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve` 和图片静态服务。
 - SSE 流式协议：`status`、`products`、`token`、`done`、`error`。
-- 美妆商品 RAG：结构化硬过滤 + keyword/facet 匹配 + Chroma 向量召回 + 可解释 `RetrievalTrace`。
+- 美妆商品 RAG：结构化硬过滤 + 必要功效过滤 + keyword/facet 匹配 + Chroma 向量召回 + 可解释 `RetrievalTrace`。
 - Doubao / Ark OpenAI-compatible API 接入；本地无 Key 时可用 mock / safe fallback 跑通闭环。
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
 - 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
@@ -162,7 +162,7 @@ python3 scripts/scan_secrets.py --all
 
 当前边界：
 
-- enriched 美妆数据目前是 6 条样例，尚未覆盖完整 25 条美妆商品。
+- enriched 美妆数据已覆盖完整 25 条美妆商品；当前 Demo 仍聚焦美妆垂类，不覆盖全品类导购。
 - 图片输入、语音、购物车、下单不在当前版本。
 - Graph-aware retrieval、多商品对比和用户反馈闭环是下一阶段增强项。
 - Guardrail 是规则版，不是完整 groundedness judge。

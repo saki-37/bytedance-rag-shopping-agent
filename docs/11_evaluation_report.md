@@ -7,10 +7,10 @@
 
 ## 当前结论
 
-当前版本完成四层评测：
+当前版本完成四层评测，并已在 25 条美妆增强数据上复跑：
 
-1. 检索层：8 条 golden queries 全部通过。
-2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠和下单承诺。
+1. 检索层：8 条 golden queries 全部通过，Chroma 当前索引 25 条 enriched 美妆商品。
+2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠、下单承诺和无证据的绝对断言。
 3. SSE 层：真实 Ark / Doubao 暂时不可用时，8 条 golden queries 仍能返回完整 `products/token/done` 事件。
 4. Android 层：真实 Doubao 回复、商品卡片、图片、详情弹窗和信息不足追问已完成第一轮模拟器复验。
 
@@ -40,6 +40,30 @@ server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 
 - 默认：`data/tmp/evals/golden_queries_latest.jsonl`
 - 本地沙盒验证：`/private/tmp/bytedance_golden_queries_latest.jsonl`
+
+2026-05-28 数据扩展后复跑结果：
+
+- `server/.venv/bin/python scripts/run_golden_queries.py --require-vector --output /private/tmp/bytedance-rag-golden.jsonl`
+- 8 条全部 PASS。
+- 每条非追问 query 均有 vector hits，`GQ-08` 信息不足仍保持先追问。
+
+## 多轮对话 Regression
+
+命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/run_conversation_cases.py --output /private/tmp/bytedance-rag-conversation.jsonl
+```
+
+2026-05-28 数据扩展后复跑结果：
+
+| ID | 结论 | 说明 |
+| --- | --- | --- |
+| CQ-01 | PASS | 复杂约束下保留已知条件，返回可证据支撑的部分匹配 |
+| CQ-02 | PASS | 用户放宽预算时继承上一轮需求并取消预算硬约束 |
+| CQ-03 | PASS | 用户把预算降到 150 元时，因没有同时满足功效和预算的商品而主动追问 |
+| CQ-04 | PASS | 泛泛想买护肤品时先追问，不乱推商品 |
 
 ## 生成层 Guardrail
 
@@ -161,10 +185,10 @@ server/.venv/bin/python scripts/run_golden_queries.py --check-stream --require-v
 1. Guardrail V1 是规则校验，不是完整 groundedness judge。
 2. 目前只校验价格和明显商业承诺，尚未对所有功效声明做细粒度证据匹配。
 3. Android 端真实 Doubao 已完成第一轮复验；自动滚动已完成一轮模拟器复验，后续录屏前仍需做一次人工检查。
-4. Chroma 当前只索引 6 条 enriched 美妆商品，扩展到 25 条后需要重跑评测。
+4. Chroma 当前已索引 25 条 enriched 美妆商品；后续如果继续扩到全品类，需要重新建立分品类评测。
 
 ## 下一步
 
-1. 按 `docs/12_demo_script.md` 录第一版 1 分钟闭环 Demo。
+1. 用 25 条美妆数据在 Android 端抽样复验新增子类：洁面、眼霜、蜜粉、唇釉/眉笔。
 2. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
-3. 扩展 enriched 数据后更新评测表。
+3. 增加多商品对比评测样例。
