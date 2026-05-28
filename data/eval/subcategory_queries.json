@@ -1,0 +1,86 @@
+[
+  {
+    "id": "SQ-01",
+    "title": "百元内温和洁面",
+    "query": "预算100以内，混合肌日常温和洁面，洗后不要太拔干",
+    "expect": {
+      "expected_budget_max": 100,
+      "expected_facets": {
+        "effect": ["洁面"]
+      },
+      "expected_exclude_terms": ["拔干"],
+      "expected_any_product_ids": ["p_beauty_011"],
+      "allowed_sub_categories": ["洁面"]
+    }
+  },
+  {
+    "id": "SQ-02",
+    "title": "眼周干燥卡粉眼霜",
+    "query": "眼周干燥卡粉，有没有350元以内的保湿眼霜",
+    "expect": {
+      "expected_budget_max": 350,
+      "expected_facets": {
+        "skin_type": ["干皮"],
+        "effect": ["保湿", "眼周护理"]
+      },
+      "expected_any_product_ids": ["p_beauty_016", "p_beauty_021"],
+      "allowed_sub_categories": ["眼霜"]
+    }
+  },
+  {
+    "id": "SQ-03",
+    "title": "油皮控油定妆蜜粉",
+    "query": "油皮夏天想要150元以内控油定妆蜜粉",
+    "expect": {
+      "expected_budget_max": 150,
+      "expected_facets": {
+        "skin_type": ["油皮"],
+        "effect": ["控油", "定妆"]
+      },
+      "expected_any_product_ids": ["p_beauty_013"],
+      "allowed_sub_categories": ["蜜粉"]
+    }
+  },
+  {
+    "id": "SQ-04",
+    "title": "学生党通勤唇釉",
+    "query": "学生党想要150元以内日常通勤唇釉，滋润一点",
+    "expect": {
+      "expected_budget_max": 150,
+      "expected_facets": {
+        "effect": ["保湿", "唇妆"],
+        "use_case": ["通勤"]
+      },
+      "expected_any_product_ids": ["p_beauty_015"],
+      "allowed_sub_categories": ["唇釉"]
+    }
+  },
+  {
+    "id": "SQ-05",
+    "title": "新手自然防晕染眉笔",
+    "query": "新手想要100元以内自然防晕染眉笔",
+    "expect": {
+      "expected_budget_max": 100,
+      "expected_facets": {
+        "effect": ["眉妆"]
+      },
+      "expected_any_product_ids": ["p_beauty_025"],
+      "allowed_sub_categories": ["眉笔"]
+    }
+  },
+  {
+    "id": "SQ-06",
+    "title": "敏感肌温和卸妆",
+    "query": "敏感肌想要200元以内温和卸妆，不要酒精",
+    "expect": {
+      "expected_budget_max": 200,
+      "expected_facets": {
+        "skin_type": ["敏感肌"],
+        "effect": ["卸妆"]
+      },
+      "expected_exclude_terms": ["酒精"],
+      "expected_any_product_ids": ["p_beauty_017"],
+      "allowed_sub_categories": ["卸妆"]
+    }
+  }
+]

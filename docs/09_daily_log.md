@@ -27,3 +27,5 @@
 - 新增 [Demo 脚本](12_demo_script.md)，用于录制第一版 1 分钟闭环 Demo。
 - 本地录屏 `demo/录屏v1.mov` 已完成，视频文件按 `.gitignore` 规则不提交。
 - 新增 [系统架构说明](10_architecture.md)，补齐 Android、FastAPI、RAG、Doubao、guardrail、数据层和验证状态。
+- 扩展美妆数据到完整 25 条后，新增 6 条子类 query benchmark，覆盖洁面、眼霜、蜜粉、唇釉、眉笔、卸妆。
+- Android 端将快捷问题扩展到 9 个，并抽样复验眼霜、蜜粉、卸妆三个新增子类；当前均能展示对应子类商品卡片。

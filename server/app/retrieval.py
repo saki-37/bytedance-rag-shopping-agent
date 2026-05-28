@@ -40,7 +40,9 @@ FACET_LEXICON: dict[str, dict[str, list[str]]] = {
         "提亮": ["提亮", "亮肤", "美白", "暗沉"],
         "淡斑": ["淡斑", "斑点", "色斑", "痘印", "色沉", "色素"],
         "抗初老": ["抗初老", "抗老", "淡纹", "紧致", "抗皱"],
-        "清洁": ["清洁", "洁面", "洗面奶", "卸妆", "毛孔污垢"],
+        "清洁": ["清洁", "毛孔污垢"],
+        "洁面": ["洁面", "洗面奶", "泡沫洁面"],
+        "卸妆": ["卸妆", "卸除", "防水彩妆"],
         "眼周护理": ["眼霜", "眼周", "干纹", "卡粉"],
         "底妆": ["底妆", "粉底", "粉底液", "遮瑕"],
         "定妆": ["定妆", "蜜粉", "散粉", "持妆"],
@@ -354,10 +356,36 @@ def _missing_required_effect(intent: QueryIntent, item: dict) -> str | None:
     required_effects = intent.facets.get("effect", [])
     if not required_effects:
         return None
+    specific_effects = [
+        effect
+        for effect in required_effects
+        if effect in {"底妆", "定妆", "洁面", "卸妆", "眼周护理", "唇妆", "眉妆"}
+    ]
+    if specific_effects:
+        if any(_matches_specific_effect(effect, item) for effect in specific_effects):
+            return None
+        return ",".join(specific_effects)
     text = product_search_text(item).lower()
     if any(effect.lower() in text for effect in required_effects):
         return None
     return ",".join(required_effects)
+
+
+def _matches_specific_effect(effect: str, item: dict) -> bool:
+    raw = item["raw"]
+    sub_category = str(raw.get("sub_category", ""))
+    attrs = item.get("attributes", {})
+    tags = {str(tag) for tag in attrs.get("tags", [])}
+    allowed_sub_categories = {
+        "底妆": {"粉底液"},
+        "定妆": {"蜜粉"},
+        "洁面": {"洁面"},
+        "卸妆": {"卸妆"},
+        "眼周护理": {"眼霜"},
+        "唇妆": {"唇釉"},
+        "眉妆": {"眉笔"},
+    }
+    return sub_category in allowed_sub_categories.get(effect, set()) or effect in tags
 
 
 def _has_excluded_risk(text: str, term: str) -> bool:

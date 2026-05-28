@@ -33,6 +33,7 @@
 | RAG 检索 trace | 已完成 V1 | `docs/08_rag_retrieval_strategy.md`、`docs/10_architecture.md` |
 | 反幻觉 guardrail | 已完成 V1 | `docs/11_evaluation_report.md`、`server/app/guardrails.py` |
 | Golden query 评测 | 已完成第一轮 | `scripts/run_golden_queries.py`、`docs/11_evaluation_report.md` |
+| 子类 query 评测 | 已完成第一轮 | `scripts/run_subcategory_queries.py`、`docs/11_evaluation_report.md` |
 
 ## 评分点对照
 
@@ -53,7 +54,7 @@ demo/录屏v1_submission_phone_60s.mp4
 
 建议 60-90 秒内展示：
 
-1. 打开 Android App，展示 3 个快捷问题。
+1. 打开 Android App，展示快捷问题。
 2. 点击 `油皮通勤防晒`，展示真实流式回复和商品卡片。
 3. 点击商品卡片，展示详情弹窗。
 4. 点击或展示 `信息不足追问`，证明系统不会在信息不足时强行推荐。
@@ -103,6 +104,7 @@ MOCK_LLM=false
 ```bash
 cd bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_golden_queries.py --require-vector
+server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 server/.venv/bin/python scripts/run_conversation_cases.py
 server/.venv/bin/python scripts/check_generation_guardrails.py
 ```
@@ -150,7 +152,6 @@ git diff --check
 
 ## 下一阶段建议
 
-1. 用 25 条美妆数据抽样复验 Android 端新增子类展示。
-2. 补商品对比能力，覆盖“欧莱雅防晒 vs 安热沙防晒”这类问题。
-3. 增加用户反馈按钮，沉淀失败 query 和推荐修正记录。
-4. 设计轻量属性图，把商品、品牌、类目、肤质、功效、注意事项放进统一 trace。
+1. 补商品对比能力，覆盖“欧莱雅防晒 vs 安热沙防晒”这类问题。
+2. 增加用户反馈按钮，沉淀失败 query 和推荐修正记录。
+3. 设计轻量属性图，把商品、品牌、类目、肤质、功效、注意事项放进统一 trace。

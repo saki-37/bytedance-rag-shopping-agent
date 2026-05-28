@@ -9,10 +9,10 @@
 
 当前版本完成四层评测，并已在 25 条美妆增强数据上复跑：
 
-1. 检索层：8 条 golden queries 全部通过，Chroma 当前索引 25 条 enriched 美妆商品。
+1. 检索层：8 条 golden queries 和 6 条子类 queries 全部通过，Chroma 当前索引 25 条 enriched 美妆商品。
 2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠、下单承诺和无证据的绝对断言。
 3. SSE 层：真实 Ark / Doubao 暂时不可用时，8 条 golden queries 仍能返回完整 `products/token/done` 事件。
-4. Android 层：真实 Doubao 回复、商品卡片、图片、详情弹窗和信息不足追问已完成第一轮模拟器复验。
+4. Android 层：真实 Doubao 主线回复、商品卡片、图片、详情弹窗、信息不足追问已完成模拟器复验；新增子类抽样在 `MOCK_LLM=true` 下完成，重点验证检索、卡片和布局。
 
 ## 检索层 Benchmark
 
@@ -46,6 +46,34 @@ server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 - `server/.venv/bin/python scripts/run_golden_queries.py --require-vector --output /private/tmp/bytedance-rag-golden.jsonl`
 - 8 条全部 PASS。
 - 每条非追问 query 均有 vector hits，`GQ-08` 信息不足仍保持先追问。
+
+## 子类 Query Benchmark
+
+用途：数据扩到 25 条后，单纯的 golden queries 仍偏主线场景，不能充分覆盖新增子类。新增子类 query 用来检查“用户明确说洁面/眼霜/蜜粉/唇釉/眉笔/卸妆时，系统是否召回对应子类，而不是被相邻功效词带偏”。
+
+命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
+```
+
+2026-05-28 本地结果：
+
+| ID | 结论 | 期望子类 | 当前召回 |
+| --- | --- | --- | --- |
+| SQ-01 | PASS | 洁面 | `p_beauty_011` |
+| SQ-02 | PASS | 眼霜 | `p_beauty_021`, `p_beauty_016` |
+| SQ-03 | PASS | 蜜粉 | `p_beauty_013` |
+| SQ-04 | PASS | 唇釉 | `p_beauty_015` |
+| SQ-05 | PASS | 眉笔 | `p_beauty_025` |
+| SQ-06 | PASS | 卸妆 | `p_beauty_017` |
+
+关键修正：
+
+- 将“洁面”和“卸妆”从泛化“清洁”中拆出，避免正文里的“洁面后使用”“卸妆水卸除”误触发。
+- 对 `底妆`、`定妆`、`洁面`、`卸妆`、`眼周护理`、`唇妆`、`眉妆` 这类子类级意图做更严格匹配，优先匹配商品子类目和专属标签。
+- 保留 vector hits 作为语义召回证据，但子类硬约束优先于相似度排序。
 
 ## 多轮对话 Regression
 
@@ -141,21 +169,32 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 日期：2026-05-28
 设备：`emulator-5554` / `Medium_Phone_API_36.0`
 
-本轮新增了 3 个演示快捷问题 chip，避免 adb 和现场演示时中文输入不稳定：
+本轮新增了演示快捷问题 chip，避免 adb 和现场演示时中文输入不稳定：
 
 - `油皮通勤防晒` -> `我是油皮，想要200元以内通勤防晒`
 - `敏感肌修护` -> `敏感肌，最近屏障不稳定，想找修护面霜，不要酒精味太重或者刺激感强的产品`
 - `信息不足追问` -> `我想买护肤品，你推荐什么？`
+- `洁面` -> `预算100以内，混合肌日常温和洁面，洗后不要太拔干`
+- `眼霜` -> `眼周干燥卡粉，有没有350元以内的保湿眼霜`
+- `蜜粉` -> `油皮夏天想要150元以内控油定妆蜜粉`
+- `唇釉` -> `学生党想要150元以内日常通勤唇釉，滋润一点`
+- `眉笔` -> `新手想要100元以内自然防晕染眉笔`
+- `卸妆` -> `敏感肌想要200元以内温和卸妆，不要酒精`
 
 验证结果：
 
+说明：油皮防晒、商品详情、信息不足追问和连续多轮展示来自真实 Doubao 复验；眼霜、蜜粉、卸妆子类抽样使用 `MOCK_LLM=true`，用于快速验证扩展数据后的检索命中、卡片渲染和布局稳定性。
+
 | 场景 | 结论 | 证据 |
 | --- | --- | --- |
-| App 启动 | PASS | UI 树出现标题、输入框和 3 个快捷问题 |
+| App 启动 | PASS | UI 树出现标题、输入框和 9 个快捷问题 |
 | 油皮通勤防晒 | PASS | Android 发出 `POST http://10.0.2.2:8000/api/chat/stream`；UI 展示真实回复、商品卡片、图片、价格和标签 |
 | 商品详情 | PASS | 点击商品卡片后弹窗展示价格、类目、推荐理由、适合、使用场景、卖点和注意事项 |
 | 信息不足追问 | PASS | 空会话下返回“你更在意肤质、预算，还是防晒/修护/控油这类具体功效？”，没有乱推商品 |
 | 连续多轮展示 | PASS | 连续点击 `油皮通勤防晒` 和 `敏感肌修护` 后，列表自动滚到第二条回复和商品卡片；两次 POST 均无网络错误 |
+| 眼霜子类 | PASS | 点击 `眼霜` 后展示科颜氏 `¥320` 和 AHC `¥139` 两张眼霜卡片 |
+| 蜜粉子类 | PASS | 点击 `蜜粉` 后只展示方里 `¥99` 蜜粉卡片，没有混入防晒、精华或眉笔 |
+| 卸妆子类 | PASS | 点击 `卸妆` 后只展示芳珂 `¥178` 卸妆卡片，标签包含“卸妆/清洁/敏感肌/温和/无酒精” |
 
 本地截图证据：
 
@@ -164,6 +203,9 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 - `/private/tmp/ragshopping_product_detail_20260528.png`
 - `/private/tmp/ragshopping_clarification_prompt_20260528.png`
 - `/private/tmp/ragshopping_autoscroll_two_prompts_20260528.png`
+- `/private/tmp/ragshopping_yanshuang.png`
+- `/private/tmp/ragshopping_mifen.png`
+- `/private/tmp/ragshopping_xiezhuang.png`
 
 ## SSE 稳定性
 
@@ -189,6 +231,6 @@ server/.venv/bin/python scripts/run_golden_queries.py --check-stream --require-v
 
 ## 下一步
 
-1. 用 25 条美妆数据在 Android 端抽样复验新增子类：洁面、眼霜、蜜粉、唇釉/眉笔。
+1. 增加多商品对比评测样例。
 2. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
-3. 增加多商品对比评测样例。
+3. 设计用户反馈闭环的最小记录结构。

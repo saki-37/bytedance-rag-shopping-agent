@@ -123,6 +123,12 @@ server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 server/.venv/bin/python scripts/run_conversation_cases.py
 ```
 
+子类 query 样例：
+
+```bash
+server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
+```
+
 生成层 guardrail：
 
 ```bash

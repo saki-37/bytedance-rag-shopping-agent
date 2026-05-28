@@ -10,7 +10,7 @@
 
 > Android 快捷问题/文字输入 -> FastAPI `/api/chat/stream` -> 美妆商品检索 -> Doubao 流式回复 -> Android 展示回复、商品卡片、图片和详情弹窗。
 
-2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明；根目录 `README.md` 和 `docs/14_submission_package.md` 已整理成提交入口。2026-05-28 继续将 enriched 美妆数据从 6 条扩展到完整 25 条，重建 Chroma 索引并复跑 golden queries、conversation cases 和 generation guardrails。当前仍不是最终参赛版本，最主要的缺口是：Graph-aware / hybrid retrieval 还没有进入主链路，多商品对比和用户反馈闭环尚未实现。
+2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明；根目录 `README.md` 和 `docs/14_submission_package.md` 已整理成提交入口。2026-05-28 继续将 enriched 美妆数据从 6 条扩展到完整 25 条，重建 Chroma 索引并复跑 golden queries、conversation cases、subcategory queries 和 generation guardrails；Android 端已抽样复验眼霜、蜜粉、卸妆三个新增子类。当前仍不是最终参赛版本，最主要的缺口是：Graph-aware / hybrid retrieval 还没有进入主链路，多商品对比和用户反馈闭环尚未实现。
 
 ## 对照课题必做最小闭环
 
@@ -49,10 +49,11 @@
   - 商品卡片、商品图片、价格和标签。
   - 商品详情弹窗。
 - 当前 UI loading 卡住问题已定位为客户端 SSE 收尾问题，并已修正代码。
-- 为演示和自动化复验新增 3 个快捷问题 chip：
+- 为演示和自动化复验新增 9 个快捷问题 chip：
   - 油皮通勤防晒。
   - 敏感肌修护。
   - 信息不足追问。
+  - 洁面、眼霜、蜜粉、唇釉、眉笔、卸妆。
 - 商品卡片点击详情已完成并在 Android 端复验。
 - 商品图片静态接口已完成第一版，`/assets/...jpg` 可返回 `image/jpeg`。
 - V1 检索层已完成本地烟测：
@@ -63,6 +64,7 @@
   - 当前入库 25 条 enriched 美妆商品。
   - 运行时 vector 通道能返回 8 个 hits。
   - `scripts/run_golden_queries.py --require-vector` 检索层 8 条全部通过。
+  - `scripts/run_subcategory_queries.py --require-vector` 子类 query 6 条全部通过。
   - `scripts/run_conversation_cases.py` 多轮对话 4 条全部通过。
 - 生成层 guardrail 已完成：
   - 模型输出先在后端聚合并校验，再重新流式输出给客户端。
@@ -77,6 +79,10 @@
   - 商品卡片点击：详情弹窗展示价格、类目、适合、使用场景、卖点和注意事项。
   - `信息不足追问`：空会话下不推荐商品，主动追问肤质、预算或具体功效。
   - 多轮连续发送时发现列表不会自动滚到底部，已补自动滚动并完成连续两轮复验。
+- Android 端新增子类抽样复验已完成，使用 `MOCK_LLM=true` 快速验证检索、卡片和布局：
+  - `眼霜`：展示科颜氏 `¥320` 和 AHC `¥139` 两张眼霜卡片。
+  - `蜜粉`：只展示方里 `¥99` 蜜粉卡片，没有混入防晒、精华或眉笔。
+  - `卸妆`：只展示芳珂 `¥178` 卸妆卡片，标签包含“卸妆/清洁/敏感肌/温和/无酒精”。
 
 ## 接下来优先级
 
@@ -99,14 +105,19 @@
    - 已补全肤质、功效、成分/禁忌、使用场景、适合/不适合人群。
 2. 已重建 Chroma 索引并复跑：
    - `scripts/run_golden_queries.py --require-vector`
+   - `scripts/run_subcategory_queries.py --require-vector`
    - `scripts/run_conversation_cases.py`
    - `scripts/check_generation_guardrails.py`
-3. 继续记录 Android 端真实输出是否被 guardrail 拦截、是否有 loading/超时/排版问题。
-4. 增加多轮上下文：
+3. 已抽样复验 Android 端新增子类：
+   - 眼霜。
+   - 蜜粉。
+   - 卸妆。
+4. 继续记录 Android 端真实输出是否被 guardrail 拦截、是否有 loading/超时/排版问题。
+5. 增加多轮上下文：
    - 用户先说模糊需求。
    - Agent 主动追问。
    - 用户补充后再推荐。
-5. 设计 Graph-aware / hybrid retrieval V2：
+6. 设计 Graph-aware / hybrid retrieval V2：
    - 保留通用字段：价格、品牌、类目、子类目。
    - 按品类扩展专属字段：肤质、成分、禁忌、材质、尺寸等。
    - 将硬约束、属性图召回、向量召回和重排 trace 放进同一评测框架。
@@ -132,16 +143,17 @@
 
 ## 当前最应该做的下一步
 
-先做 **25 条数据版本的 Android 端抽样复验 + 多商品对比设计**。
+先做 **多商品对比设计与最小实现**。
 
 原因：
 
 - README、提交材料清单和架构文档已经形成第一版入口。
 - 25 条 enriched 美妆数据、Chroma 索引和脚本评测已经更新。
-- 数据池扩大后，下一条主线应确认 Android 端展示是否仍然稳定，并补一个能体现“多候选选择/对比”的展示点。
+- Android 端新增子类抽样已经跑过眼霜、蜜粉、卸妆，展示稳定。
+- 下一条主线应补一个能体现“多候选选择/对比”的展示点。
 
 完成标准：
 
-- 选 3-5 个新子类 query 做 Android 端抽样：洁面、眼霜、蜜粉、唇釉/眉笔。
-- 记录是否出现无关低价商品乱入、卡片排版或 guardrail 误拦截。
 - 设计一个“防晒对比”或“定妆产品对比”的最小实现方案。
+- 增加 1-2 条对比型 benchmark，检查回答是否引用价格、肤质、注意事项等结构化证据。
+- Android 端能展示对比型回复和相关商品卡片。
