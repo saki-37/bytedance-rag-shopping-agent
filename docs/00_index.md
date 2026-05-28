@@ -14,6 +14,7 @@
 - [评分点对照与推进工作流](07_scoring_alignment_workflow.md)
 - [RAG 检索策略调研与设计](08_rag_retrieval_strategy.md)
 - [每日推进记录](09_daily_log.md)
+- [系统架构说明](10_architecture.md)
 - [评测记录](11_evaluation_report.md)
 - [Demo 脚本](12_demo_script.md)
 - [安全与本地配置](13_security_and_config.md)

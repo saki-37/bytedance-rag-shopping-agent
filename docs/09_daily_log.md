@@ -25,3 +25,5 @@
   - 信息不足追问：不乱推商品，先追问肤质/预算/功效。
 - 发现连续多轮后列表不会自动滚到底部，已补自动滚动并完成连续两轮复验。
 - 新增 [Demo 脚本](12_demo_script.md)，用于录制第一版 1 分钟闭环 Demo。
+- 本地录屏 `demo/录屏v1.mov` 已完成，视频文件按 `.gitignore` 规则不提交。
+- 新增 [系统架构说明](10_architecture.md)，补齐 Android、FastAPI、RAG、Doubao、guardrail、数据层和验证状态。
