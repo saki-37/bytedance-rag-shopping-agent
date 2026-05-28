@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -36,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +56,12 @@ import coil.compose.SubcomposeAsyncImageContent
 
 private const val AssetBaseUrl = "http://10.0.2.2:8000/assets"
 
+private val DemoPrompts = listOf(
+    "油皮通勤防晒" to "我是油皮，想要200元以内通勤防晒",
+    "敏感肌修护" to "敏感肌，最近屏障不稳定，想找修护面霜，不要酒精味太重或者刺激感强的产品",
+    "信息不足追问" to "我想买护肤品，你推荐什么？",
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,11 +76,19 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
+    val listState = rememberLazyListState()
     var selectedProduct by remember { mutableStateOf<ProductCard?>(null) }
+    val latestMessage = state.messages.lastOrNull()
+
+    LaunchedEffect(state.messages.size, latestMessage?.content?.length, latestMessage?.products?.size) {
+        listState.scrollToItem(state.messages.size)
+    }
+
     Surface(color = Color(0xFFF3FBF6), modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             Header()
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth(),
@@ -82,6 +98,9 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                 items(state.messages) { message ->
                     MessageBubble(message = message, onProductClick = { selectedProduct = it })
                 }
+                item("bottom-anchor") {
+                    Spacer(modifier = Modifier.height(1.dp))
+                }
             }
             InputBar(
                 value = state.input,
@@ -89,6 +108,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                 statusText = state.statusText,
                 onValueChange = viewModel::updateInput,
                 onSend = viewModel::send,
+                onQuickPrompt = viewModel::sendPrompt,
             )
         }
         selectedProduct?.let { product ->
@@ -274,6 +294,7 @@ private fun DetailSection(title: String, values: List<String>) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun InputBar(
     value: String,
@@ -281,6 +302,7 @@ private fun InputBar(
     statusText: String?,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
+    onQuickPrompt: (String) -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -299,6 +321,19 @@ private fun InputBar(
                 color = Color(0xFF087A42),
                 style = MaterialTheme.typography.bodySmall,
             )
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DemoPrompts.forEach { (label, prompt) ->
+                Text(
+                    text = label,
+                    modifier = Modifier
+                        .background(Color(0xFFE4F6EA), RoundedCornerShape(999.dp))
+                        .clickable(enabled = !isLoading) { onQuickPrompt(prompt) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    color = Color(0xFF087A42),
+                    style = MaterialTheme.typography.labelMedium,
+                )
+            }
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,

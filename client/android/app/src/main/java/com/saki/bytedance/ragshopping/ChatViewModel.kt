@@ -31,6 +31,14 @@ class ChatViewModel(
 
     fun send() {
         val message = state.value.input.trim()
+        sendMessage(message)
+    }
+
+    fun sendPrompt(message: String) {
+        sendMessage(message.trim())
+    }
+
+    private fun sendMessage(message: String) {
         if (message.isEmpty() || state.value.isLoading) return
         val history = state.value.messages
             .filter { it.content.isNotBlank() && it.role in setOf(Role.User, Role.Assistant) }

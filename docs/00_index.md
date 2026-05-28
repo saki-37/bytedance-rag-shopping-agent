@@ -15,13 +15,14 @@
 - [RAG 检索策略调研与设计](08_rag_retrieval_strategy.md)
 - [每日推进记录](09_daily_log.md)
 - [评测记录](11_evaluation_report.md)
+- [Demo 脚本](12_demo_script.md)
 - [安全与本地配置](13_security_and_config.md)
 
 ## 当前里程碑
 
-第一阶段只交付美妆文字闭环：
+第一阶段交付美妆文字闭环：
 
 1. 数据检查与 5 条增强样例。
 2. FastAPI SSE 聊天接口。
-3. Android Kotlin 原生聊天页与商品卡片。
-4. 至少 3 个 golden queries 跑通端到端 Demo。
+3. Android Kotlin 原生聊天页、演示快捷问题、商品卡片与详情弹窗。
+4. Golden queries、真实 Doubao probe 和 Android 端闭环复验。
