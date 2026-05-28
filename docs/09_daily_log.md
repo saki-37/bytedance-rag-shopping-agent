@@ -29,3 +29,8 @@
 - 新增 [系统架构说明](10_architecture.md)，补齐 Android、FastAPI、RAG、Doubao、guardrail、数据层和验证状态。
 - 扩展美妆数据到完整 25 条后，新增 6 条子类 query benchmark，覆盖洁面、眼霜、蜜粉、唇釉、眉笔、卸妆。
 - Android 端将快捷问题扩展到 9 个，并抽样复验眼霜、蜜粉、卸妆三个新增子类；当前均能展示对应子类商品卡片。
+- 重写 [评分点对照与阶段路线](07_scoring_alignment_workflow.md)，明确 V0/V1/V1.5/V2/V3 当前状态。
+- 新增 [多品类 Enriched Schema 设计](15_multicategory_schema.md)，完成 V2-A 第一版 schema，并确定第二品类优先从服饰运动 5 条样例开始。
+- 新增 [电商 Schema 外部参考调研](16_ecommerce_schema_references.md)，对照 Amazon、Google Merchant Center、Schema.org、淘宝开放平台和电商属性抽取研究，补回 `variants`、`attributes.specifications` 和 `source.attribute_provenance` 三个 V2-B 标注关键字段。
+- 新增 `data/enriched/apparel_products.jsonl`，完成 5 条服饰运动 V2-B enriched 样例；后端改为加载 `data/enriched/*_products.jsonl`，并让检索文本纳入 `display`、`variants`、`category_attributes`、`retrieval` 和 `source`。
+- 新增 `data/eval/apparel_queries.json`，服饰 5 条 query 全部 PASS；同步复跑美妆 golden、subcategory、conversation 和 generation guardrail，均 PASS。

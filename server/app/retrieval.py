@@ -58,6 +58,12 @@ FACET_LEXICON: dict[str, dict[str, list[str]]] = {
         "约会": ["约会", "聚会", "拍照", "妆造"],
         "出差": ["出差", "旅行装", "便携", "随身"],
     },
+    "sub_category": {
+        "短袖T恤": ["短袖", "T恤", "t恤", "白T", "基础T", "速干衣"],
+        "跑步鞋": ["跑步鞋", "慢跑鞋", "公路跑鞋", "缓震跑鞋"],
+        "徒步鞋": ["徒步鞋", "登山鞋", "防水鞋", "户外鞋"],
+        "背包": ["背包", "双肩包", "电脑包", "通勤包"],
+    },
 }
 
 BEAUTY_TERMS = [
@@ -83,6 +89,32 @@ BEAUTY_TERMS = [
     "蜜粉",
     "散粉",
 ]
+APPAREL_TERMS = [
+    "服饰",
+    "衣服",
+    "短袖",
+    "t恤",
+    "T恤",
+    "白T",
+    "速干",
+    "棉感",
+    "纯棉",
+    "尺码",
+    "版型",
+    "跑步鞋",
+    "慢跑鞋",
+    "徒步鞋",
+    "登山鞋",
+    "防水鞋",
+    "抓地",
+    "背包",
+    "双肩包",
+    "电脑包",
+]
+CATEGORY_TO_RAW = {
+    "beauty": "美妆护肤",
+    "apparel": "服饰运动",
+}
 
 GENERIC_RECOMMEND_TERMS = ["推荐", "买什么", "护肤品", "化妆品", "随便", "看看"]
 EXCLUDE_TERMS = ["酒精", "刺激", "刺痛", "太油", "油腻", "厚重", "拔干", "日系"]
@@ -119,7 +151,7 @@ def parse_query_intent(query: str) -> QueryIntent:
     facets = _extract_facets(query)
     exclude_terms = [] if _relaxes_exclusions(query) else _extract_exclude_terms(query)
     soft_preferences = _extract_soft_preferences(query)
-    category_candidates = ["beauty"] if _looks_like_beauty_query(query, facets) or exclude_terms else []
+    category_candidates = _extract_category_candidates(query, facets, exclude_terms)
     hard_constraints: list[str] = []
     if budget is not None:
         hard_constraints.append(f"budget_max <= {budget:g}")
@@ -212,10 +244,27 @@ def _extract_soft_preferences(query: str) -> list[str]:
     return [term for term in SOFT_PREFERENCE_TERMS if term in query]
 
 
+def _extract_category_candidates(
+    query: str,
+    facets: dict[str, list[str]],
+    exclude_terms: list[str],
+) -> list[str]:
+    candidates: list[str] = []
+    if _looks_like_beauty_query(query, facets) or exclude_terms:
+        candidates.append("beauty")
+    if _looks_like_apparel_query(query):
+        candidates.append("apparel")
+    return candidates
+
+
 def _looks_like_beauty_query(query: str, facets: dict[str, list[str]]) -> bool:
     if any(term in query for term in BEAUTY_TERMS):
         return True
     return any(key in facets for key in ["skin_type", "effect"])
+
+
+def _looks_like_apparel_query(query: str) -> bool:
+    return any(term in query for term in APPAREL_TERMS)
 
 
 def _needs_clarification(query: str, signal_count: int) -> bool:
@@ -241,7 +290,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
 
     budget = intent.universal_constraints.budget_max
     terms = _query_terms(query)
-    vector_scores, vector_hits = _vector_scores(query, index_dir)
+    vector_scores, vector_hits = _vector_scores(query, index_dir, intent.category_candidates)
     keyword_hits: list[RetrievalHit] = []
     final_hits: list[RetrievalHit] = []
     hard_filtered_out: list[FilteredProduct] = []
@@ -249,6 +298,17 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
 
     for item in products:
         raw = item["raw"]
+        if intent.category_candidates and not _matches_category_candidate(raw.get("category", ""), intent.category_candidates):
+            hard_filtered_out.append(
+                FilteredProduct(product_id=raw["product_id"], reason=f"category {raw.get('category', '')} not in {intent.category_candidates}")
+            )
+            continue
+        required_sub_categories = intent.facets.get("sub_category", [])
+        if required_sub_categories and raw.get("sub_category", "") not in required_sub_categories:
+            hard_filtered_out.append(
+                FilteredProduct(product_id=raw["product_id"], reason=f"sub_category {raw.get('sub_category', '')} not in {required_sub_categories}")
+            )
+            continue
         if budget is not None and float(raw["base_price"]) > budget:
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"price {raw['base_price']} > budget {budget:g}")
@@ -452,7 +512,7 @@ def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
     text = product_search_text(item).lower()
     score = 0.0
     reasons: list[str] = []
-    weights = {"skin_type": 4.0, "effect": 3.0, "use_case": 2.0}
+    weights = {"sub_category": 5.0, "skin_type": 4.0, "effect": 3.0, "use_case": 2.0}
     for facet_name, values in intent.facets.items():
         weight = weights.get(facet_name, 1.0)
         for value in values:
@@ -469,6 +529,11 @@ def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
 def _is_hard_filtered(item: dict, filtered: list[FilteredProduct]) -> bool:
     product_id = item["raw"]["product_id"]
     return any(entry.product_id == product_id for entry in filtered)
+
+
+def _matches_category_candidate(raw_category: str, candidates: list[str]) -> bool:
+    allowed = {CATEGORY_TO_RAW[candidate] for candidate in candidates if candidate in CATEGORY_TO_RAW}
+    return not allowed or raw_category in allowed
 
 
 def _no_result_clarification(intent: QueryIntent) -> str:
@@ -497,7 +562,9 @@ def _no_result_clarification(intent: QueryIntent) -> str:
     return "当前商品池里没有足够匹配的商品。你想优先补充预算、肤质，还是主要功效？"
 
 
-def _vector_scores(query: str, index_dir: Path | None) -> tuple[dict[str, float], list[RetrievalHit]]:
+def _vector_scores(query: str, index_dir: Path | None, category_candidates: list[str]) -> tuple[dict[str, float], list[RetrievalHit]]:
+    if category_candidates and "beauty" not in category_candidates:
+        return {}, []
     if index_dir is None or not index_dir.exists():
         return {}, []
     try:
@@ -533,9 +600,14 @@ def _vector_scores(query: str, index_dir: Path | None) -> tuple[dict[str, float]
 def _to_card(item: dict, query: str) -> ProductCard:
     raw = item["raw"]
     attrs = item.get("attributes", {})
+    display = item.get("display", {})
     knowledge = raw.get("rag_knowledge", {})
     tags = list(dict.fromkeys(attrs.get("tags", [])[:5]))
-    reason = item.get("card_reason") or "匹配本次需求，推荐理由来自商品资料和结构化标签。"
+    reason = (
+        item.get("card_reason")
+        or display.get("card_reason")
+        or "匹配本次需求，推荐理由来自商品资料和结构化标签。"
+    )
     if "防晒" in query and raw["sub_category"] == "防晒":
         reason = "防晒相关需求匹配；请结合肤质、户外时长和补涂频率选择。"
     return ProductCard(
@@ -569,6 +641,9 @@ def _context_block(item: dict) -> str:
     knowledge = raw.get("rag_knowledge", {})
     attrs = item.get("attributes", {})
     beauty = item.get("beauty_attributes", {})
+    category_attrs = item.get("category_attributes", {})
+    variants = item.get("variants", {})
+    source = item.get("source", {})
     return f"""商品ID: {raw['product_id']}
 标题: {raw['title']}
 品牌: {raw['brand']}
@@ -576,5 +651,8 @@ def _context_block(item: dict) -> str:
 价格: {raw['base_price']}
 结构化标签: {attrs}
 美妆属性: {beauty}
+品类属性: {category_attrs}
+变体维度: {variants}
+证据来源: {source}
 商品资料: {knowledge.get('marketing_description', '')}
 """

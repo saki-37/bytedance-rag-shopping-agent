@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     ark_model: str | None = None
 
     raw_data_dir: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"
+    enriched_data_dir: Path = ROOT_DIR / "data" / "enriched"
     enriched_beauty_path: Path = ROOT_DIR / "data" / "enriched" / "beauty_products.jsonl"
     index_dir: Path = ROOT_DIR / "data" / "indexes" / "chroma"
     image_base_path: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"

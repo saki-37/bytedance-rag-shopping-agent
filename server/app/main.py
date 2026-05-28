@@ -15,7 +15,7 @@ from app.retrieval import retrieve
 
 settings = get_settings()
 raw_products = load_raw_products(settings.raw_data_dir)
-enriched_products = load_enriched_products(settings.enriched_beauty_path, raw_products)
+enriched_products = load_enriched_products(settings.enriched_data_dir, raw_products)
 
 app = FastAPI(title="ByteDance RAG Shopping Agent")
 app.add_middleware(

@@ -130,6 +130,13 @@ FAQ 数量大致为 1-6 条，用户评价大致为 3-6 条。文本素材足够
 - 多类目扩展测试。
 - 「材质/尺码/运动场景」类复杂约束示例。
 
+当前状态：
+
+- 已完成 5 条 V2-B enriched 样例：`p_clothes_001`、`p_clothes_002`、`p_clothes_007`、`p_clothes_014`、`p_clothes_018`。
+- 样例覆盖短袖 T 恤、速干训练短袖、跑步鞋、徒步鞋、通勤户外背包。
+- 每条样例都按 V2 schema 标注了 `variants`、`attributes.specifications`、`source.attribute_provenance` 和 `category_attributes.apparel`。
+- 服饰 query benchmark 见 `data/eval/apparel_queries.json`。
+
 ### 食品饮料
 
 规模：25 条。
@@ -172,7 +179,7 @@ FAQ 数量大致为 1-6 条，用户评价大致为 3-6 条。文本素材足够
 
 ## 需要新增的结构化字段
 
-建议新增一个 `normalized` 或 `attributes` 字段，不覆盖原始 `rag_knowledge`。
+建议新增一个 `normalized` 或 `attributes` 字段，不覆盖原始 `rag_knowledge`。V2 多品类版本的正式字段设计见 [多品类 Enriched Schema 设计](15_multicategory_schema.md)，外部平台字段参考见 [电商 Schema 外部参考调研](16_ecommerce_schema_references.md)；本节保留早期字段草案，方便理解字段来源。
 
 通用字段：
 
@@ -269,8 +276,8 @@ FAQ 数量大致为 1-6 条，用户评价大致为 3-6 条。文本素材足够
 
 ## 下一步动作
 
-1. 先确定主线类目：建议以美妆护肤为主。
-2. 设计增强字段 schema。
-3. 抽 5 条美妆数据做人工标注样例。
-4. 用样例反推检索和商品卡片需要的字段。
-5. 再批量增强剩余美妆数据，必要时扩展到其他类目。
+1. 主线类目已确定为美妆护肤，并已完成 25 条 enriched 数据。
+2. 多品类 schema 第一版已在 `docs/15_multicategory_schema.md` 中完成。
+3. 下一步建议抽 5 条服饰运动商品做第二品类 enriched 样例。
+4. 用服饰样例验证材质、尺码、运动场景、天气条件等字段能进入检索和 trace。
+5. 通过后再决定是否扩展数码电子或食品饮料。

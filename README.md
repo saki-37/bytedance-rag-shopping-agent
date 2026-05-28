@@ -10,6 +10,7 @@
 - FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve` 和图片静态服务。
 - SSE 流式协议：`status`、`products`、`token`、`done`、`error`。
 - 美妆商品 RAG：结构化硬过滤 + 必要功效过滤 + keyword/facet 匹配 + Chroma 向量召回 + 可解释 `RetrievalTrace`。
+- V2 多品类起步：新增 5 条服饰运动 enriched 样例，覆盖变体、规格、证据来源和第二品类 query benchmark。
 - Doubao / Ark OpenAI-compatible API 接入；本地无 Key 时可用 mock / safe fallback 跑通闭环。
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
 - 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
@@ -129,6 +130,14 @@ server/.venv/bin/python scripts/run_conversation_cases.py
 server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 ```
 
+服饰运动第二品类样例：
+
+```bash
+server/.venv/bin/python scripts/run_subcategory_queries.py \
+  --cases data/eval/apparel_queries.json \
+  --output /private/tmp/bytedance-rag-apparel-v2b.jsonl
+```
+
 生成层 guardrail：
 
 ```bash
@@ -168,7 +177,8 @@ python3 scripts/scan_secrets.py --all
 
 当前边界：
 
-- enriched 美妆数据已覆盖完整 25 条美妆商品；当前 Demo 仍聚焦美妆垂类，不覆盖全品类导购。
+- enriched 美妆数据已覆盖完整 25 条美妆商品；当前 Demo 仍聚焦美妆垂类。
+- 服饰运动已有 5 条 V2-B 样例并通过本地 query benchmark，但 Android 演示和向量索引仍以美妆主线为主。
 - 图片输入、语音、购物车、下单不在当前版本。
 - Graph-aware retrieval、多商品对比和用户反馈闭环是下一阶段增强项。
 - Guardrail 是规则版，不是完整 groundedness judge。

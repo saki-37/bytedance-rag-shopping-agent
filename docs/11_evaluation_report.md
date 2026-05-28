@@ -9,7 +9,7 @@
 
 当前版本完成四层评测，并已在 25 条美妆增强数据上复跑：
 
-1. 检索层：8 条 golden queries 和 6 条子类 queries 全部通过，Chroma 当前索引 25 条 enriched 美妆商品。
+1. 检索层：8 条 golden queries、6 条美妆子类 queries 和 5 条服饰运动 V2-B queries 全部通过，Chroma 当前索引 25 条 enriched 美妆商品。
 2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠、下单承诺和无证据的绝对断言。
 3. SSE 层：真实 Ark / Doubao 暂时不可用时，8 条 golden queries 仍能返回完整 `products/token/done` 事件。
 4. Android 层：真实 Doubao 主线回复、商品卡片、图片、详情弹窗、信息不足追问已完成模拟器复验；新增子类抽样在 `MOCK_LLM=true` 下完成，重点验证检索、卡片和布局。
@@ -74,6 +74,36 @@ server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 - 将“洁面”和“卸妆”从泛化“清洁”中拆出，避免正文里的“洁面后使用”“卸妆水卸除”误触发。
 - 对 `底妆`、`定妆`、`洁面`、`卸妆`、`眼周护理`、`唇妆`、`眉妆` 这类子类级意图做更严格匹配，优先匹配商品子类目和专属标签。
 - 保留 vector hits 作为语义召回证据，但子类硬约束优先于相似度排序。
+
+## 服饰运动 V2-B Benchmark
+
+用途：验证多品类 schema 不只是文档设计。当前先标注 5 条服饰运动样例，并用 query 检查类目边界、子类硬约束、预算和关键词召回。
+
+命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/run_subcategory_queries.py \
+  --cases data/eval/apparel_queries.json \
+  --output /private/tmp/bytedance-rag-apparel-v2b.jsonl
+```
+
+2026-05-28 本地结果：
+
+| ID | 结论 | 期望子类 | 当前召回 |
+| --- | --- | --- | --- |
+| apparel_001_commute_tshirt_budget | PASS | 短袖T恤 | `p_clothes_001` |
+| apparel_002_training_quick_dry | PASS | 短袖T恤 | `p_clothes_002`, `p_clothes_001` |
+| apparel_003_cushion_running_shoes | PASS | 跑步鞋 | `p_clothes_007` |
+| apparel_004_waterproof_hiking_shoes | PASS | 徒步鞋 | `p_clothes_014` |
+| apparel_005_commute_outdoor_backpack | PASS | 背包 | `p_clothes_018` |
+
+关键修正：
+
+- 后端现在从 `data/enriched/*_products.jsonl` 加载多份 enriched 数据。
+- `product_search_text` 纳入 `display`、`variants`、`category_attributes`、`retrieval` 和 `source`，使第二品类样例能参与关键词/字段检索。
+- Query parser 增加 `apparel` 类目边界和 `sub_category` 硬约束，避免服饰 query 被美妆向量召回抢分。
+- 当前 apparel benchmark 不要求 vector hits，因为 Chroma collection 仍是美妆专用；后续若做全品类向量索引，需要新增分品类 collection 或统一 collection metadata filter。
 
 ## 多轮对话 Regression
 
@@ -227,10 +257,11 @@ server/.venv/bin/python scripts/run_golden_queries.py --check-stream --require-v
 1. Guardrail V1 是规则校验，不是完整 groundedness judge。
 2. 目前只校验价格和明显商业承诺，尚未对所有功效声明做细粒度证据匹配。
 3. Android 端真实 Doubao 已完成第一轮复验；自动滚动已完成一轮模拟器复验，后续录屏前仍需做一次人工检查。
-4. Chroma 当前已索引 25 条 enriched 美妆商品；后续如果继续扩到全品类，需要重新建立分品类评测。
+4. Chroma 当前已索引 25 条 enriched 美妆商品；服饰 V2-B 当前走类目/子类/关键词检索，后续如果继续扩到全品类，需要重新建立分品类向量评测。
 
 ## 下一步
 
-1. 增加多商品对比评测样例。
-2. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
-3. 设计用户反馈闭环的最小记录结构。
+1. 决定全品类向量索引策略：分品类 collection，或统一 collection + metadata filter。
+2. 增加多商品对比评测样例。
+3. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
+4. 设计用户反馈闭环的最小记录结构。

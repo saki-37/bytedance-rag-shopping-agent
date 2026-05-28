@@ -19,6 +19,8 @@
 - [Demo 脚本](12_demo_script.md)
 - [安全与本地配置](13_security_and_config.md)
 - [提交材料清单](14_submission_package.md)
+- [多品类 Enriched Schema 设计](15_multicategory_schema.md)
+- [电商 Schema 外部参考调研](16_ecommerce_schema_references.md)
 
 ## 当前里程碑
 
@@ -29,3 +31,5 @@
 3. Android Kotlin 原生聊天页、演示快捷问题、商品卡片与详情弹窗。
 4. Golden queries、真实 Doubao probe 和 Android 端闭环复验。
 5. README 提交入口、架构说明、评测记录、Demo 脚本和提交材料清单。
+6. V2 多品类 schema 第一版设计与外部电商字段参考调研。
+7. 服饰运动 5 条 enriched 样例和第二品类 query benchmark。

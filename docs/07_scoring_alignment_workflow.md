@@ -1,311 +1,284 @@
-# 评分点对照与推进工作流
+# 评分点对照与阶段路线
 
 日期：2026-05-26  
 更新：2026-05-28
-用途：把课题说明会的评分点、当前实现状态、缺口和下一步优先级放在同一个稳定参考文档里。每次开始推进前先看本页，避免被局部 UI 或单个 bug 带跑。
+
+用途：把课题评分点、当前实现状态、V0/V1/V2/V3 路线和下一步优先级放在同一页。每次开始推进前先看本页，避免被局部 UI、单个 bug 或某个新想法带跑。
 
 ## 当前定位
 
-当前项目已经跑通第一版端到端 MVP：
+当前项目已经形成一个 **V1 可提交版本**：
 
-> Android Kotlin 原生输入文字 -> FastAPI 后端 -> 美妆商品检索 -> Doubao/Mock 流式回复 -> Android 展示回复、商品卡片、图片和详情弹窗。
+> Android Kotlin 原生 App -> FastAPI `/api/chat/stream` -> 美妆商品 RAG 检索 -> Doubao/Mock 流式生成 -> Android 展示回复、商品卡片、图片和详情弹窗。
 
-当前版本已经从 **可演示骨架** 推进到 **第一版可录屏闭环**，并完成了完整 25 条美妆增强数据。最需要补强的是：
+当前最准确的阶段判断：
 
-1. 25 条数据版本还需要做 Android 端抽样复验，确认新增子类不会破坏展示和排序体验。
-2. RAG 主链路已有 `RetrievalTrace`，系统架构说明已补齐，后续需要保持提交材料与真实实现同步。
-3. 真实 Doubao 输出已有 guardrail 和二次改写，但还需要继续沉淀 failure cases。
-4. 多商品对比、反馈闭环、Graph-aware retrieval 还没有进入主线。
-5. 根目录 README 和提交材料清单已形成第一版入口；后续需要按平台要求上传 Demo，并在新增能力后更新评测证据。
+| 阶段 | 名称 | 当前状态 | 判断 |
+| --- | --- | --- | --- |
+| V0 | 可跑端到端闭环 | 已完成 | Android、FastAPI、SSE、商品卡片、图片和详情弹窗都已跑通 |
+| V1 | Constraint-Aware Hybrid RAG | 基本完成 | 25 条美妆 enriched 数据、Chroma、QueryIntent、RetrievalTrace、golden/subcategory/conversation benchmark、guardrail 已有 |
+| V1.5 | 提交材料和 Demo 稳定性 | 第一版完成 | README、架构、评测、Demo 脚本、提交材料、安全说明、1 分钟录屏均已有 |
+| V2 | 多品类 / Graph-aware Retrieval | V2-A 完成，V2-B 服饰 5 条样例已进后端检索 | raw 总库 100 条；25 条美妆 + 5 条服饰进入 enriched，Android Demo 仍以美妆主线为主 |
+| V3 | Verifier / Feedback Loop | 有雏形，未完整闭环 | 生成后 guardrail 和 failure case 有了，但用户反馈、失败 query 自动记录、groundedness judge 未完成 |
+
+一句话说：**我们已经有保底可提交版本，接下来要做的是提高层次，而不是继续证明“能不能跑”。**
 
 ## 评分维度对照
 
-| 评分维度 | 权重 | 评审关注点 | 当前状态 | 风险判断 |
+| 评分维度 | 权重 | 评审关注点 | 当前状态 | 下一步抓手 |
 | --- | --- | --- | --- | --- |
-| 基础功能完整性 | 35% | 客户端对话 -> 后端 RAG 检索 -> 模型生成 -> 流式返回 -> 商品卡片展示 | Android、FastAPI、SSE、真实 Doubao、商品卡片、图片、详情弹窗已完成第一版 | 已能录第一版 demo，仍需复验连续多轮体验 |
-| 工程质量 | 25% | 代码结构、接口设计、错误处理、文档 | monorepo、API 契约、架构、进度、安全、评测、Demo、README、提交材料清单已有 | 结构清晰，后续需保持材料和真实实现同步 |
-| 效果与可靠性 | 20% | 运行流畅、检索准确、无幻觉、复杂场景处理 | V1 检索、25 条美妆数据、真实 Doubao probe、guardrail、二次改写、多轮 benchmark 已有 | 当前主要风险是更细粒度 groundedness 和多商品决策辅助 |
-| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | RAG 可靠性与可解释 trace 已形成主打方向 | 下一步做多商品对比/反馈闭环，比拍照找货更稳 |
+| 基础功能完整性 | 35% | 客户端对话 -> 后端 RAG -> 模型生成 -> 流式返回 -> 商品卡片 | V0 已完成，并有 Android 端复验证据 | 保持稳定，必要时重录更干净 Demo |
+| 工程质量 | 25% | 代码结构、接口设计、错误处理、文档、安全配置 | monorepo、API 契约、README、架构、评测、安全、提交材料已有 | 每次新增能力后同步文档和评测证据 |
+| 效果与可靠性 | 20% | 检索准确、无幻觉、复杂场景处理 | V1 基本完成；预算、排除、追问、trace、guardrail 已有 | 补对比型 query 和更细 groundedness |
+| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace | 先做多品类 schema / graph-aware，再做多商品对比或反馈闭环 |
 
-## 最小闭环完成度
+## V0：可跑闭环
 
-| 模块 | 课题要求 | 当前状态 | 下一步 |
-| --- | --- | --- | --- |
-| 原生客户端 | iOS 或 Android 原生 App | 已完成第一版 Android Kotlin + Jetpack Compose | 录屏证明可运行 |
-| 文字对话 | 对话窗口，支持发送文字 | 已完成 | 保持稳定 |
-| 流式回复 | 接收并渲染 AI 流式回复 | 已完成 SSE token 渲染，真实 Doubao 已复验 | 复验自动滚动 |
-| 商品卡片 | 回复中包含可点击商品卡片 | 已完成第一版并在 Android 端复验 | 录入 Demo 脚本 |
-| 商品详情 | 点击卡片进入落地页或模拟详情 | 已完成详情弹窗并在 Android 端复验 | 录入 Demo 脚本 |
-| 后端服务 | Python / Go / Node.js 任选 | 已完成 FastAPI 服务 | 补架构说明 |
-| 向量数据库 | 集成向量数据库 | Chroma 已可构建并进入 trace，当前索引 25 条美妆商品 | 抽样复验新增子类 query |
-| RAG 基本链路 | 检索库内商品并基于资料回答 | 结构化硬过滤 + 必要功效过滤 + keyword/facet/vector + trace | 继续沉淀 failure cases |
-| 模型调用 | 调用大模型生成导购回复 | Doubao/Ark 真实 probe 和 Android 端复验已完成第一轮 | 继续沉淀 failure cases |
-| 反幻觉 | 不编造商品、价格、优惠、库存、功效 | 商品卡字段来自数据源，guardrail + 二次改写已有 | 增加更细粒度 groundedness 校验 |
+目标：证明这是一个真实全栈移动端项目，而不是脚本或静态页面。
 
-## 主攻加分项
-
-当前不建议同时铺开购物车、下单、拍照找货。更合理的策略是：先把 **对话智能与 RAG 增强** 做深，再用 **工程质量与体验优化** 承托 Demo。
-
-### 加分项 A：对话智能与 RAG 增强
-
-优先实现：
-
-1. 信息不足时主动追问。
-2. 反选和排除条件，例如不要酒精、不要刺激、不要太油。
-3. 多商品对比，例如防晒 A 和防晒 B 更适合谁。
-
-答辩叙事：
-
-> 我没有只做一个包装大模型的聊天框，而是把模糊需求、结构化过滤、向量召回、商品资料约束和推荐理由生成串成了一条可解释链路。
-
-### 加分项 B：工程质量与体验优化
-
-优先实现：
-
-1. 首 token 时间和流式体验稳定。
-2. 后端断开、模型超时、空输入等错误状态可理解。
-3. 商品卡片、详情弹窗、图片加载稳定。
-4. 用 golden queries 形成可重复评测。
-
-答辩叙事：
-
-> 这个项目关注端到端工程完整性：不只让模型能回答，还要让移动端、后端、检索、流式渲染和错误处理都能稳定配合。
-
-## 当前优先级
-
-### 当前实现顺序
-
-本阶段按 `docs/08_rag_retrieval_strategy.md` 的算法路线推进：
-
-1. `V0 当前 Baseline`：已有关键词/结构化 baseline，可跑 MVP。
-2. `V1 Constraint-Aware Hybrid Retrieval`：当前最优先。
-3. `V2 Graph-Aware Retrieval`：第二阶段加属性图关系分。
-4. `V3 Verifier + Benchmark Loop`：与 V1 并行起步，后续深化。
-
-### P0-A：提交材料入口收口
-
-目标：让评委或自己换一台机器后能快速理解并复现当前闭环。
-
-状态：第一版已完成。
+当前状态：**已完成**。
 
 已完成：
 
-1. 更新根目录 `README.md`：
-   - 项目定位。
-   - 当前完成能力。
-   - 运行后端和 Android 的步骤。
-   - `.env` 配置说明，不暴露真实 Key。
-   - Demo 录屏和文档入口。
-2. 给出推荐阅读顺序：
-   - `docs/10_architecture.md`
-   - `docs/11_evaluation_report.md`
-   - `docs/12_demo_script.md`
-   - `docs/08_rag_retrieval_strategy.md`
-3. 明确当前边界：
-   - 文字美妆导购主线。
-   - enriched 数据已覆盖 25 条美妆商品。
-   - 多模态、购物车、下单不在当前版本。
-4. 新增 `docs/14_submission_package.md`：
-   - 提交入口。
-   - 评分点对照。
-   - Demo 讲解顺序。
-   - 运行和评测复现路径。
-   - 提交前检查。
-
-完成标准：
-
-1. README 可以作为提交入口。
-2. 运行命令不包含真实 API Key。
-3. 文档入口完整。
-
-后续维护：
-
-1. 每次扩展数据、改检索、改 Demo 后同步更新 README 和提交材料清单。
-2. 提交前确认录屏附件和代码仓库材料一致。
-
-### P0-B：Demo 稳定性收口
-
-目标：把现有真实闭环变成可稳定录屏的版本。
-
-任务：
-
-1. 复验消息列表自动滚动：
-   - 连续点击 `油皮通勤防晒` 和 `敏感肌修护`。
-   - 最新消息应该自动出现在可视区域。
-2. 准备 1 分钟第一版 Demo：
-   - 快捷问题触发。
-   - 真实 Doubao 回复。
-   - 商品卡片与图片。
+1. Android Kotlin + Jetpack Compose 原生 App。
+2. FastAPI 后端。
+3. `POST /api/chat/stream` SSE 流式接口。
+4. Android 端展示：
+   - 用户消息。
+   - 助手流式回复。
+   - 商品卡片。
+   - 商品图片。
    - 商品详情弹窗。
-   - 信息不足主动追问。
-3. 写 `docs/12_demo_script.md`。
+5. Mock 和真实 Doubao 都完成过闭环复验。
+6. 本地已有第一版 Demo 录屏。
+
+V0 风险：
+
+1. 录屏仍可更干净，但不影响功能成立。
+2. 现场真实 API 依赖网络和 Key，Demo 前需要保留 mock fallback。
+
+## V1：Constraint-Aware Hybrid RAG
+
+目标：证明系统不是“把用户问题丢给大模型”，而是有约束解析、检索、证据控制和可评测能力。
+
+当前状态：**基本完成，约 80%**。
+
+已完成：
+
+1. 数据层：
+   - 25 条美妆商品已进入 `data/enriched/beauty_products.jsonl`。
+   - raw 商品字段和 enriched 字段分离。
+   - 商品卡字段来自数据源，不由模型自由生成。
+2. 检索层：
+   - `QueryIntent`：预算、肤质、功效、场景、排除条件、信息不足。
+   - 预算硬过滤，例如 `200 元以内` 不返回超预算商品。
+   - 排除条件解析，例如 `不要酒精`、`不要刺激`。
+   - 信息不足时主动追问。
+   - Chroma 向量召回进入主链路。
+   - `RetrievalTrace` 可解释 query parse、filter、keyword/vector hits、final ranking。
+3. 评测层：
+   - 8 条 golden queries。
+   - 6 条 subcategory queries。
+   - 4 条 conversation cases。
+   - 生成层 guardrail regression。
+4. Android 端复验：
+   - 油皮通勤防晒。
+   - 信息不足追问。
+   - 商品详情。
+   - 眼霜、蜜粉、卸妆子类抽样。
+5. 生成层：
+   - Doubao/Ark OpenAI-compatible API 接入。
+   - 生成后 guardrail 拦截编造价格、库存、优惠、下单承诺和无证据绝对断言。
+   - 对 `unsupported_absence_claims` 已有 failure case 和二次改写策略。
+
+尚未完成：
+
+1. 对所有功效声明做细粒度 groundedness 校验。
+2. 对比型 query 还没有独立 benchmark 和实现策略。
+3. 真实 Doubao 下的所有子类 query 尚未系统复验。
+4. 纯向量、约束混合、graph-aware 三种检索版本的指标对比还没形成。
+
+V1 下一步如果继续补强：
+
+1. 增加对比型 benchmark。
+2. 给真实 Doubao 输出继续沉淀 failure cases。
+3. 把 guardrail 从“明显违规”推进到“声明是否有证据支持”。
+
+## V1.5：提交材料与演示稳定性
+
+目标：让评委或自己换一台机器后能快速理解项目、跑起项目、看懂亮点。
+
+当前状态：**第一版完成，可继续收口**。
+
+已完成：
+
+1. 根目录 `README.md`。
+2. `docs/10_architecture.md` 系统架构说明。
+3. `docs/11_evaluation_report.md` 评测记录。
+4. `docs/12_demo_script.md` Demo 脚本。
+5. `docs/13_security_and_config.md` 安全和配置说明。
+6. `docs/14_submission_package.md` 提交材料清单。
+7. API Key 扫描脚本和 pre-commit hook。
+8. 本地 1 分钟 Demo 视频。
+
+仍可收口：
+
+1. 把“当前主线是美妆，raw 总库是 100 条，后续可扩品类”写得更自然。
+2. 如果时间允许，重录一个没有模拟器悬浮控制条/剪贴板提示的版本。
+3. 随后每新增 V2/V3 能力，都同步更新 README、评测和提交材料。
+
+## V2：多品类 / Graph-aware Retrieval
+
+目标：证明当前系统不是只为美妆写死，而是可以扩展到多类目电商导购；同时让“为什么推荐”从字段匹配升级到关系匹配。
+
+当前状态：**V2-A 多品类 schema 与外部电商字段参考第一版已完成，V2-B 服饰运动 5 条样例已进入后端检索链路**。
+
+现状：
+
+1. raw 总库已有 100 条：
+   - 美妆护肤 25 条。
+   - 数码电子 25 条。
+   - 服饰运动 25 条。
+   - 食品饮料 25 条。
+2. enriched 当前覆盖 25 条美妆和 5 条服饰运动样例。
+3. RAG 主 Demo 仍聚焦美妆；服饰运动样例已可通过 debug retrieval 和本地 benchmark 验证。
+4. `docs/08_rag_retrieval_strategy.md` 已设计 V2 图结构：
+   - product -> brand。
+   - product -> category。
+   - product -> sub_category。
+   - product -> universal_facet。
+   - product -> category_specific_facet。
+   - product -> price_bucket。
+   - product -> evidence_text。
+
+V2 建议不要一步做全品类。建议拆成三步：
+
+1. **V2-A：多品类 schema 设计**
+   - 通用字段：价格、品牌、类目、子类目、场景、适合/不适合、注意事项。
+   - 美妆字段：肤质、功效、成分、质地、禁忌。
+   - 数码字段：性能、续航、屏幕、存储、用途、兼容性。
+   - 服饰字段：材质、尺码、季节、版型、运动场景、天气条件。
+   - 食品字段：口味、糖分、咖啡因、包装、过敏原、健康声明注意。
+   - 设计文档见 `docs/15_multicategory_schema.md`。
+   - 外部字段参考见 `docs/16_ecommerce_schema_references.md`。
+2. **V2-B：第二品类 5 条 enriched 样例**
+   - 推荐优先选 `服饰运动`。
+   - 原因：材质、尺码、运动场景和主办方提到的“纯棉”这类约束更贴近，也能和美妆形成差异。
+   - 当前已完成第一版：`data/enriched/apparel_products.jsonl` + `data/eval/apparel_queries.json`。
+3. **V2-C：轻量属性图打分**
+   - 不接 Neo4j，不接重型 GraphRAG。
+   - 用本地 dict/JSON 构建 product-attribute relations。
+   - 在 `RetrievalTrace` 中新增 `graph_hits` / `graph_relation_score`。
+
+V2 完成标准：
+
+1. 至少 1 个非美妆品类有 5 条 enriched 样例。
+2. 至少 3 条跨品类或第二品类 query 能完成检索。
+3. trace 中能看到 graph relation 命中。
+4. 文档能说明：系统支持品类专属字段扩展，不是美妆写死规则。
+
+## V3：Verifier / Feedback Loop
+
+目标：让系统不仅能推荐，还能记录哪里错、为什么错、下一轮怎么修。
+
+当前状态：**有雏形，未完整闭环**。
+
+已有：
+
+1. 生成后规则 guardrail。
+2. `unsupported_absence_claims` failure case。
+3. golden/subcategory/conversation benchmark。
+4. 密钥扫描和提交前检查。
+
+未完成：
+
+1. 用户反馈按钮，例如“有用/无用”。
+2. 失败 query 自动记录。
+3. 推荐失败原因分类。
+4. prompt / 数据增强 / 检索规则迭代记录。
+5. LLM judge 或 Ragas groundedness 指标。
+
+V3 建议拆成两层：
+
+1. **轻量反馈闭环**
+   - Android 卡片或回复下方加 `有用` / `不准确`。
+   - 后端记录 query、intent、products、trace、feedback。
+   - 先写本地 JSONL，不急着上数据库。
+2. **Verifier 增强**
+   - 检查推荐是否超预算。
+   - 检查是否出现非候选商品。
+   - 检查价格、库存、优惠、功效是否有数据源支持。
+   - 对“资料中未说明”类问题保留谨慎措辞。
+
+## 当前推荐优先级
+
+### 第一优先级：全品类向量索引策略
+
+原因：
+
+1. 服饰 5 条样例已经通过类目/子类/关键词检索。
+2. 当前 Chroma collection 仍只索引美妆，如果继续扩品类，需要避免不同品类互相抢分。
+3. 这是 V2-C graph-aware / 多品类检索前最关键的工程边界。
 
 完成标准：
 
-1. Demo 不依赖中文输入法手动输入。
-2. loading 能回到 `发`。
-3. 录屏路径和复验结论写入评测报告。
+1. 决定使用分品类 collection，还是统一 collection + metadata filter。
+2. `build_index.py` 或新脚本支持多品类索引。
+3. 美妆 golden / subcategory 与 apparel benchmark 都能稳定通过。
+4. `RetrievalTrace` 能区分 keyword/vector/category/sub_category 各自贡献。
 
-### P0-C：Constraint-Aware Hybrid Retrieval 收口
+### 第二优先级：多商品对比
 
-目标：先把“硬约束、软偏好、信息不足、可解释 trace”从现有检索逻辑里拆清楚。Chroma 在这一阶段作为向量召回通道加入，但不是第一性约束来源。
+原因：
 
-任务：
-
-1. 新增 `QueryIntent`：
-   - `category_candidates`
-   - `universal_constraints`
-   - `facets`
-   - `hard_constraints`
-   - `soft_preferences`
-   - `exclude_terms`
-   - `needs_clarification`
-   - `confidence`
-2. 明确处理边界：
-   - 明确预算：硬过滤。
-   - 明确排除：过滤或极强降权。
-   - 软偏好：排序加权。
-   - 信息不足：先追问，不进入普通推荐。
-3. 新增 `RetrievalTrace`：
-   - query parse
-   - hard filter
-   - keyword hits
-   - vector hits
-   - final scores
-   - guardrail checks
-4. 重构 `retrieve()`，让返回结果不仅有 `cards/context`，还有可 debug 的 trace。
-5. 继续确保商品卡片字段只来自 raw/enriched 数据源。
+1. 对比是“辅助决策”的强展示点。
+2. 如果先有 graph/schema，对比会更自然，不只是 prompt 模板。
 
 完成标准：
 
-1. 至少 3 条 golden queries 能输出完整 trace。
-2. “200 元以内”不会返回超预算商品。
-3. “我想买护肤品”这类信息不足 query 会先追问。
-4. 后端返回的商品与 query 有可解释匹配关系。
+1. 增加 1-2 条对比型 benchmark。
+2. 回答按价格、适合人群、场景、注意事项给出选择建议。
+3. Android 展示多张相关商品卡片。
 
-### P0-D：Chroma 向量召回进入主链路
+### 第三优先级：反馈闭环
 
-目标：让向量召回成为 V1 的一个稳定通道，并用 benchmark 比较它和结构化约束的关系。
+原因：
 
-任务：
-
-1. 构建 Chroma 索引。
-2. 后端运行时真实使用向量召回。
-3. trace 中记录 vector hits。
-4. 对比：
-   - 当前 baseline。
-   - 纯 Chroma。
-   - Constraint-aware + Chroma。
+1. 是课题要求里的“质量评测与反馈闭环”的加分项。
+2. 但它依赖 trace 和 benchmark，适合在 V2 后补。
 
 完成标准：
 
-1. `scripts/build_index.py` 能稳定完成。
-2. 至少 3 条 golden queries 经过 Chroma 通道。
-3. 能说明纯向量在哪些场景会违反硬约束，constraint-aware 为什么必要。
+1. 用户能标记推荐是否有用。
+2. 后端记录 feedback JSONL。
+3. 文档中能展示如何用失败 query 反哺 prompt 或数据增强。
 
-### P0-E：Golden Query 评测表
+## 当前不建议优先做
 
-目标：让“效果可靠性”有证据，而不是只靠口头感觉。评测从 V1 开始就要同步建立，不等所有功能完成。
-
-任务：
-
-1. 建立评测表，字段包括：
-   - query
-   - parsed intent
-   - 期望召回
-   - 实际召回
-   - 是否超预算
-   - 是否错误推荐
-   - 是否编造价格/库存/优惠/功效
-   - 是否应该追问
-   - 实际是否追问
-   - trace 是否完整
-   - 备注和修正计划
-2. 先覆盖 8 条 golden queries。
-3. 每次修改检索或 prompt 后复跑。
-
-完成标准：
-
-1. 至少 8 条记录完整。
-2. 能说明 1-2 个失败 case 如何被修正。
-3. Demo 中可展示评测表截图或摘要。
-
-### P0-F：真实 Doubao 流式复验
-
-目标：在检索候选和 trace 可靠后，确认真实模型能被 Android 端稳定消费，并且不破坏证据约束。
-
-任务：
-
-1. 本地 `.env` 配置真实 `ARK_API_KEY`、`ARK_MODEL`，保持 `.env` 不提交。
-2. `MOCK_LLM=false` 后启动后端。
-3. Android 连续跑 3 条 query。
-4. 记录是否出现超时、空 token、卡 loading、幻觉输出。
-5. 检查模型文本是否只解释候选商品。
-
-完成标准：
-
-1. Android 端能看到真实模型流式输出。
-2. loading 能正常结束。
-3. 商品卡片和模型文本一致，不出现明显编造价格、优惠、库存。
-
-### P1：复杂语义能力
-
-目标：形成一个真正能讲的加分点。
-
-任务：
-
-1. 基于 V1 的 `needs_clarification` 做信息不足主动追问。
-2. 基于 `exclude_terms` 做否定条件解析与排除。
-3. 基于 V2 属性图做多商品对比。
-4. 支持多轮补充条件，例如“再便宜点”“我其实是敏感肌”。
-
-完成标准：
-
-1. 每类能力至少有 2 条 query 可稳定演示。
-2. 代码中能解释意图识别、过滤、后处理的策略。
-3. 评测表能体现复杂语义能力提升。
-
-### P1：提交文档与展示材料
-
-目标：让评委能快速理解项目，而不是只看代码。
-
-需要补充：
-
-1. `docs/08_rag_retrieval_strategy.md`：RAG 检索调研、强约束处理和 benchmark 设计。
-2. `docs/10_architecture.md`：整体架构和请求链路。
-3. `docs/11_evaluation_report.md`：golden queries 评测结果。
-4. `docs/12_demo_script.md`：3-5 分钟 Demo 脚本。
-5. `docs/13_security_and_config.md`：API Key、`.env`、脱敏和提交注意事项。
+1. 图片输入 / 拍照找货：
+   - 多模态是加分项，但工程和调试成本高。
+   - 当前更稳的加分点是 RAG 可靠性、多品类和可解释性。
+2. 购物车 / 下单：
+   - 与当前课题核心“导购决策辅助”关系弱。
+   - 容易把范围拉散。
+3. 全量 75 条非美妆一次性标注：
+   - 成本高，且短期不一定提升 Demo。
+   - 先做 5 条第二品类样例更稳。
 
 ## 每次开工工作流
 
 每次开始推进前，按这个顺序看：
 
-1. 看本文件，确认今天做的是 P0 还是 P1。
+1. 看本文件，确认今天做的是 V1 收口、V2 扩展，还是 V3 闭环。
 2. 看 `docs/06_progress_tracker.md`，确认当前实现状态。
 3. 如果动接口，先看 `docs/04_api_contract.md`。
-4. 如果动检索或模型，先看 `docs/05_golden_queries.md`。
+4. 如果动检索或模型，先看 `docs/05_golden_queries.md` 和 `docs/08_rag_retrieval_strategy.md`。
 5. 改完后至少做一项验证：
    - 数据脚本。
    - 后端接口。
    - Android 端手动验证。
-   - golden query 复跑。
+   - golden/subcategory/conversation query 复跑。
 6. 把结论写回文档，不只留在聊天里。
-
-## Demo 建议脚本
-
-推荐 3-5 分钟展示顺序：
-
-1. 打开 Android App，展示聊天界面。
-2. 输入：“我是油皮，想要 200 元以内的通勤防晒。”
-3. 展示流式回复、商品卡片和图片。
-4. 点击商品卡片，展示详情字段来自数据源。
-5. 输入：“我想买护肤品，你推荐什么？”
-6. 展示 Agent 主动追问肤质、预算或具体需求。
-7. 输入：“不要酒精味太重或者刺激感强的产品。”
-8. 展示排除约束和温和选项。
-9. 切到架构图，讲 Android -> FastAPI -> RAG -> Doubao -> SSE -> 商品卡片。
-10. 展示 golden query 评测摘要。
 
 ## 答辩必须讲清楚的点
 
@@ -316,7 +289,8 @@
 5. 商品卡字段为什么可信，哪些字段来自数据源。
 6. 如何防止模型编造价格、优惠、库存和功效。
 7. 原始数据和 enriched 数据为什么分开。
-8. 当前系统边界在哪里，下一步如何增强。
+8. 当前主线为什么聚焦美妆，以及如何扩展到多品类。
+9. V1 的约束感知检索和 V2 的 graph-aware retrieval 有什么区别。
 
 ## 安全与提交注意事项
 
@@ -324,15 +298,9 @@
 2. 说明会原始文档如果包含 API Key，不能原样进入公开仓库。
 3. Demo 和文档中展示配置时必须脱敏。
 4. 商品数据如果最终公开，需要确认是否允许公开；比赛私有仓库内可先保留。
+5. 提交前运行：
 
-## 下一步建议
-
-当前最建议先做：
-
-> 提交材料入口收口：更新 README，把架构、评测、Demo 和运行方式串起来。
-
-原因：
-
-1. Demo 和架构文档已经有了，README 是评委看到项目时的入口。
-2. README 能把工程质量、效果证据和安全配置放在同一个可读位置。
-3. 完成入口整理后，再扩数据或做 Graph-aware 会更踏实。
+```bash
+git diff --check
+python3 scripts/scan_secrets.py --all
+```

@@ -1,0 +1,49 @@
+[
+  {
+    "id": "apparel_001_commute_tshirt_budget",
+    "title": "百元内夏季通勤 T 恤",
+    "query": "100元以内夏天通勤T恤，不想太闷",
+    "expect": {
+      "expected_budget_max": 100,
+      "expected_any_product_ids": ["p_clothes_001"],
+      "allowed_sub_categories": ["短袖T恤"]
+    }
+  },
+  {
+    "id": "apparel_002_training_quick_dry",
+    "title": "跑步训练速干短袖",
+    "query": "跑步训练用，想要速干透气短袖",
+    "expect": {
+      "expected_any_product_ids": ["p_clothes_002"],
+      "allowed_sub_categories": ["短袖T恤"]
+    }
+  },
+  {
+    "id": "apparel_003_cushion_running_shoes",
+    "title": "日常慢跑缓震跑鞋",
+    "query": "日常慢跑鞋，想要缓震舒服",
+    "expect": {
+      "expected_any_product_ids": ["p_clothes_007"],
+      "allowed_sub_categories": ["跑步鞋"]
+    }
+  },
+  {
+    "id": "apparel_004_waterproof_hiking_shoes",
+    "title": "防水抓地徒步鞋",
+    "query": "徒步鞋要防水抓地，预算1200以内",
+    "expect": {
+      "expected_budget_max": 1200,
+      "expected_any_product_ids": ["p_clothes_014"],
+      "allowed_sub_categories": ["徒步鞋"]
+    }
+  },
+  {
+    "id": "apparel_005_commute_outdoor_backpack",
+    "title": "通勤和轻户外背包",
+    "query": "通勤也能周末户外用的双肩包",
+    "expect": {
+      "expected_any_product_ids": ["p_clothes_018"],
+      "allowed_sub_categories": ["背包"]
+    }
+  }
+]

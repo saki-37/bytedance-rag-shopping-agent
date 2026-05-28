@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RAW_ROOT = ROOT / "data" / "raw" / "ecommerce_agent_dataset"
 ENRICHED_PATH = ROOT / "data" / "enriched" / "beauty_products.jsonl"
+ENRICHED_DIR = ROOT / "data" / "enriched"
 
 REQUIRED_RAW_FIELDS = {
     "product_id",
@@ -29,7 +30,8 @@ def main() -> None:
     validate_raw(products)
     if ENRICHED_PATH.exists():
         validate_enriched(products)
-    print(f"OK raw_products={len(products)} enriched_exists={ENRICHED_PATH.exists()}")
+    validate_multicategory_enriched(products)
+    print(f"OK raw_products={len(products)} enriched_files={len(list_enriched_paths())}")
 
 
 def load_raw_products() -> dict[str, dict]:
@@ -96,6 +98,51 @@ def validate_enriched(products: dict[str, dict]) -> None:
         raise AssertionError(f"Unexpected non-beauty enriched rows: {extra}")
     if len(rows) != len(beauty_ids):
         raise AssertionError(f"Expected {len(beauty_ids)} enriched beauty rows, got {len(rows)}")
+
+
+def validate_multicategory_enriched(products: dict[str, dict]) -> None:
+    seen: set[str] = set()
+    for path in list_enriched_paths():
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            raw_id = row.get("raw_product_id")
+            if raw_id not in products:
+                raise AssertionError(f"{path.name}:{line_number}: raw_product_id not found: {raw_id}")
+            if raw_id in seen:
+                raise AssertionError(f"{path.name}:{line_number}: duplicated enriched raw_product_id: {raw_id}")
+            seen.add(raw_id)
+
+            if path.name == "beauty_products.jsonl":
+                continue
+
+            for field in [
+                "schema_version",
+                "canonical_category",
+                "source",
+                "variants",
+                "display",
+                "attributes",
+                "category_attributes",
+                "retrieval",
+            ]:
+                if field not in row:
+                    raise AssertionError(f"{path.name}:{line_number}: missing {field}")
+            if row["canonical_category"] not in row["category_attributes"]:
+                raise AssertionError(
+                    f"{path.name}:{line_number}: category_attributes missing {row['canonical_category']}"
+                )
+            if not row["source"].get("attribute_provenance"):
+                raise AssertionError(f"{path.name}:{line_number}: missing source.attribute_provenance")
+            if not row["variants"].get("variant_dimensions"):
+                raise AssertionError(f"{path.name}:{line_number}: missing variants.variant_dimensions")
+            if not row["attributes"].get("specifications"):
+                raise AssertionError(f"{path.name}:{line_number}: missing attributes.specifications")
+
+
+def list_enriched_paths() -> list[Path]:
+    return sorted(ENRICHED_DIR.glob("*_products.jsonl"))
 
 
 if __name__ == "__main__":
