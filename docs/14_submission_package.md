@@ -10,7 +10,7 @@
 
 1. GitHub 仓库：`saki-37/bytedance-rag-shopping-agent`
 2. 根目录 README：`README.md`
-3. Demo 录屏：本地 `demo/录屏v1.mov`，作为平台附件单独上传
+3. Demo 录屏：优先上传本地 `demo/录屏v1_submission_phone_60s.mp4`；原始录屏为 `demo/录屏v1.mov`
 4. 架构说明：`docs/10_architecture.md`
 5. 评测记录：`docs/11_evaluation_report.md`
 
@@ -45,7 +45,13 @@
 
 ## Demo 讲解顺序
 
-详见 `docs/12_demo_script.md`。建议 60-90 秒内展示：
+详见 `docs/12_demo_script.md`。当前建议上传 60 秒手机屏版本：
+
+```text
+demo/录屏v1_submission_phone_60s.mp4
+```
+
+建议 60-90 秒内展示：
 
 1. 打开 Android App，展示 3 个快捷问题。
 2. 点击 `油皮通勤防晒`，展示真实流式回复和商品卡片。
@@ -126,6 +132,7 @@ git diff --check
 - Demo 录屏中没有显示 API Key 或终端敏感配置。
 - `data/indexes/`、`data/tmp/`、`*.mov`、`*.mp4` 不进入 Git。
 - 如果平台要求上传视频，使用本地录屏作为单独附件，而不是提交到代码仓库。
+- 当前 60 秒版本已裁掉 Android Studio 主界面和终端内容；仍能看到模拟器悬浮控制条和一次剪贴板提示，若时间允许可后续重录更干净版本。
 
 ## 当前边界
 

@@ -23,7 +23,7 @@
 - 提交材料清单：[docs/14_submission_package.md](docs/14_submission_package.md)
 - 文档总入口：[docs/00_index.md](docs/00_index.md)
 
-本地录屏文件位于 `demo/录屏v1.mov`，属于生成媒体文件，已被 `.gitignore` 忽略；提交时建议作为单独附件上传。
+本地原始录屏位于 `demo/录屏v1.mov`；当前已导出 60 秒手机屏版本 `demo/录屏v1_submission_phone_60s.mp4`，更适合作为平台附件上传。录屏文件属于生成媒体，已被 `.gitignore` 忽略，不进入 Git。
 
 ## Repository Layout
 
