@@ -40,3 +40,8 @@
 - 完成 RetrievalTrace 可解释性增强第一版：trace 新增 `metadata_filter`、`filter_summary`、`ranking_signals`，并同步写入 golden、subcategory、comparison、conversation 的 JSONL 评测输出；完整回归通过。
 - 开始 Graph-aware relation score 第一版：先用运行时派生的属性关系做小权重 rerank 和 trace 展示，不接重型图数据库。
 - 完成 Graph-aware relation score 第一版：`retrieval_channels.graph` 和 `ranking_signals.graph` 已展示 category、sub_category、budget、facet、preference 等关系命中；comparison、golden、subcategory、apparel、conversation 和 generation guardrail 回归均 PASS。
+
+## 2026-05-29
+
+- 新增 [采分点确认与待办看板](17_scoring_todo_board.md)：按基础功能完整性、工程质量、效果与可靠性、加分项深度整理当前状态，并把 groundedness / 反编造 benchmark 的 5 个待办 case 先放入待办池，暂不扩张成代码实现。
+- 新增 [官方采分点逐项对照表](18_official_scoring_checklist.md)：完全按官方“必做最小闭环、明确不能踩的线、评分权重、基础/进阶/高级场景”逐条标注 ✅ / ◯ / △ / ✕ / ⏸，用于判断哪些得分点已踩到、哪些还需要 benchmark 或提交材料收口。
