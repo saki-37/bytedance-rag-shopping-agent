@@ -43,7 +43,7 @@
 | Step 3 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 后端或 debug 入口能记录 feedback JSONL |
 | Step 4 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | README、提交包、Demo、secret scan 最终确认 |
 
-当前正在执行：**Step 0**。
+当前正在执行：**Step 1**。
 
 ### P0：提交材料收口
 
@@ -79,6 +79,13 @@
 data/eval/groundedness_cases.json
 scripts/run_groundedness_cases.py
 ```
+
+当前进展：
+
+- 已新增 `data/eval/groundedness_cases.json`，先把 case 格式和 11 条人工标注 case 固定下来。
+- case 覆盖三类难度：`L1` 单点事实边界、`L2` 约束/风险/商业声明陷阱、`L3` 多轮上下文继承；其中 3 条是 5-8 轮长对话。
+- 每条 case 包含：考察能力、困难点、来源证据摘要、用户问题、期望行为、禁止行为和参考回答。
+- 下一步再补 `scripts/run_groundedness_cases.py`，把这些 case 转成可回归的自动检查。
 
 ### P2：轻量反馈闭环
 
