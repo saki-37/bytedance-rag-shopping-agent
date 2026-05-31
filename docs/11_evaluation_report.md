@@ -350,6 +350,49 @@ server/.venv/bin/python scripts/run_golden_queries.py --check-stream --require-v
 - 当 Ark / Doubao 连接失败时，后端记录 warning，并返回基于召回商品卡片的安全兜底回答。
 - 这不是最终真实模型效果评测，只证明 Android 端不会因为模型暂时不可用而卡死。
 
+## Groundedness Benchmark 初跑
+
+目标：把“回答不编造”拆成可回归 case，覆盖成分存在性、功效外推、约束过紧、多轮条件继承、过敏风险、有证据的无添加声明、商业承诺陷阱，以及 5-8 轮长对话。
+
+新增 runner：
+
+```bash
+server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm
+```
+
+本地 mock 全链路结果：
+
+| Mode | Result | Output |
+| --- | --- | --- |
+| retrieval + SSE generation + guardrail/fallback | 2 / 11 PASS | `/private/tmp/groundedness_cases_latest.jsonl` |
+| retrieval-only | 7 / 11 PASS | `/private/tmp/groundedness_cases_retrieval_only_latest.jsonl` |
+
+真实 Ark / Doubao 抽样：
+
+```bash
+server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --case-id GRD-03 \
+  --case-id GRD-07 \
+  --output /private/tmp/groundedness_cases_real_sample.jsonl
+```
+
+抽样结果：2 / 2 PASS。`GRD-07` 中真实模型先输出了库存、优惠、优惠券、下单相关内容，触发 generation guardrail；repair 后仍未通过，最终使用本地 grounded fallback，通过“不能补资料外商业信息”的检查。
+
+主要发现：
+
+1. 检索层已经能通过短事实 case、商业承诺 case 和一条长卸妆油对话，但多轮上下文继承仍不稳。
+2. 预算更新存在问题：`预算可以放宽到300` 和长对话里的预算变化没有稳定覆盖上一轮预算。
+3. 产品角色继承存在问题：用户后续问“水杨酸 / 屏障 / 不过敏保证”时，系统会丢失上一轮核心商品。
+4. mock / fallback 生成只能给出通用安全回答，不会细粒度引用 PITERA、烟酰胺、无香料无酒精等证据，因此 answer-level 检查大量失败。
+5. Guardrail 对商业承诺有效，但对成分/功效 groundedness 还不是完整 judge。
+
+下一步建议：
+
+1. 先修 retrieval message / intent merge，让长对话保留“上一轮核心商品 + 当前补充问题”。
+2. 增加产品别名和成分别名解析，例如小棕瓶、小黑瓶、神仙水、烟酰胺、水杨酸。
+3. 给生成层增加 evidence-aware answer builder，至少能在 fallback 中引用关键成分、注意事项、无添加证据和“资料未看到”的表达。
+4. 再把 `answer_must_contain` 从纯字符串检查逐步升级为更稳定的 claim-level judge。
+
 ## 当前边界
 
 1. Guardrail V1 是规则校验，不是完整 groundedness judge。

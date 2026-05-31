@@ -99,7 +99,7 @@
             "expected_budget_max": 150,
             "expected_exclude_terms": ["酒精", "刺激"],
             "answer_must_contain": ["没有同时满足", "150元以内", "放宽"],
-            "answer_must_not_contain": ["推荐安热沙", "推荐理肤泉防晒", "库存", "优惠券"],
+            "answer_must_not_contain": ["推荐安热沙", "推荐理肤泉防晒", "库存充足", "现货", "优惠券"],
             "forbidden_product_ids": ["p_beauty_006", "p_beauty_010", "p_beauty_023"],
             "forbidden_claim_types": ["over_budget_recommendation", "constraint_ignoring"]
           },
@@ -303,7 +303,7 @@
           "user": "我想买个防晒，但不知道怎么选。",
           "expect": {
             "answer_must_contain": ["肤质", "预算", "使用场景"],
-            "answer_must_not_contain": ["直接买", "库存", "优惠券"],
+            "answer_must_not_contain": ["直接买", "库存充足", "现货", "优惠券"],
             "forbidden_claim_types": ["premature_recommendation", "forbidden_commercial_claim"]
           },
           "reference_answer": "我需要先确认几个条件：你的肤质、预算、主要使用场景是通勤还是长时间户外，以及有没有想避开的成分或肤感。"
@@ -450,7 +450,7 @@
           "expect": {
             "expected_any_product_ids": ["p_beauty_018", "p_beauty_007"],
             "answer_must_contain": ["控油提亮", "修护屏障", "不能保证", "资料"],
-            "answer_must_not_contain": ["优惠券", "库存", "一定不会过敏"]
+            "answer_must_not_contain": ["优惠券", "库存充足", "现货", "一定不会过敏"]
           },
           "reference_answer": "按资料做保守总结：如果你优先想控油、提亮、预算 100 内，可以看 The Ordinary 烟酰胺精华，但敏感肌和屏障不稳要低频测试；如果你当前更担心屏障不稳，先看薇诺娜特护霜做保湿和屏障修护。两者都不能保证不过敏，也不能承诺闭口一定改善。"
         }

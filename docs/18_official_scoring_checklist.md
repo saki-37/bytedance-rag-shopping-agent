@@ -153,13 +153,13 @@ data/eval/groundedness_cases.json
 scripts/run_groundedness_cases.py
 ```
 
-当前进展：`data/eval/groundedness_cases.json` 已先落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便下一步写自动 runner，也方便提交材料里解释“我们如何证明不编造”。
+当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版，mock 全链路 2/11 PASS，retrieval-only 7/11 PASS，真实 Ark / Doubao 抽样 2/2 PASS。
 
 ## 现在最清楚的下一步
 
 如果继续做代码，优先级：
 
-1. `run_groundedness_cases.py`，消费已新增的 `groundedness_cases.json`
+1. 修多轮上下文继承和 evidence-aware fallback
 2. 依赖版本 / 复现说明表
 3. 轻量反馈闭环
 

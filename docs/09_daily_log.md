@@ -46,3 +46,4 @@
 - 新增 [采分点确认与待办看板](17_scoring_todo_board.md)：按基础功能完整性、工程质量、效果与可靠性、加分项深度整理当前状态，并把 groundedness / 反编造 benchmark 的 5 个待办 case 先放入待办池，暂不扩张成代码实现。
 - 新增 [官方采分点逐项对照表](18_official_scoring_checklist.md)：完全按官方“必做最小闭环、明确不能踩的线、评分权重、基础/进阶/高级场景”逐条标注 ✅ / ◯ / △ / ✕ / ⏸，用于判断哪些得分点已踩到、哪些还需要 benchmark 或提交材料收口。
 - 新增 `data/eval/groundedness_cases.json`：把反编造/可溯源 case 扩展为 11 条人工标注 benchmark 草案，覆盖成分存在性、功效外推、约束过紧、多轮排除继承、过敏风险、有证据的无添加声明、商业承诺陷阱和孕期/不过敏安全边界；其中 3 条为 5-8 轮长对话。
+- 新增 `scripts/run_groundedness_cases.py` 并完成初跑：mock 全链路 2/11 PASS，retrieval-only 7/11 PASS；真实 Ark / Doubao 抽样 `GRD-03`、`GRD-07` 为 2/2 PASS，且 `GRD-07` 验证了商业承诺触发 guardrail 后可回落到安全回答。

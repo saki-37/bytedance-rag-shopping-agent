@@ -85,7 +85,9 @@ scripts/run_groundedness_cases.py
 - 已新增 `data/eval/groundedness_cases.json`，先把 case 格式和 11 条人工标注 case 固定下来。
 - case 覆盖三类难度：`L1` 单点事实边界、`L2` 约束/风险/商业声明陷阱、`L3` 多轮上下文继承；其中 3 条是 5-8 轮长对话。
 - 每条 case 包含：考察能力、困难点、来源证据摘要、用户问题、期望行为、禁止行为和参考回答。
-- 下一步再补 `scripts/run_groundedness_cases.py`，把这些 case 转成可回归的自动检查。
+- 已新增 `scripts/run_groundedness_cases.py`，把这些 case 转成可回归的自动检查。
+- 初跑结果：mock 全链路 2/11 PASS，retrieval-only 7/11 PASS；真实 Ark / Doubao 抽样 2/2 PASS。
+- 下一步优先修多轮上下文继承和 evidence-aware fallback，而不是继续扩 case 数量。
 
 ### P2：轻量反馈闭环
 
