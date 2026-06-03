@@ -83,7 +83,7 @@ V0 风险：
 3. 评测层：
    - 8 条 golden queries。
    - 6 条 subcategory queries。
-   - 5 条 conversation cases。
+   - 6 条 conversation cases。
    - 3 条 comparison queries。
    - 生成层 guardrail regression。
 4. Android 端复验：

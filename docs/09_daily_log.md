@@ -60,3 +60,4 @@
 - `POST /api/debug/retrieve` 新增 `conversation_state` trace，方便查看 state merge 是否应用以及具体 actions。
 - 扩展 `data/eval/conversation_cases.json`：新增 `CQ-05` 5轮预算更新/取消预算/排除继承 case；conversation benchmark 从 4/4 扩展为 5/5 PASS。
 - 同步回归：golden 8/8、beauty subcategory 6/6、apparel 5/5、comparison 3/3、generation guardrail PASS。
+- 继续补齐商品卡指代第一版：Android history 现在回传 assistant 商品卡 `product_ids`；后端可将“第一款/它/这款”映射到上一轮商品，并新增 `CQ-06`，conversation benchmark 扩展为 6/6 PASS。

@@ -26,10 +26,16 @@ SSE 流式聊天接口。
   "conversation_id": "local-demo",
   "history": [
     {"role": "user", "content": "我想找防晒"},
-    {"role": "assistant", "content": "你更在意通勤还是户外？"}
+    {
+      "role": "assistant",
+      "content": "你更在意通勤还是户外？",
+      "product_ids": ["p_beauty_006", "p_beauty_022"]
+    }
   ]
 }
 ```
+
+`history[].product_ids` 为可选字段。Android 会把上一轮 assistant 商品卡片的 `product_id` 带回后端，用于解析“第一款”“它”“这款”等商品指代；旧请求不传该字段时按空数组处理。
 
 事件类型：
 
@@ -73,6 +79,7 @@ SSE 流式聊天接口。
 - 模型只能解释已召回商品，不允许编造优惠、库存、价格或未提供功效。
 - 生成层会做后置校验：如果模型输出包含未授权价格、库存、优惠、购买链接等商业承诺，后端会改用基于商品卡片的安全兜底回答继续流式输出。
 - 如果真实 Ark / Doubao 调用失败，后端也会返回安全兜底回答，避免 Android 端只收到 `error` 事件。
+- 多轮商品指代依赖 `history[].product_ids`，不会从模型自由猜上一轮商品。
 
 ## GET `/assets/{image_path}`
 

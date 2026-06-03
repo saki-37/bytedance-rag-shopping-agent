@@ -122,7 +122,16 @@ def run_case(case: dict[str, Any], client: Any) -> dict[str, Any]:
                 "guardrail_checks": debug["trace"]["guardrail_checks"],
             }
         )
+        product_ids = [product["product_id"] for product in debug["products"]]
         history.append({"role": "user", "content": turn["user"]})
+        if product_ids:
+            history.append(
+                {
+                    "role": "assistant",
+                    "content": "已返回商品卡片。",
+                    "product_ids": product_ids,
+                }
+            )
 
     return {
         "id": case["id"],
@@ -183,6 +192,10 @@ def evaluate_turn(expectation: dict[str, Any], debug: dict[str, Any]) -> list[st
     if expected_any and not set(expected_any).intersection(product_ids):
         failures.append(f"missing_expected_product any_of={expected_any} got={product_ids}")
 
+    expected_exact = expectation.get("expected_product_ids_exact", [])
+    if expected_exact and product_ids != expected_exact:
+        failures.append(f"product_ids_exact_mismatch expected={expected_exact} got={product_ids}")
+
     forbidden_products = [product_id for product_id in expectation.get("forbidden_product_ids", []) if product_id in product_ids]
     if forbidden_products:
         failures.append(f"forbidden_products_present={forbidden_products}")
@@ -210,6 +223,14 @@ def evaluate_turn(expectation: dict[str, Any], debug: dict[str, Any]) -> list[st
         for text in expectation["expected_state_actions_contains"]:
             if not any(text in action for action in actions):
                 failures.append(f"state_action_missing={text} actual={actions}")
+
+    expected_references = expectation.get("expected_state_referenced_product_ids", [])
+    if expected_references:
+        actual_references = merged_state.get("referenced_product_ids", [])
+        if actual_references != expected_references:
+            failures.append(
+                f"referenced_product_ids_mismatch expected={expected_references} got={actual_references}"
+            )
 
     return failures
 

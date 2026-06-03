@@ -161,6 +161,7 @@ def _query_terms(query: str) -> set[str]:
 
 
 def parse_query_intent(query: str) -> QueryIntent:
+    referenced_product_ids = _extract_referenced_product_ids(query)
     budget = None if _relaxes_budget(query) else _hard_budget(query)
     facets = _extract_facets(query)
     exclude_terms = [] if _relaxes_exclusions(query) else _extract_exclude_terms(query)
@@ -170,10 +171,12 @@ def parse_query_intent(query: str) -> QueryIntent:
     hard_constraints: list[str] = []
     if budget is not None:
         hard_constraints.append(f"budget_max <= {budget:g}")
+    hard_constraints.extend(f"referenced_product:{product_id}" for product_id in referenced_product_ids)
     hard_constraints.extend(f"exclude:{term}" for term in exclude_terms)
 
     signal_count = (
-        len(exclude_terms)
+        len(referenced_product_ids)
+        + len(exclude_terms)
         + len(soft_preferences)
         + sum(len(values) for values in facets.values())
         + (1 if budget is not None else 0)
@@ -182,6 +185,7 @@ def parse_query_intent(query: str) -> QueryIntent:
     confidence = min(0.95, 0.2 + signal_count * 0.15 + (0.1 if category_candidates else 0.0))
     return QueryIntent(
         category_candidates=category_candidates,
+        referenced_product_ids=referenced_product_ids,
         universal_constraints=UniversalConstraints(budget_max=budget),
         facets=facets,
         hard_constraints=hard_constraints,
@@ -215,6 +219,11 @@ def _hard_budget(query: str) -> float | None:
     if not matches:
         return None
     return max(matches, key=lambda item: item[0])[1]
+
+
+def _extract_referenced_product_ids(query: str) -> list[str]:
+    ids = re.findall(r"\bp_[a-z]+_\d+\b", query)
+    return list(dict.fromkeys(ids))
 
 
 def _relaxes_budget(query: str) -> bool:
@@ -328,6 +337,11 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
 
     for item in products:
         raw = item["raw"]
+        if intent.referenced_product_ids and raw["product_id"] not in intent.referenced_product_ids:
+            hard_filtered_out.append(
+                FilteredProduct(product_id=raw["product_id"], reason=f"product_id {raw['product_id']} not in {intent.referenced_product_ids}")
+            )
+            continue
         if intent.category_candidates and not _matches_category_candidate(raw.get("category", ""), intent.category_candidates):
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"category {raw.get('category', '')} not in {intent.category_candidates}")
@@ -457,6 +471,7 @@ def _filter_summary(filtered: list[FilteredProduct]) -> dict[str, int]:
         "budget": 0,
         "exclude_terms": 0,
         "required_effect": 0,
+        "referenced_product": 0,
         "other": 0,
     }
     for entry in filtered:
@@ -471,6 +486,8 @@ def _filter_summary(filtered: list[FilteredProduct]) -> dict[str, int]:
             counts["exclude_terms"] += 1
         elif reason.startswith("missing required effect"):
             counts["required_effect"] += 1
+        elif reason.startswith("product_id"):
+            counts["referenced_product"] += 1
         else:
             counts["other"] += 1
     return {key: value for key, value in counts.items() if value}

@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class ChatMessage(BaseModel):
     role: str
     content: str
+    product_ids: list[str] = Field(default_factory=list)
 
 
 class ChatRequest(BaseModel):
@@ -38,6 +39,7 @@ class UniversalConstraints(BaseModel):
 
 class QueryIntent(BaseModel):
     category_candidates: list[str] = Field(default_factory=list)
+    referenced_product_ids: list[str] = Field(default_factory=list)
     universal_constraints: UniversalConstraints = Field(default_factory=UniversalConstraints)
     facets: dict[str, list[str]] = Field(default_factory=dict)
     hard_constraints: list[str] = Field(default_factory=list)

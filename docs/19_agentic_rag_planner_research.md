@@ -244,14 +244,20 @@ Planner 输出必须经过校验：
 - 新增 `server/app/conversation_state.py`。
 - `POST /api/debug/retrieve` 返回 `conversation_state` trace。
 - 支持预算更新、预算取消、排除条件继承、类目/肤质/功效/场景合并。
-- 新增 `CQ-05` 5轮 conversation case，conversation benchmark 从 4/4 扩展为 5/5 PASS。
+- 新增 `CQ-05` 5轮 conversation case 和 `CQ-06` 商品卡指代 case，conversation benchmark 从 4/4 扩展为 6/6 PASS。
 - 同步复跑 golden、subcategory、apparel、comparison 和 generation guardrail，均通过。
 
 仍未覆盖：
 
-- “它 / 刚才那款 / 第一款”这类商品卡指代。
 - 上一轮 top products 的结构化保存。
 - 抽象偏好和复杂长对话的低置信度 planner fallback。
+
+2026-06-03 继续补齐商品卡指代第一版：
+
+- Android history 会把上一轮 assistant 商品卡 `product_ids` 发回后端。
+- `conversation_state.py` 可解析“第一款 / 第二款 / 它 / 这款 / 刚才那款”并写入 `referenced_product_ids`。
+- `retrieval.py` 会将 `referenced_product_ids` 作为商品事实追问的聚焦条件。
+- 已覆盖 `CQ-06`；但“像刚才那款但更便宜”这类替代推荐仍未实现。
 
 ### Step B：Planner-assisted Fallback
 

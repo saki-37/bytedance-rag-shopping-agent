@@ -334,7 +334,7 @@ server/.venv/bin/python scripts/run_comparison_queries.py \
 | golden queries | 8 / 8 PASS |
 | beauty subcategory queries | 6 / 6 PASS |
 | apparel queries | 5 / 5 PASS |
-| conversation cases | 5 / 5 PASS |
+| conversation cases | 6 / 6 PASS |
 | generation guardrails | PASS |
 
 命令：
@@ -416,14 +416,35 @@ CQ-05: 5轮预算更新、取消预算和排除条件继承
 
 | Benchmark | Result | Output |
 | --- | --- | --- |
-| conversation cases | 5 / 5 PASS | `/private/tmp/bytedance-rag-conversation-rule-state.jsonl` |
+| conversation cases | 6 / 6 PASS | `/private/tmp/bytedance-rag-conversation-product-ref.jsonl` |
 | golden queries | 8 / 8 PASS | `/private/tmp/bytedance-rag-golden-rule-state.jsonl` |
 | beauty subcategory queries | 6 / 6 PASS | `/private/tmp/bytedance-rag-subcategory-rule-state.jsonl` |
 | apparel queries | 5 / 5 PASS | `/private/tmp/bytedance-rag-apparel-rule-state.jsonl` |
 | comparison queries | 3 / 3 PASS | `/private/tmp/bytedance-rag-comparison-rule-state.jsonl` |
 | generation guardrails | PASS | terminal output |
 
-注意：这一步只解决显式规则能覆盖的多轮约束，不解决代词商品指代、上一轮商品卡引用和复杂抽象偏好。后者仍是后续 LLM Planner / retrieval plan validator 的目标。
+注意：这一步只解决显式规则能覆盖的多轮约束；商品卡指代已在下一节补上第一版。复杂抽象偏好和相似替代推荐仍是后续 LLM Planner / retrieval plan validator 的目标。
+
+## Product Reference 回归
+
+目标：让 Android 和后端都能看到上一轮商品卡片，先覆盖“第一款/它/这款”这类商品事实追问。
+
+实现点：
+
+1. `ChatMessage` 支持可选 `product_ids`。
+2. Android 端在发送 history 时，会把 assistant 消息里的商品卡 `productId` 列表带回后端。
+3. `conversation_state.py` 从最近一条 assistant history 中读取商品 id，并在“第一款/第二款/它/这款/刚才那款”等表达中解析指代。
+4. `retrieval.py` 解析 `指代商品ID：p_xxx`，并将候选商品聚焦到该商品，避免重新按关键词召回一批无关商品。
+
+新增 case：
+
+```text
+CQ-06: 商品卡指代：第一款追问应聚焦上一轮商品
+```
+
+回归结果：conversation benchmark 6 / 6 PASS。`CQ-06` 第二轮“第一款有没有酒精？”只返回上一轮第一款 `p_beauty_006`。
+
+注意：这一步解决商品事实追问，不解决“找一个像刚才那款但更便宜”的替代推荐。替代推荐需要把上一轮商品属性转成相似商品检索条件，留给下一层 planner / similarity plan。
 
 下一步建议：
 

@@ -47,6 +47,7 @@ FOLLOW_UP_TERMS = [
 @dataclass
 class RuleConversationState:
     category_candidates: list[str] = field(default_factory=list)
+    referenced_product_ids: list[str] = field(default_factory=list)
     budget_max: float | None = None
     budget_relaxed: bool = False
     facets: dict[str, list[str]] = field(default_factory=dict)
@@ -90,6 +91,10 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
     for message in previous_user_messages[-4:]:
         _merge_message(state, message, source="history")
     _merge_message(state, current_message, source="current")
+    referenced_product_ids = _referenced_history_product_ids(current_message, request.history)
+    if referenced_product_ids:
+        state.referenced_product_ids = referenced_product_ids
+        state.actions.append(f"current:reference_products={','.join(referenced_product_ids)}")
 
     merged_message = _format_merged_message(
         state=state,
@@ -216,6 +221,8 @@ def _format_merged_message(
     if state.category_candidates:
         labels = [CATEGORY_LABELS.get(category, category) for category in state.category_candidates]
         lines.append(f"- 类目：{'、'.join(labels)}")
+    if state.referenced_product_ids:
+        lines.append(f"- 指代商品ID：{'、'.join(state.referenced_product_ids)}")
     for facet_name in ["skin_type", "effect", "use_case", "sub_category"]:
         values = state.facets.get(facet_name, [])
         if values:
@@ -243,6 +250,7 @@ def _format_merged_message(
 def _state_trace(state: RuleConversationState) -> dict:
     return {
         "category_candidates": state.category_candidates,
+        "referenced_product_ids": state.referenced_product_ids,
         "budget_max": state.budget_max,
         "budget_relaxed": state.budget_relaxed,
         "facets": state.facets,
@@ -257,3 +265,40 @@ def _append_unique(target: list[str], values: list[str]) -> None:
     for value in values:
         if value not in target:
             target.append(value)
+
+
+def _referenced_history_product_ids(message: str, history: list) -> list[str]:
+    product_ids = _latest_history_product_ids(history)
+    if not product_ids:
+        return []
+    index = _referenced_product_index(message)
+    if index is None:
+        return []
+    if index >= len(product_ids):
+        return []
+    return [product_ids[index]]
+
+
+def _latest_history_product_ids(history: list) -> list[str]:
+    for item in reversed(history):
+        if item.role != "assistant":
+            continue
+        product_ids = [product_id for product_id in item.product_ids if product_id]
+        if product_ids:
+            return product_ids
+    return []
+
+
+def _referenced_product_index(message: str) -> int | None:
+    normalized = message.strip()
+    explicit_patterns = [
+        (r"(第一|第1|1)[个款件]?", 0),
+        (r"(第二|第2|2)[个款件]?", 1),
+        (r"(第三|第3|3)[个款件]?", 2),
+    ]
+    for pattern, index in explicit_patterns:
+        if re.search(pattern, normalized):
+            return index
+    if any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
+        return 0
+    return None

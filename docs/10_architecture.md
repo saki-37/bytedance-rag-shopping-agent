@@ -177,7 +177,7 @@ Doubao 生成层遵循 evidence-bound 设计：
 
 - `message`：本轮用户输入。
 - `conversation_id`：本地 demo 标识。
-- `history`：最近用户和助手消息，用于多轮上下文。
+- `history`：最近用户和助手消息，用于多轮上下文；assistant 消息可携带上一轮商品卡片 `product_ids`。
 
 SSE 事件：
 
@@ -207,7 +207,7 @@ SSE 事件：
 
 1. 后端脚本级验证：
    - 8 条 golden queries。
-   - 5 条多轮 conversation cases。
+   - 6 条多轮 conversation cases。
    - 真实 Doubao 三轮 probe。
    - 生成层 guardrail。
 2. Android 模拟器验证：

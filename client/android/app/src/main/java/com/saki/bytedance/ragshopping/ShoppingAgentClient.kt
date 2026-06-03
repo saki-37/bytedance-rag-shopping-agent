@@ -116,6 +116,7 @@ class ShoppingAgentClient(
                     JSONObject()
                         .put("role", role)
                         .put("content", message.content)
+                        .put("product_ids", JSONArray(message.products.map { it.productId }))
                 )
             }
         return array
