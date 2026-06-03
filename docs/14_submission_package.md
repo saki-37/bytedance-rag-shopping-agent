@@ -1,6 +1,6 @@
 # 提交材料清单
 
-日期：2026-05-28
+日期：2026-06-03
 
 用途：把评委或后续复盘最需要看的材料收束到一页，避免代码、文档、录屏和评测证据散落。
 
@@ -35,15 +35,18 @@
 | 反幻觉 guardrail | 已完成 V1 | `docs/11_evaluation_report.md`、`server/app/guardrails.py` |
 | Golden query 评测 | 已完成第一轮 | `scripts/run_golden_queries.py`、`docs/11_evaluation_report.md` |
 | 子类 query 评测 | 已完成第一轮 | `scripts/run_subcategory_queries.py`、`docs/11_evaluation_report.md` |
+| 多商品对比 | 已完成第一版 | `scripts/run_comparison_queries.py`、`docs/11_evaluation_report.md` |
+| Groundedness 陷阱评测 | 已完成检索层第一版 | `data/eval/groundedness_cases.json`、`scripts/run_groundedness_cases.py`、`docs/11_evaluation_report.md` |
+| 依赖版本与复现说明 | 已完成 | `docs/20_reproducibility_and_dependencies.md` |
 
 ## 评分点对照
 
 | 评分维度 | 当前抓手 | 说明 |
 | --- | --- | --- |
 | 基础功能完整性 | Android -> FastAPI -> RAG -> Doubao -> SSE -> 商品卡片 | 第一版真实模型端到端闭环已跑通 |
-| 工程质量 | monorepo、API 契约、架构文档、安全配置、评测脚本 | README 已作为提交入口；`docs/` 可支撑复盘和答辩 |
-| 效果与可靠性 | 8 条 golden queries、6 条 conversation cases、guardrail、真实 probe | 当前主打“约束感知 + 可解释 trace”，不是单纯聊天框 |
-| 加分项深度 | 可解释 RAG、反幻觉、移动端流式体验 | 下一阶段可继续做商品对比、反馈闭环和 graph-aware retrieval |
+| 工程质量 | monorepo、API 契约、架构文档、安全配置、评测脚本、依赖复现说明 | README 已作为提交入口；`docs/` 可支撑复盘和答辩 |
+| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness retrieval-only、guardrail、真实 probe | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框 |
+| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、移动端流式体验 | 下一阶段可继续做反馈闭环或 evidence-aware fallback |
 
 ## Demo 讲解顺序
 
@@ -109,6 +112,8 @@ cd bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 server/.venv/bin/python scripts/run_conversation_cases.py
+server/.venv/bin/python scripts/run_comparison_queries.py --require-vector
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm --retrieval-only
 server/.venv/bin/python scripts/check_generation_guardrails.py
 ```
 
@@ -145,9 +150,9 @@ git diff --check
 
 1. 图片输入、语音输入、购物车和下单。
 2. 全品类导购主线。
-3. 全品类导购主线。
-4. 完整 graph-aware retrieval。
-5. 完整 groundedness judge。
+3. 完整重型 GraphRAG / Neo4j 图数据库。
+4. 完整 groundedness judge 或 LLM judge。
+5. 用户反馈闭环。
 
 这些不是当前版本的失败点，而是下一阶段路线。当前版本主打的是：
 
@@ -155,6 +160,6 @@ git diff --check
 
 ## 下一阶段建议
 
-1. 补商品对比能力，覆盖“欧莱雅防晒 vs 安热沙防晒”这类问题。
-2. 增加用户反馈按钮，沉淀失败 query 和推荐修正记录。
-3. 设计轻量属性图，把商品、品牌、类目、肤质、功效、注意事项放进统一 trace。
+1. 给生成层增加 evidence-aware fallback，让兜底回答更具体地引用证据和“资料未说明”边界。
+2. 增加用户反馈按钮或 debug 反馈接口，沉淀失败 query 和推荐修正记录。
+3. 最终提交前按 `docs/20_reproducibility_and_dependencies.md` 跑一轮复现检查，并确认 Demo 录屏没有敏感信息。

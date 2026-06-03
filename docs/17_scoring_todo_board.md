@@ -1,6 +1,6 @@
 # 采分点确认与待办看板
 
-更新：2026-05-29
+更新：2026-06-03
 
 用途：把“现在能拿哪些分、哪些还只是第一版、哪些先记下来不扩张”放在一页。每次想继续做功能前，先看这页，避免把局部想法误当成主线。
 
@@ -17,8 +17,8 @@
 | 采分点 | 当前状态 | 已有证据 | 还缺什么 |
 | --- | --- | --- | --- |
 | 基础功能完整性 | 稳定可拿 | Android -> FastAPI -> RAG -> Doubao/Mock -> SSE -> 商品卡片；图片和详情弹窗已跑通 | 录屏可更干净；最终演示前再人工复验一次 |
-| 工程质量 | 基本可拿 | monorepo、README、API 契约、架构文档、评测报告、安全配置、密钥扫描 | 依赖/版本说明可以再集中列一页；提交包说明可最终收口 |
-| 效果与可靠性 | 第一版可拿，仍值得补强 | golden、subcategory、apparel、comparison、conversation benchmark；guardrail；RetrievalTrace；graph relation score | groundedness benchmark 还不够系统；真实 Doubao failure cases 还可以继续沉淀 |
+| 工程质量 | 基本可拿 | monorepo、README、API 契约、架构文档、评测报告、安全配置、密钥扫描、依赖版本与复现说明 | 最终提交前按复现检查表再跑一轮 |
+| 效果与可靠性 | 第一版可拿，仍值得补强 | golden、subcategory、apparel、comparison、conversation、groundedness retrieval-only benchmark；guardrail；RetrievalTrace；graph relation score | 生成层 evidence-aware fallback 和真实 Doubao failure cases 还可以继续沉淀 |
 | 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema 和服饰样例 | 反馈闭环还没做；多模态/购物车不建议作为主线 |
 
 ## 能确认已经完成的点
@@ -33,17 +33,19 @@
 
 ## 需要补、但不要一次全做的点
 
+见下方执行顺序。这里的原则是：先把已完成能力变成稳定证据，再决定是否开反馈闭环或生成层增强。
+
 ## 执行顺序
 
 | 顺序 | 动作 | 目的 | 完成标志 |
 | --- | --- | --- | --- |
 | Step 0 | 提交当前采分表和待办看板 | 固定方向盘，避免后续继续口头漂移 | `17_scoring_todo_board.md`、`18_official_scoring_checklist.md` 已提交 |
-| Step 1 | Groundedness / 反编造 Benchmark | 把“不能编造”从原则变成可回归证据 | 新增 groundedness cases 和脚本，至少 5 条 PASS |
+| Step 1 | Groundedness / 反编造 Benchmark | 把“不能编造”从原则变成可回归证据 | 已新增 groundedness cases 和脚本；retrieval-only 11/11 PASS |
 | Step 2 | 依赖版本 / 复现说明表 | 补工程质量里的复现友好度 | 已新增 `docs/20_reproducibility_and_dependencies.md`，集中说明 Android/Python/Chroma/模型配置与复现检查 |
 | Step 3 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 后端或 debug 入口能记录 feedback JSONL |
 | Step 4 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | README、提交包、Demo、secret scan 最终确认 |
 
-当前正在执行：**Step 1**。
+当前正在执行：**Step 4 的文档状态收口**。这是在开新功能前把所有文档同步到当前真实状态，避免旧待办继续误导优先级。
 
 ### P0：提交材料收口
 
@@ -89,7 +91,7 @@ scripts/run_groundedness_cases.py
 - 初跑结果：mock 全链路 2/11 PASS，retrieval-only 7/11 PASS；真实 Ark / Doubao 抽样 2/2 PASS。
 - 2026-06-03 复跑：runner 已对齐 Android 商品卡 history，补了预算 `放到300`、补充语延续、`香精` 排除和商品/品牌别名引用；retrieval-only 提升到 9/11 PASS。
 - 已修正 `p_beauty_007` / `p_beauty_012` 价格证据和预算期望，并补上“控油精华 -> 修护面霜”的轻量意图切换规则；retrieval-only 进一步达到 11/11 PASS。
-- 下一步优先做 evidence-aware fallback 或相似替代推荐，而不是继续扩 case 数量。
+- 当前位置：检索层已经能稳定证明“不乱召回、不乱放宽约束”；下一步如果继续补可靠性，应优先做 evidence-aware fallback 或相似替代推荐，而不是继续扩 case 数量。
 
 ### P2：轻量反馈闭环
 
@@ -100,6 +102,11 @@ scripts/run_groundedness_cases.py
 1. Android 或 debug 接口提供 `有用` / `不准确` 反馈入口。
 2. 后端把 `query`、`intent`、`products`、`trace`、`feedback` 写入本地 JSONL。
 3. 文档展示一条“失败 query -> 归因 -> 下一轮修正”的例子。
+
+优先级判断：
+
+- 它是贴近官方“质量评测与反馈闭环”的加分项。
+- 但在开做前，应先完成文档状态收口，并确认是否要优先补生成层 evidence-aware fallback。
 
 ### P3：暂不作为主线
 
@@ -112,7 +119,7 @@ scripts/run_groundedness_cases.py
 如果目标是恢复方向感：
 
 1. 打开本页。
-2. 只看“按官方采分点看当前状态”和“P1：Groundedness / 反编造 Benchmark”。
+2. 只看“按官方采分点看当前状态”和“执行顺序”。
 3. 写下：
 
 ```text

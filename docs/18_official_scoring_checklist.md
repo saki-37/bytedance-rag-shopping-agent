@@ -1,6 +1,6 @@
 # 官方采分点逐项对照表
 
-更新：2026-05-29
+更新：2026-06-03
 
 来源：`docs/01_topic_brief.md` 中根据官方课题说明整理出的“课题真实要求、评分权重、基础/进阶/高级场景”。本页不按我们自己的 V0/V1/V2/V3 展开，只按官方采分口径看当前完成度。
 
@@ -20,7 +20,7 @@
 | --- | --- | --- |
 | 基础功能完整性 35% | ✅ 基本稳 | Android 原生端到后端 RAG、模型流式、商品卡片和详情已经跑通 |
 | 工程质量 25% | ✅ 基本稳 | 目录、接口、文档、安全、评测、依赖版本表和复现说明都有；最终提交前再跑一轮复现检查 |
-| 效果与可靠性 20% | ◯ 第一版可讲，最值得补强 | 已有检索 benchmark、conversation、guardrail、trace；groundedness 陷阱 case 还不系统 |
+| 效果与可靠性 20% | ◯ 第一版可讲，仍值得补强 | 已有检索 benchmark、conversation、guardrail、trace 和 groundedness retrieval-only 11/11；生成层 fallback 仍可更 evidence-aware |
 | 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、多品类样例已有；反馈闭环未做 |
 
 ## 必做最小闭环
@@ -54,7 +54,7 @@
 | 不编造不存在的商品 | ✅ | 生成 prompt 限制只能提候选商品；商品卡来自数据源 | 可补“不存在商品”陷阱 case |
 | 不编造价格 | ✅ | 商品卡价格来自数据源；guardrail 拦截未授权价格 | 已有规则 guardrail，可补 benchmark 证明 |
 | 不编造优惠/库存/下单承诺 | ✅ | `FORBIDDEN_COMMERCIAL_CLAIMS` 拦截库存、优惠、满减、折扣、购买链接、下单等 | 可补官方演示说明 |
-| 不编造功能/功效 | ◯ | 已拦截部分无证据绝对断言；prompt 要求基于资料 | 这是当前最值得补的 groundedness benchmark |
+| 不编造功能/功效 | ◯ | 已有 groundedness cases 和 retrieval-only 11/11；prompt 要求基于资料；guardrail 拦截部分无证据绝对断言 | 生成层回答模板还可更细地引用证据和“资料未说明”边界 |
 
 ### 数据
 
@@ -70,7 +70,7 @@
 | --- | --- | --- | --- |
 | 不能用纯 Web / H5 方案替代原生 App | ✅ | Android Kotlin 原生 App | 无明显缺口 |
 | Demo 不能需要大量手动配置 | ✅ | README、`.env.example`、Mock fallback、Demo 脚本和 `docs/20_reproducibility_and_dependencies.md` 已有 | 最终提交前再按检查表跑一轮 |
-| 不能出现明显幻觉 | ◯ | 商品卡来自数据源；guardrail 拦截价格/库存/优惠/下单/部分无证据断言 | groundedness 陷阱 case 需要系统化 |
+| 不能出现明显幻觉 | ◯ | 商品卡来自数据源；guardrail 拦截价格/库存/优惠/下单/部分无证据断言；groundedness retrieval-only 11/11 | 生成层真实输出和 fallback 还可以继续做 evidence-aware 回归 |
 | 答辩时必须能解释架构、链路和关键代码细节 | ◯ | 架构文档、RAG 策略、trace、评测报告已有 | 需要准备 3-5 句口头解释和关键代码入口 |
 
 ## 评分权重逐项对照
@@ -100,9 +100,9 @@
 
 | 官方关注点 | 状态 | 当前证据 | 缺口 |
 | --- | --- | --- | --- |
-| 检索准确 | ◯ | golden 8、subcategory 6、apparel 5、comparison 3 全部 PASS | benchmark 规模仍小 |
-| 少幻觉 | ◯ | guardrail + failure case + fallback answer | groundedness benchmark 未系统化 |
-| 多轮可用 | ◯ | conversation 4 条 PASS，上下文继承和放宽/收紧预算有覆盖 | 可补更多真实多轮问法 |
+| 检索准确 | ◯ | golden 8、subcategory 6、apparel 5、comparison 3、groundedness retrieval-only 11 全部 PASS | benchmark 规模仍小，但主线证据已较完整 |
+| 少幻觉 | ◯ | guardrail + failure case + fallback answer + groundedness retrieval-only 11/11 | 生成层 claim-level judge 尚未实现 |
+| 多轮可用 | ◯ | conversation 6 条 PASS，上下文继承、预算放宽/收紧和商品卡指代有覆盖 | 可补更多真实多轮问法 |
 | 复杂约束可用 | ◯ | 预算、排除项、子类、信息不足、对比均有第一版 | 约束过紧无结果和过敏风险需要陷阱 case |
 | UI 无明显 Bug | ◯ | loading 收尾、自动滚动、卡片详情已修 | 最终录屏前需要人工复验 |
 
@@ -159,8 +159,8 @@ scripts/run_groundedness_cases.py
 
 如果继续做代码，优先级：
 
-1. 修多轮上下文继承和 evidence-aware fallback
-2. 依赖版本 / 复现说明表
-3. 轻量反馈闭环
+1. Evidence-aware fallback / 生成层回答模板：让兜底回答更明确引用数据证据和“资料未说明”的边界。
+2. 轻量反馈闭环：记录 `有用/不准确` 和失败 query，形成可复盘 JSONL。
+3. 最终 Demo 复验：真实 API、Mock fallback、Android 构建、secret scan 和录屏安全。
 
 如果只做方向确认，停止在这里即可，不继续开新功能。

@@ -1,7 +1,7 @@
 # 评分点对照与阶段路线
 
 日期：2026-05-26  
-更新：2026-05-28
+更新：2026-06-03
 
 用途：把课题评分点、当前实现状态、V0/V1/V2/V3 路线和下一步优先级放在同一页。每次开始推进前先看本页，避免被局部 UI、单个 bug 或某个新想法带跑。
 
@@ -19,22 +19,22 @@
 | --- | --- | --- | --- |
 | V0 | 可跑端到端闭环 | 已完成 | Android、FastAPI、SSE、商品卡片、图片和详情弹窗都已跑通 |
 | V1 | Constraint-Aware Hybrid RAG | 基本完成 | 25 条美妆 enriched 数据、Chroma、QueryIntent、显式 RetrievalTrace、golden/subcategory/conversation/comparison benchmark、guardrail 已有 |
-| V1.5 | 提交材料和 Demo 稳定性 | 第一版完成 | README、架构、评测、Demo 脚本、提交材料、安全说明、1 分钟录屏均已有 |
+| V1.5 | 提交材料和 Demo 稳定性 | 第一版完成 | README、架构、评测、Demo 脚本、提交材料、安全说明、依赖复现说明、1 分钟录屏均已有 |
 | V2 | 多品类 / Graph-aware Retrieval | V2-A、V2-B、V2-C 第一版完成 | raw 总库 100 条；25 条美妆 + 5 条服饰进入 enriched；统一向量索引 + 轻量 graph relation score 已进主链路 |
-| V3 | Verifier / Feedback Loop | 有雏形，未完整闭环 | 生成后 guardrail 和 failure case 有了，但用户反馈、失败 query 自动记录、groundedness judge 未完成 |
+| V3 | Verifier / Feedback Loop | 有雏形，未完整闭环 | 生成后 guardrail、groundedness cases 和检索层回归已有，但用户反馈、失败 query 自动记录、claim-level judge 未完成 |
 
 一句话说：**我们已经有保底可提交版本，接下来要做的是提高层次，而不是继续证明“能不能跑”。**
 
-最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`；**Graph-aware relation score** 第一版已进入主链路，trace 可展示 `graph_category`、`graph_sub_category`、`graph_effect`、`graph_price_within_budget` 等关系命中。下一步建议转入轻量反馈闭环或 groundedness judge。
+最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`；**Graph-aware relation score** 第一版已进入主链路，trace 可展示 `graph_category`、`graph_sub_category`、`graph_effect`、`graph_price_within_budget` 等关系命中；**Groundedness / 反编造 benchmark** 已补 11 条人工 case，retrieval-only 在修正数据证据和意图切换后达到 11/11 PASS；**依赖版本与复现说明** 已集中到 `docs/20_reproducibility_and_dependencies.md`。下一步建议先完成文档状态收口，再在 evidence-aware fallback 和轻量反馈闭环之间二选一。
 
 ## 评分维度对照
 
 | 评分维度 | 权重 | 评审关注点 | 当前状态 | 下一步抓手 |
 | --- | --- | --- | --- | --- |
 | 基础功能完整性 | 35% | 客户端对话 -> 后端 RAG -> 模型生成 -> 流式返回 -> 商品卡片 | V0 已完成，并有 Android 端复验证据 | 保持稳定，必要时重录更干净 Demo |
-| 工程质量 | 25% | 代码结构、接口设计、错误处理、文档、安全配置 | monorepo、API 契约、README、架构、评测、安全、提交材料已有 | 每次新增能力后同步文档和评测证据 |
-| 效果与可靠性 | 20% | 检索准确、无幻觉、复杂场景处理 | V1 基本完成；预算、排除、追问、对比、显式 trace、guardrail 已有 | 补更细 groundedness |
-| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace；多商品对比和 graph-aware 第一版已有 | 下一步做反馈闭环或 groundedness judge |
+| 工程质量 | 25% | 代码结构、接口设计、错误处理、文档、安全配置 | monorepo、API 契约、README、架构、评测、安全、提交材料、依赖复现说明已有 | 最终提交前按检查表复验 |
+| 效果与可靠性 | 20% | 检索准确、无幻觉、复杂场景处理 | V1 基本完成；预算、排除、追问、对比、显式 trace、guardrail、groundedness retrieval-only 已有 | 补 evidence-aware fallback 或 claim-level judge |
+| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace；多商品对比和 graph-aware 第一版已有 | 可做轻量反馈闭环 |
 
 ## V0：可跑闭环
 
@@ -98,8 +98,8 @@ V0 风险：
 
 尚未完成：
 
-1. 对所有功效声明做细粒度 groundedness 校验。
-2. 对比型 query 已有第一版 benchmark 和实现策略，但 Android 端真实演示还可继续复验。
+1. 生成层还没有完整 claim-level groundedness judge。
+2. Evidence-aware fallback 还可以更具体地引用关键成分、注意事项、无添加证据和“资料未说明”边界。
 3. 真实 Doubao 下的所有子类 query 尚未系统复验。
 4. 纯向量、约束混合、graph-aware 三种检索版本的指标对比还没形成。
 
@@ -123,8 +123,9 @@ V1 下一步如果继续补强：
 4. `docs/12_demo_script.md` Demo 脚本。
 5. `docs/13_security_and_config.md` 安全和配置说明。
 6. `docs/14_submission_package.md` 提交材料清单。
-7. API Key 扫描脚本和 pre-commit hook。
-8. 本地 1 分钟 Demo 视频。
+7. `docs/20_reproducibility_and_dependencies.md` 依赖版本与复现说明。
+8. API Key 扫描脚本和 pre-commit hook。
+9. 本地 1 分钟 Demo 视频。
 
 仍可收口：
 
@@ -217,9 +218,9 @@ V3 建议拆成两层：
    - 检查价格、库存、优惠、功效是否有数据源支持。
    - 对“资料中未说明”类问题保留谨慎措辞。
 
-## 当前推荐优先级
+## 已完成的优先级回顾与当前建议
 
-### 第一优先级：多商品对比
+### 已完成：多商品对比
 
 状态：**第一版已完成**。
 
@@ -249,7 +250,7 @@ V3 建议拆成两层：
 3. 若用户明确点名商品或品牌，召回必须覆盖被点名对象；若没有点名，则以同子类或相近用途商品做对比。
 4. 回答必须使用商品卡片和 enriched 字段，不输出资料外价格、库存、优惠或功效。
 
-### 第二优先级：RetrievalTrace 可解释性增强
+### 已完成：RetrievalTrace 可解释性增强
 
 状态：**第一版已完成**。
 
@@ -271,7 +272,17 @@ V3 建议拆成两层：
 2. `scripts/run_golden_queries.py`、`scripts/run_subcategory_queries.py`、`scripts/run_comparison_queries.py`、`scripts/run_conversation_cases.py` 的 JSONL 输出已包含上述字段。
 3. comparison、golden、subcategory、apparel、conversation 和 generation guardrail 回归均 PASS。
 
-### 第三优先级：反馈闭环
+### 当前建议优先级：文档收口 -> 生成层可靠性 -> 反馈闭环
+
+状态：**文档收口正在进行；后两项尚未实现**。
+
+建议顺序：
+
+1. 先完成文档状态收口：让 `README`、提交材料、采分表和路线图都指向同一个当前状态。
+2. 再做 evidence-aware fallback：让 mock / API 失败时的兜底回答也能更明确引用数据证据和“资料未说明”边界。
+3. 最后做轻量反馈闭环：记录用户 `有用/不准确`，把失败 query 变成后续 benchmark 或数据增强输入。
+
+### 待做：反馈闭环
 
 原因：
 
