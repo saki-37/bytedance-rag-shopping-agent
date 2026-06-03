@@ -24,6 +24,7 @@
 - [采分点确认与待办看板](17_scoring_todo_board.md)
 - [官方采分点逐项对照表](18_official_scoring_checklist.md)
 - [Agentic RAG / LLM Planner 调研补充](19_agentic_rag_planner_research.md)
+- [依赖版本与复现说明](20_reproducibility_and_dependencies.md)
 
 ## 当前里程碑
 
@@ -36,3 +37,4 @@
 5. README 提交入口、架构说明、评测记录、Demo 脚本和提交材料清单。
 6. V2 多品类 schema 第一版设计与外部电商字段参考调研。
 7. 服饰运动 5 条 enriched 样例和第二品类 query benchmark。
+8. 依赖版本与复现说明集中成表，补齐工程质量里的复现友好度。

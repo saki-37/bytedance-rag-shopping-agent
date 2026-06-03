@@ -13,6 +13,7 @@
 3. Demo 录屏：优先上传本地 `demo/录屏v1_submission_phone_60s.mp4`；原始录屏为 `demo/录屏v1.mov`
 4. 架构说明：`docs/10_architecture.md`
 5. 评测记录：`docs/11_evaluation_report.md`
+6. 依赖版本与复现说明：`docs/20_reproducibility_and_dependencies.md`
 
 其中 README 是第一入口；本页是提交前自检清单；架构说明和评测记录用于支撑答辩或技术追问。
 
@@ -66,6 +67,8 @@ demo/录屏v1_submission_phone_60s.mp4
 - 对“无酒精/不刺激”等资料未支持的绝对断言，后端会触发 guardrail 或二次改写。
 
 ## 运行复现路径
+
+完整版本表、环境说明和复现检查表见 `docs/20_reproducibility_and_dependencies.md`。这里保留最短复现顺序：
 
 最短复现顺序：
 

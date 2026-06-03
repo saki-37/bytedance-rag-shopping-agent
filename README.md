@@ -22,6 +22,7 @@
 - 系统架构：[docs/10_architecture.md](docs/10_architecture.md)
 - 评测记录：[docs/11_evaluation_report.md](docs/11_evaluation_report.md)
 - 提交材料清单：[docs/14_submission_package.md](docs/14_submission_package.md)
+- 依赖版本与复现说明：[docs/20_reproducibility_and_dependencies.md](docs/20_reproducibility_and_dependencies.md)
 - 文档总入口：[docs/00_index.md](docs/00_index.md)
 
 本地原始录屏位于 `demo/录屏v1.mov`；当前已导出 60 秒手机屏版本 `demo/录屏v1_submission_phone_60s.mp4`，更适合作为平台附件上传。录屏文件属于生成媒体，已被 `.gitignore` 忽略，不进入 Git。
@@ -39,6 +40,8 @@ scripts/          数据检查、增强、索引构建、评测和安全扫描�
 ```
 
 ## Quick Start
+
+完整依赖版本、环境说明和复现检查表见 [docs/20_reproducibility_and_dependencies.md](docs/20_reproducibility_and_dependencies.md)。下面保留最短启动路径。
 
 ### 1. Backend
 
@@ -201,4 +204,5 @@ python3 scripts/scan_secrets.py --all
 2. [docs/10_architecture.md](docs/10_architecture.md)：系统架构和端到端链路。
 3. [docs/11_evaluation_report.md](docs/11_evaluation_report.md)：当前评测证据。
 4. [docs/12_demo_script.md](docs/12_demo_script.md)：Demo 展示脚本。
-5. [docs/08_rag_retrieval_strategy.md](docs/08_rag_retrieval_strategy.md)：RAG 策略调研与后续路线。
+5. [docs/20_reproducibility_and_dependencies.md](docs/20_reproducibility_and_dependencies.md)：依赖版本、复现说明和检查表。
+6. [docs/08_rag_retrieval_strategy.md](docs/08_rag_retrieval_strategy.md)：RAG 策略调研与后续路线。

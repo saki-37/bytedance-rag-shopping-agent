@@ -39,7 +39,7 @@
 | --- | --- | --- | --- |
 | Step 0 | 提交当前采分表和待办看板 | 固定方向盘，避免后续继续口头漂移 | `17_scoring_todo_board.md`、`18_official_scoring_checklist.md` 已提交 |
 | Step 1 | Groundedness / 反编造 Benchmark | 把“不能编造”从原则变成可回归证据 | 新增 groundedness cases 和脚本，至少 5 条 PASS |
-| Step 2 | 依赖版本 / 复现说明表 | 补工程质量里的复现友好度 | 新增版本表，说明 Android/Python/Chroma/模型配置 |
+| Step 2 | 依赖版本 / 复现说明表 | 补工程质量里的复现友好度 | 已新增 `docs/20_reproducibility_and_dependencies.md`，集中说明 Android/Python/Chroma/模型配置与复现检查 |
 | Step 3 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 后端或 debug 入口能记录 feedback JSONL |
 | Step 4 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | README、提交包、Demo、secret scan 最终确认 |
 
@@ -51,7 +51,7 @@
 
 待办：
 
-1. 补一页依赖和版本说明：Android Gradle Plugin、Kotlin、Compose、Python、FastAPI、Chroma、sentence-transformers、主要脚本运行方式。
+1. 已补一页依赖和版本说明：Android Gradle Plugin、Kotlin、Compose、Python、FastAPI、Chroma、sentence-transformers、主要脚本运行方式。
 2. 最终检查 README、提交材料清单、Demo 脚本是否能独立说明项目。
 3. Demo 前复验：真实 API 可用；Mock fallback 可用；录屏没有 API Key 或敏感终端信息。
 

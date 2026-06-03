@@ -19,7 +19,7 @@
 | 官方采分块 | 当前判断 | 最短解释 |
 | --- | --- | --- |
 | 基础功能完整性 35% | ✅ 基本稳 | Android 原生端到后端 RAG、模型流式、商品卡片和详情已经跑通 |
-| 工程质量 25% | ◯ 接近稳 | 目录、接口、文档、安全、评测都有；还可补依赖版本表和最终复现说明 |
+| 工程质量 25% | ✅ 基本稳 | 目录、接口、文档、安全、评测、依赖版本表和复现说明都有；最终提交前再跑一轮复现检查 |
 | 效果与可靠性 20% | ◯ 第一版可讲，最值得补强 | 已有检索 benchmark、conversation、guardrail、trace；groundedness 陷阱 case 还不系统 |
 | 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、多品类样例已有；反馈闭环未做 |
 
@@ -69,7 +69,7 @@
 | 官方红线 | 状态 | 当前防线 | 缺口/下一步 |
 | --- | --- | --- | --- |
 | 不能用纯 Web / H5 方案替代原生 App | ✅ | Android Kotlin 原生 App | 无明显缺口 |
-| Demo 不能需要大量手动配置 | ◯ | README、`.env.example`、Mock fallback、Demo 脚本已有 | 还可补依赖版本表和一键运行/复现说明 |
+| Demo 不能需要大量手动配置 | ✅ | README、`.env.example`、Mock fallback、Demo 脚本和 `docs/20_reproducibility_and_dependencies.md` 已有 | 最终提交前再按检查表跑一轮 |
 | 不能出现明显幻觉 | ◯ | 商品卡来自数据源；guardrail 拦截价格/库存/优惠/下单/部分无证据断言 | groundedness 陷阱 case 需要系统化 |
 | 答辩时必须能解释架构、链路和关键代码细节 | ◯ | 架构文档、RAG 策略、trace、评测报告已有 | 需要准备 3-5 句口头解释和关键代码入口 |
 
@@ -92,7 +92,7 @@
 | 清晰目录 | ✅ | monorepo：client/server/data/docs/scripts | 无 |
 | 接口设计 | ✅ | `docs/04_api_contract.md`，SSE 事件固定 | 无 |
 | 错误处理 | ◯ | Mock fallback、guardrail fallback、无结果追问 | 可补后端断开/真实 API 失败的演示说明 |
-| 依赖说明 | △ | README 有启动方式，项目文件含 Gradle/Python 依赖 | 还缺集中版本表 |
+| 依赖说明 | ✅ | `docs/20_reproducibility_and_dependencies.md` 已集中列出 Python、Android、Gradle、Chroma、模型配置和复现检查 | 最终提交前确认版本表仍与代码一致 |
 | README | ✅ | 根目录 README | 最终提交前再收口 |
 | 技术文档 | ✅ | architecture/evaluation/security/RAG strategy/schema docs | 文档较多，需给评委推荐阅读顺序 |
 
