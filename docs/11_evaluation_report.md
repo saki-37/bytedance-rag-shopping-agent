@@ -466,7 +466,7 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
   --output /private/tmp/groundedness_final_retrieval_only.jsonl
 ```
 
-结果：
+第一轮结果：
 
 | Mode | Result | Output |
 | --- | --- | --- |
@@ -477,28 +477,56 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 - `GRD-L01` 现在 6 轮全部通过：预算继承/放宽/压低、酒精/香精/刺激排除继承，以及“如果选欧莱雅能不能保证不过敏”都能聚焦到 `p_beauty_006`。
 - `GRD-L03` 继续通过：卸妆油、多轮无添加证据、用户评价边界和购买链接/优惠拒绝都能保持同一商品上下文。
 
-剩余失败：
+当时剩余失败：
 
 - `GRD-08` 和 `GRD-L02` 都围绕 `p_beauty_007`。当前 raw 数据中 `p_beauty_007` 价格为 `268`，但 benchmark 的来源证据和期望里把它写成 `89` 或 `200元以内/100元以内`可推荐，因此严格预算过滤下不应召回它。
 - 这两条当前更像 benchmark-data 对齐问题，而不是应该通过代码绕过预算硬约束。下一步应先修正 `groundedness_cases.json` 的来源证据和期望，再决定是否补“相似替代推荐 / 预算放宽询问”的新 case。
+
+### 2026-06-03 Benchmark 修正后复跑
+
+修正内容：
+
+1. `GRD-08` 将预算从 200 元修正为 300 元，并把可接受商品从单一 `p_beauty_007` 扩展为 `p_beauty_007` / `p_beauty_012`，因为两者都是 raw 数据支持的 300 元内敏感修护面霜候选。
+2. `GRD-L02` 将“修护屏障面霜”轮次显式改成“预算放宽到300”，参考答案价格改为 raw 数据中的 `260` / `268`。
+3. `conversation_state.py` 增加轻量意图切换规则：当前轮出现新子类并带有“更偏/有没有/改看”等切换语义时，`sub_category` 和 `effect` 用当前轮覆盖旧状态；预算、肤质、排除条件仍继承。
+
+复跑命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --mock-llm \
+  --retrieval-only \
+  --output /private/tmp/groundedness_after_case_and_state_correction_retrieval_only.jsonl
+```
+
+结果：
+
+| Mode | Result | Output |
+| --- | --- | --- |
+| retrieval-only | 11 / 11 PASS | `/private/tmp/groundedness_after_case_and_state_correction_retrieval_only.jsonl` |
+
+关键变化：
+
+- `GRD-08` 现在能在 300 元内召回 `p_beauty_012` / `p_beauty_007`，第二轮“它孕妇也能用吗/能保证不过敏吗”继续聚焦上一轮修护面霜。
+- `GRD-L02` 第 5 轮从控油精华切到修护面霜后，召回从旧的 `p_beauty_018` 转为 `p_beauty_012` / `p_beauty_007`，第 6 轮“这个面霜能不能顺便去闭口”也能继续聚焦面霜。
 
 同步回归：
 
 | Benchmark | Result | Output |
 | --- | --- | --- |
-| conversation cases | 6 / 6 PASS | `/private/tmp/bytedance-rag-conversation-final.jsonl` |
-| golden queries | 8 / 8 PASS | `/private/tmp/bytedance-rag-golden-final.jsonl` |
-| beauty subcategory queries | 6 / 6 PASS | `/private/tmp/bytedance-rag-subcategory-final.jsonl` |
-| apparel queries | 5 / 5 PASS | `/private/tmp/bytedance-rag-apparel-final.jsonl` |
-| comparison queries | 3 / 3 PASS | `/private/tmp/bytedance-rag-comparison-final.jsonl` |
+| conversation cases | 6 / 6 PASS | `/private/tmp/bytedance-rag-conversation-after-groundedness-correction.jsonl` |
+| golden queries | 8 / 8 PASS | `/private/tmp/bytedance-rag-golden-after-groundedness-correction.jsonl` |
+| beauty subcategory queries | 6 / 6 PASS | `/private/tmp/bytedance-rag-subcategory-after-groundedness-correction.jsonl` |
+| apparel queries | 5 / 5 PASS | `/private/tmp/bytedance-rag-apparel-after-groundedness-correction.jsonl` |
+| comparison queries | 3 / 3 PASS | `/private/tmp/bytedance-rag-comparison-after-groundedness-correction.jsonl` |
 | generation guardrails | PASS | terminal output |
 
 下一步建议：
 
-1. 先修正 `groundedness_cases.json` 中与 raw 数据冲突的 p007 价格/预算期望。
-2. 再单独补“相似替代推荐”：当用户要 100/200 内修护面霜但没有满足商品时，系统应明确无结果，并询问是否放宽预算或改看修护面膜/精华。
-3. 给生成层增加 evidence-aware answer builder，至少能在 fallback 中引用关键成分、注意事项、无添加证据和“资料未看到”的表达。
-4. 再把 `answer_must_contain` 从纯字符串检查逐步升级为更稳定的 claim-level judge。
+1. 再单独补“相似替代推荐”：当用户要 100/200 内修护面霜但没有满足商品时，系统应明确无结果，并询问是否放宽预算或改看修护面膜/精华。
+2. 给生成层增加 evidence-aware answer builder，至少能在 fallback 中引用关键成分、注意事项、无添加证据和“资料未看到”的表达。
+3. 再把 `answer_must_contain` 从纯字符串检查逐步升级为更稳定的 claim-level judge。
 
 ## 当前边界
 

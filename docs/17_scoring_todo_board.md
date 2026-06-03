@@ -88,8 +88,8 @@ scripts/run_groundedness_cases.py
 - 已新增 `scripts/run_groundedness_cases.py`，把这些 case 转成可回归的自动检查。
 - 初跑结果：mock 全链路 2/11 PASS，retrieval-only 7/11 PASS；真实 Ark / Doubao 抽样 2/2 PASS。
 - 2026-06-03 复跑：runner 已对齐 Android 商品卡 history，补了预算 `放到300`、补充语延续、`香精` 排除和商品/品牌别名引用；retrieval-only 提升到 9/11 PASS。
-- 当前剩余两条 retrieval-only 失败都围绕 `p_beauty_007`，其 raw 价格为 268，但 case 期望里按 89 或 200/100 元以内处理。下一步应先修 benchmark 标答，再决定是否补相似替代推荐。
-- 下一步优先修 benchmark/raw 数据对齐和 evidence-aware fallback，而不是继续扩 case 数量。
+- 已修正 `p_beauty_007` / `p_beauty_012` 价格证据和预算期望，并补上“控油精华 -> 修护面霜”的轻量意图切换规则；retrieval-only 进一步达到 11/11 PASS。
+- 下一步优先做 evidence-aware fallback 或相似替代推荐，而不是继续扩 case 数量。
 
 ### P2：轻量反馈闭环
 

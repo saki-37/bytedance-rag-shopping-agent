@@ -64,5 +64,7 @@
 - 对齐 groundedness runner 和真实 Android history：runner 现在也把上一轮商品卡 `product_ids` 写入 assistant history，方便复现商品事实追问。
 - 修补多轮 parser 小洞：支持 `预算放到300`，把“还有/另外/最好/顺便”等补充语识别为多轮延续，加入 `香精` 排除项，并避免把 `预算200以内` 的裸数字误判为第二款。
 - 增加商品/品牌别名引用第一版：`欧莱雅`、`AIRism`、`DRY-EX` 等明确商品名会映射到商品 ID；商品事实追问不再被上一轮预算或子类过滤误杀。
-- Groundedness retrieval-only 从 7/11 初跑推进到 9/11 PASS；剩余 `GRD-08` 和 `GRD-L02` 与 `p_beauty_007` raw 价格 `268` 和 benchmark 期望 `89/200元以内/100元以内` 冲突有关，需先修 benchmark 标答再继续做策略。
-- 同步最终回归：conversation 6/6、golden 8/8、beauty subcategory 6/6、apparel 5/5、comparison 3/3、generation guardrail PASS。
+- Groundedness retrieval-only 从 7/11 初跑推进到 9/11 PASS；定位出 `GRD-08` 和 `GRD-L02` 与 `p_beauty_007` raw 价格 `268` 和 benchmark 期望 `89/200元以内/100元以内` 冲突。
+- 修正 groundedness case：`GRD-08` 改为 300 元内修护面霜，并允许 `p_beauty_007` / `p_beauty_012`；`GRD-L02` 将修护面霜轮次显式改为预算放宽到 300，参考价格改为 raw 数据中的 260/268。
+- 修复“控油精华 -> 修护面霜”的意图切换：当前轮出现新子类并带“更偏/有没有/改看”等切换语义时，`sub_category` 和 `effect` 用当前轮覆盖旧状态，预算/肤质/排除条件继续继承。
+- Groundedness retrieval-only 修正后达到 11/11 PASS；同步最终回归：conversation 6/6、golden 8/8、beauty subcategory 6/6、apparel 5/5、comparison 3/3、generation guardrail PASS。

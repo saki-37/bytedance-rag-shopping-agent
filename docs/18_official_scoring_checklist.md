@@ -153,7 +153,7 @@ data/eval/groundedness_cases.json
 scripts/run_groundedness_cases.py
 ```
 
-当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版并在 2026-06-03 对齐 Android 商品卡 history；mock 全链路仍是 2/11 PASS，retrieval-only 已从 7/11 提升到 9/11 PASS，真实 Ark / Doubao 抽样 2/2 PASS。剩余两条 retrieval-only 失败都与 `p_beauty_007` benchmark 期望价格和 raw 数据价格不一致有关，需要先修 case 标答。
+当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版并在 2026-06-03 对齐 Android 商品卡 history；mock 全链路仍是 2/11 PASS，retrieval-only 在修正 p007/p012 价格证据和意图切换规则后达到 11/11 PASS，真实 Ark / Doubao 抽样 2/2 PASS。
 
 ## 现在最清楚的下一步
 

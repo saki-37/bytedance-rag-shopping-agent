@@ -151,6 +151,7 @@ def _has_continuation_marker(message: str) -> bool:
 def _merge_message(state: RuleConversationState, message: str, source: str) -> None:
     intent = parse_query_intent(message)
     state.applied_messages.append(message)
+    subcategory_shift = bool(intent.facets.get("sub_category")) and _looks_like_subcategory_switch(message)
 
     if _relaxes_budget_without_value(message, intent):
         state.budget_max = None
@@ -177,9 +178,12 @@ def _merge_message(state: RuleConversationState, message: str, source: str) -> N
             state.actions.append(f"{source}:merge_category={','.join(intent.category_candidates)}")
 
     for facet_name, values in intent.facets.items():
-        if facet_name == "sub_category" and values and _looks_like_subcategory_switch(message):
+        if facet_name == "sub_category" and values and subcategory_shift:
             state.facets[facet_name] = list(values)
             state.actions.append(f"{source}:replace_sub_category={','.join(values)}")
+        elif facet_name == "effect" and values and subcategory_shift:
+            state.facets[facet_name] = list(values)
+            state.actions.append(f"{source}:replace_effect={','.join(values)}")
         else:
             bucket = state.facets.setdefault(facet_name, [])
             _append_unique(bucket, values)
@@ -229,7 +233,7 @@ def _should_replace_category(existing: list[str], incoming: list[str], message: 
 
 
 def _looks_like_subcategory_switch(message: str) -> bool:
-    return any(term in message for term in ["换成", "换到", "改看", "先看", "只看", "重新看"])
+    return any(term in message for term in ["换成", "换到", "改看", "先看", "只看", "重新看", "更偏", "有没有"])
 
 
 def _format_merged_message(
