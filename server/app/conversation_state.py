@@ -43,6 +43,16 @@ FOLLOW_UP_TERMS = [
     "第三款",
 ]
 
+CONTINUATION_MARKERS = [
+    "还有",
+    "另外",
+    "补充",
+    "其实",
+    "也",
+    "最好",
+    "顺便",
+]
+
 
 @dataclass
 class RuleConversationState:
@@ -116,6 +126,8 @@ def _is_follow_up(message: str, intent: QueryIntent) -> bool:
     normalized = message.strip()
     if len(normalized) <= 24:
         return True
+    if _has_continuation_marker(normalized):
+        return True
     has_structured_intent = (
         bool(intent.category_candidates)
         or bool(intent.facets)
@@ -127,6 +139,13 @@ def _is_follow_up(message: str, intent: QueryIntent) -> bool:
     if any(term in normalized for term in FOLLOW_UP_TERMS):
         return True
     return not has_structured_intent
+
+
+def _has_continuation_marker(message: str) -> bool:
+    prefix = message[:18]
+    if any(prefix.startswith(marker) for marker in CONTINUATION_MARKERS):
+        return True
+    return any(marker in prefix for marker in ["还有", "另外", "补充", "也最好", "最好", "顺便"])
 
 
 def _merge_message(state: RuleConversationState, message: str, source: str) -> None:
@@ -292,9 +311,9 @@ def _latest_history_product_ids(history: list) -> list[str]:
 def _referenced_product_index(message: str) -> int | None:
     normalized = message.strip()
     explicit_patterns = [
-        (r"(第一|第1|1)[个款件]?", 0),
-        (r"(第二|第2|2)[个款件]?", 1),
-        (r"(第三|第3|3)[个款件]?", 2),
+        (r"(第一|第1(?:个|款|件)?|1(?:号|个|款|件))", 0),
+        (r"(第二|第2(?:个|款|件)?|2(?:号|个|款|件))", 1),
+        (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
     ]
     for pattern, index in explicit_patterns:
         if re.search(pattern, normalized):

@@ -446,10 +446,57 @@ CQ-06: 商品卡指代：第一款追问应聚焦上一轮商品
 
 注意：这一步解决商品事实追问，不解决“找一个像刚才那款但更便宜”的替代推荐。替代推荐需要把上一轮商品属性转成相似商品检索条件，留给下一层 planner / similarity plan。
 
+### 2026-06-03 Groundedness 复跑
+
+本轮继续把 groundedness runner 对齐真实 Android 行为：assistant history 现在会记录上一轮商品卡片 `product_ids`，因此多轮 case 里的“它/第一款/这款”能被检索层复现。同时补了几个低成本解析洞：
+
+1. `预算放到300` / `预算放至300` 可以解析为新的预算上限。
+2. `还有/另外/最好/顺便` 等补充语会被视为多轮延续。
+3. `香精` 进入排除项解析，但“资料明确不含香精”不会被误过滤。
+4. 裸数字不再被误判为“第几款”，避免 `预算200以内` 被当成指代第二款。
+5. 商品/品牌名第一版别名匹配已加入，例如 `欧莱雅`、`AIRism`、`DRY-EX`；明确商品事实追问时，检索会优先取被点名商品，不再被上一轮预算或子类过滤误杀。
+
+复跑命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --mock-llm \
+  --retrieval-only \
+  --output /private/tmp/groundedness_final_retrieval_only.jsonl
+```
+
+结果：
+
+| Mode | Result | Output |
+| --- | --- | --- |
+| retrieval-only | 9 / 11 PASS | `/private/tmp/groundedness_final_retrieval_only.jsonl` |
+
+已修复的关键 case：
+
+- `GRD-L01` 现在 6 轮全部通过：预算继承/放宽/压低、酒精/香精/刺激排除继承，以及“如果选欧莱雅能不能保证不过敏”都能聚焦到 `p_beauty_006`。
+- `GRD-L03` 继续通过：卸妆油、多轮无添加证据、用户评价边界和购买链接/优惠拒绝都能保持同一商品上下文。
+
+剩余失败：
+
+- `GRD-08` 和 `GRD-L02` 都围绕 `p_beauty_007`。当前 raw 数据中 `p_beauty_007` 价格为 `268`，但 benchmark 的来源证据和期望里把它写成 `89` 或 `200元以内/100元以内`可推荐，因此严格预算过滤下不应召回它。
+- 这两条当前更像 benchmark-data 对齐问题，而不是应该通过代码绕过预算硬约束。下一步应先修正 `groundedness_cases.json` 的来源证据和期望，再决定是否补“相似替代推荐 / 预算放宽询问”的新 case。
+
+同步回归：
+
+| Benchmark | Result | Output |
+| --- | --- | --- |
+| conversation cases | 6 / 6 PASS | `/private/tmp/bytedance-rag-conversation-final.jsonl` |
+| golden queries | 8 / 8 PASS | `/private/tmp/bytedance-rag-golden-final.jsonl` |
+| beauty subcategory queries | 6 / 6 PASS | `/private/tmp/bytedance-rag-subcategory-final.jsonl` |
+| apparel queries | 5 / 5 PASS | `/private/tmp/bytedance-rag-apparel-final.jsonl` |
+| comparison queries | 3 / 3 PASS | `/private/tmp/bytedance-rag-comparison-final.jsonl` |
+| generation guardrails | PASS | terminal output |
+
 下一步建议：
 
-1. 先修 retrieval message / intent merge，让长对话保留“上一轮核心商品 + 当前补充问题”。
-2. 增加产品别名和成分别名解析，例如小棕瓶、小黑瓶、神仙水、烟酰胺、水杨酸。
+1. 先修正 `groundedness_cases.json` 中与 raw 数据冲突的 p007 价格/预算期望。
+2. 再单独补“相似替代推荐”：当用户要 100/200 内修护面霜但没有满足商品时，系统应明确无结果，并询问是否放宽预算或改看修护面膜/精华。
 3. 给生成层增加 evidence-aware answer builder，至少能在 fallback 中引用关键成分、注意事项、无添加证据和“资料未看到”的表达。
 4. 再把 `answer_must_contain` 从纯字符串检查逐步升级为更稳定的 claim-level judge。
 

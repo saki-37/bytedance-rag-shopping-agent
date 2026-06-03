@@ -59,6 +59,15 @@ FACET_LEXICON: dict[str, dict[str, list[str]]] = {
         "出差": ["出差", "旅行装", "便携", "随身"],
     },
     "sub_category": {
+        "防晒": ["防晒", "防晒霜"],
+        "面霜": ["面霜", "霜", "特护霜"],
+        "精华": ["精华", "精华液"],
+        "卸妆": ["卸妆", "卸妆油"],
+        "洁面": ["洁面", "洗面奶", "泡沫洁面"],
+        "眼霜": ["眼霜"],
+        "蜜粉": ["蜜粉", "散粉"],
+        "唇釉": ["唇釉", "口红"],
+        "眉笔": ["眉笔"],
         "短袖T恤": ["短袖", "T恤", "t恤", "白T", "基础T", "速干衣"],
         "跑步鞋": ["跑步鞋", "慢跑鞋", "公路跑鞋", "缓震跑鞋"],
         "徒步鞋": ["徒步鞋", "登山鞋", "防水鞋", "户外鞋"],
@@ -117,7 +126,7 @@ CATEGORY_TO_RAW = {
 }
 
 GENERIC_RECOMMEND_TERMS = ["推荐", "买什么", "护肤品", "化妆品", "随便", "看看"]
-EXCLUDE_TERMS = ["酒精", "刺激", "刺痛", "太油", "油腻", "厚重", "拔干", "日系"]
+EXCLUDE_TERMS = ["酒精", "香精", "刺激", "刺痛", "太油", "油腻", "厚重", "拔干", "日系"]
 SOFT_PREFERENCE_TERMS = [
     "便宜",
     "清爽",
@@ -205,9 +214,9 @@ def parse_query_intent(query: str) -> QueryIntent:
 def _hard_budget(query: str) -> float | None:
     patterns = [
         r"(\d+(?:\.\d+)?)\s*元?\s*(?:以[内下]|以内|以下|之内|内)",
-        r"(?:预算|价格|价位).{0,8}(?:放宽到|放宽至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
+        r"(?:预算|价格|价位).{0,8}(?:放宽到|放宽至|放到|放至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:预算|价格|价位)\s*(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
-        r"(?:放宽到|放宽至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
+        r"(?:放宽到|放宽至|放到|放至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:预算|价格|价位)\s*(?:在|不超过|别超过|低于|小于|不高于|<=)?\s*(\d+(?:\.\d+)?)",
         r"(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:不超过|别超过|低于|小于|不高于|<=)\s*(\d+(?:\.\d+)?)\s*元?",
@@ -313,6 +322,7 @@ def _needs_clarification(query: str, signal_count: int) -> bool:
 
 def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path | None = None) -> RetrievalResult:
     intent = parse_query_intent(query)
+    _apply_catalog_product_references(intent, query, products)
     if intent.needs_clarification:
         trace = RetrievalTrace(
             query=query,
@@ -337,35 +347,36 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
 
     for item in products:
         raw = item["raw"]
-        if intent.referenced_product_ids and raw["product_id"] not in intent.referenced_product_ids:
+        is_referenced_product = raw["product_id"] in intent.referenced_product_ids
+        if intent.referenced_product_ids and not is_referenced_product:
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"product_id {raw['product_id']} not in {intent.referenced_product_ids}")
             )
             continue
-        if intent.category_candidates and not _matches_category_candidate(raw.get("category", ""), intent.category_candidates):
+        if not is_referenced_product and intent.category_candidates and not _matches_category_candidate(raw.get("category", ""), intent.category_candidates):
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"category {raw.get('category', '')} not in {intent.category_candidates}")
             )
             continue
         required_sub_categories = intent.facets.get("sub_category", [])
-        if required_sub_categories and raw.get("sub_category", "") not in required_sub_categories:
+        if not is_referenced_product and required_sub_categories and raw.get("sub_category", "") not in required_sub_categories:
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"sub_category {raw.get('sub_category', '')} not in {required_sub_categories}")
             )
             continue
-        if budget is not None and float(raw["base_price"]) > budget:
+        if not is_referenced_product and budget is not None and float(raw["base_price"]) > budget:
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"price {raw['base_price']} > budget {budget:g}")
             )
             continue
         excluded_term = _matched_exclude_term(intent.exclude_terms, item)
-        if excluded_term is not None:
+        if not is_referenced_product and excluded_term is not None:
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"matches excluded term: {excluded_term}")
             )
             continue
         missing_effect = _missing_required_effect(intent, item)
-        if missing_effect is not None:
+        if not is_referenced_product and missing_effect is not None:
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"missing required effect: {missing_effect}")
             )
@@ -373,6 +384,9 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         text = product_search_text(item).lower()
         score = 0.0
         reasons: list[str] = []
+        if is_referenced_product:
+            score += 20.0
+            reasons.append("referenced_product")
         keyword_score = sum(1 for term in terms if len(term) >= 2 and term.lower() in text)
         if keyword_score:
             score += keyword_score
@@ -462,6 +476,52 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         ),
     )
     return RetrievalResult(cards=cards, context=context, trace=trace)
+
+
+def _apply_catalog_product_references(intent: QueryIntent, query: str, products: list[dict]) -> None:
+    if intent.referenced_product_ids:
+        return
+    matched_ids = _catalog_product_references(query, products)
+    if not matched_ids:
+        return
+    intent.referenced_product_ids = matched_ids
+    intent.hard_constraints.extend(f"referenced_product:{product_id}" for product_id in matched_ids)
+    intent.needs_clarification = False
+    intent.clarification_question = None
+    intent.confidence = max(intent.confidence, 0.85)
+
+
+def _catalog_product_references(query: str, products: list[dict]) -> list[str]:
+    normalized_query = _normalize_alias_text(query)
+    if not normalized_query:
+        return []
+    matches: list[str] = []
+    for item in products:
+        raw = item["raw"]
+        aliases = _product_aliases(raw)
+        if any(alias and alias in normalized_query for alias in aliases):
+            matches.append(raw["product_id"])
+    return list(dict.fromkeys(matches))
+
+
+def _product_aliases(raw: dict) -> list[str]:
+    brand = str(raw.get("brand", "")).strip()
+    title = str(raw.get("title", "")).strip()
+    aliases = {_normalize_alias_text(brand)}
+    if brand.startswith("巴黎") and len(brand) > 2:
+        aliases.add(_normalize_alias_text(brand.removeprefix("巴黎")))
+    if brand and title.startswith(brand):
+        short_title = title[len(brand) : len(brand) + 8]
+        aliases.add(_normalize_alias_text(short_title))
+    for token in re.findall(r"[A-Za-z][A-Za-z0-9-]{2,}", title):
+        normalized_token = _normalize_alias_text(token)
+        if len(normalized_token) >= 4:
+            aliases.add(normalized_token)
+    return [alias for alias in aliases if len(alias) >= 2]
+
+
+def _normalize_alias_text(value: str) -> str:
+    return re.sub(r"\s+", "", value).lower()
 
 
 def _filter_summary(filtered: list[FilteredProduct]) -> dict[str, int]:
@@ -583,6 +643,20 @@ def _has_excluded_risk(text: str, term: str) -> bool:
             risk_patterns=[
                 r"(含有|包含|添加|如|对|酒精味)[^。；，,.]{0,12}酒精",
                 r"酒精[^。；，,.]{0,12}(敏感|味|刺激|含量)",
+            ],
+        )
+    if term == "香精":
+        return _has_risky_occurrence(
+            text,
+            term,
+            safe_patterns=[
+                r"(不含|无|没有|不添加)[^。；，,.]{0,8}香精",
+                r"香精[^。；，,.]{0,8}(不含|无|没有|不添加)",
+                r"(不含|无|没有|不添加)[^。；，,.]{0,16}香精[^。；，,.]{0,16}酒精",
+            ],
+            risk_patterns=[
+                r"(含有|包含|添加|如|对|香精味|香味)[^。；，,.]{0,12}香精",
+                r"香精[^。；，,.]{0,12}(敏感|味|刺激|含量)",
             ],
         )
     if term == "刺激":

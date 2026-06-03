@@ -126,7 +126,7 @@ class HttpClient:
 
 
 def run_case(case: dict[str, Any], client: Any, skip_answer_checks: bool) -> dict[str, Any]:
-    history: list[dict[str, str]] = []
+    history: list[dict[str, Any]] = []
     turn_records: list[dict[str, Any]] = []
 
     for turn_index, turn in enumerate(case["turns"], start=1):
@@ -161,9 +161,17 @@ def run_case(case: dict[str, Any], client: Any, skip_answer_checks: bool) -> dic
             failures=failures,
         )
         turn_records.append(turn_record)
+        product_ids = [product["product_id"] for product in debug["products"]]
+        assistant_product_ids = list(dict.fromkeys([*product_ids, *stream_products]))
         history.append({"role": "user", "content": turn["user"]})
-        if answer:
-            history.append({"role": "assistant", "content": answer})
+        if answer or assistant_product_ids:
+            history.append(
+                {
+                    "role": "assistant",
+                    "content": answer or "已返回商品卡片。",
+                    "product_ids": assistant_product_ids,
+                }
+            )
 
     return {
         "id": case["id"],

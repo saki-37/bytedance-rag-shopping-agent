@@ -61,3 +61,8 @@
 - 扩展 `data/eval/conversation_cases.json`：新增 `CQ-05` 5轮预算更新/取消预算/排除继承 case；conversation benchmark 从 4/4 扩展为 5/5 PASS。
 - 同步回归：golden 8/8、beauty subcategory 6/6、apparel 5/5、comparison 3/3、generation guardrail PASS。
 - 继续补齐商品卡指代第一版：Android history 现在回传 assistant 商品卡 `product_ids`；后端可将“第一款/它/这款”映射到上一轮商品，并新增 `CQ-06`，conversation benchmark 扩展为 6/6 PASS。
+- 对齐 groundedness runner 和真实 Android history：runner 现在也把上一轮商品卡 `product_ids` 写入 assistant history，方便复现商品事实追问。
+- 修补多轮 parser 小洞：支持 `预算放到300`，把“还有/另外/最好/顺便”等补充语识别为多轮延续，加入 `香精` 排除项，并避免把 `预算200以内` 的裸数字误判为第二款。
+- 增加商品/品牌别名引用第一版：`欧莱雅`、`AIRism`、`DRY-EX` 等明确商品名会映射到商品 ID；商品事实追问不再被上一轮预算或子类过滤误杀。
+- Groundedness retrieval-only 从 7/11 初跑推进到 9/11 PASS；剩余 `GRD-08` 和 `GRD-L02` 与 `p_beauty_007` raw 价格 `268` 和 benchmark 期望 `89/200元以内/100元以内` 冲突有关，需先修 benchmark 标答再继续做策略。
+- 同步最终回归：conversation 6/6、golden 8/8、beauty subcategory 6/6、apparel 5/5、comparison 3/3、generation guardrail PASS。
