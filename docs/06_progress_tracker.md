@@ -69,7 +69,7 @@
   - `scripts/run_subcategory_queries.py --require-vector` 子类 query 6 条全部通过。
   - `scripts/run_subcategory_queries.py --cases data/eval/apparel_queries.json --require-vector` 服饰 query 5 条全部通过。
   - `scripts/run_comparison_queries.py --require-vector` 对比 query 3 条全部通过。
-  - `scripts/run_conversation_cases.py` 多轮对话 4 条全部通过。
+  - `scripts/run_conversation_cases.py` 多轮对话 5 条全部通过。
 - 生成层 guardrail 已完成：
   - 模型输出先在后端聚合并校验，再重新流式输出给客户端。
   - 编造价格、库存、优惠、下单承诺会被兜底回答替换。

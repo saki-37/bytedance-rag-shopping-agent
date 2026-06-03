@@ -201,7 +201,9 @@ def parse_query_intent(query: str) -> QueryIntent:
 def _hard_budget(query: str) -> float | None:
     patterns = [
         r"(\d+(?:\.\d+)?)\s*元?\s*(?:以[内下]|以内|以下|之内|内)",
+        r"(?:预算|价格|价位).{0,8}(?:放宽到|放宽至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:预算|价格|价位)\s*(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
+        r"(?:放宽到|放宽至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:预算|价格|价位)\s*(?:在|不超过|别超过|低于|小于|不高于|<=)?\s*(\d+(?:\.\d+)?)",
         r"(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:不超过|别超过|低于|小于|不高于|<=)\s*(\d+(?:\.\d+)?)\s*元?",
@@ -216,6 +218,8 @@ def _hard_budget(query: str) -> float | None:
 
 
 def _relaxes_budget(query: str) -> bool:
+    if _hard_budget(query) is not None:
+        return False
     return bool(
         re.search(
             r"(放宽|不限制|先不看|先不用管|可以超过|不限).{0,8}(预算|价格|价位)",
@@ -226,9 +230,11 @@ def _relaxes_budget(query: str) -> bool:
 
 
 def _relaxes_exclusions(query: str) -> bool:
+    if _extract_exclude_terms(query):
+        return False
     return bool(
         re.search(
-            r"(放宽|先不看|先不用管|可以接受).{0,8}(排除|避开|酒精|刺激|成分)",
+            r"(放宽|先不看|先不用管|可以接受).{0,8}(排除|避开|成分)",
             query,
         )
         or re.search(r"(排除|避开|酒精|刺激|成分).{0,8}(放宽|先不看|先不用管|可以接受)", query)
@@ -251,7 +257,10 @@ def _extract_facets(query: str) -> dict[str, list[str]]:
 def _extract_exclude_terms(query: str) -> list[str]:
     terms: list[str] = []
     for term in EXCLUDE_TERMS:
-        if term in query and re.search(rf"(不要|不想|不含|避开|排除|别太|不能).*{re.escape(term)}", query):
+        if term in query and (
+            re.search(rf"(不要|不想|不含|避开|排除|别太|不能).*{re.escape(term)}", query)
+            or re.search(rf"{re.escape(term)}[^。；，,.]{{0,12}}(不要|不想|不行|避开|排除|别太|不能|还是不要)", query)
+        ):
             terms.append(term)
     return list(dict.fromkeys(terms))
 

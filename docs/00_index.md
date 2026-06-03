@@ -23,6 +23,7 @@
 - [电商 Schema 外部参考调研](16_ecommerce_schema_references.md)
 - [采分点确认与待办看板](17_scoring_todo_board.md)
 - [官方采分点逐项对照表](18_official_scoring_checklist.md)
+- [Agentic RAG / LLM Planner 调研补充](19_agentic_rag_planner_research.md)
 
 ## 当前里程碑
 

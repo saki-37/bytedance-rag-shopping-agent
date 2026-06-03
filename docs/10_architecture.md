@@ -2,6 +2,8 @@
 
 日期：2026-05-28
 
+更新：2026-06-03 补充 rule-only conversation state merge。
+
 用途：说明当前 RAG 美妆导购 Agent 的端到端工程架构，方便评审、复盘和后续开发对齐。
 
 ## 一句话架构
@@ -16,7 +18,8 @@
 flowchart TD
     U["用户"] --> A["Android App<br/>Kotlin + Jetpack Compose"]
     A -->|"POST /api/chat/stream<br/>message + history"| API["FastAPI 后端"]
-    API -->|"解析多轮上下文"| R["Retrieval Pipeline"]
+    API --> CS["Rule-only Conversation State<br/>继承/覆盖/放宽多轮约束"]
+    CS --> R["Retrieval Pipeline"]
     R --> Q["QueryIntent<br/>预算/肤质/功效/场景/排除条件"]
     R --> D["商品数据<br/>raw + enriched"]
     R --> V["Chroma Vector Index<br/>语义召回"]
@@ -69,7 +72,7 @@ flowchart TD
    - `POST /api/chat/stream`
    - `POST /api/debug/retrieve`
    - `GET /assets/{image_path}`
-4. 对短追问做上下文合并，例如“再便宜点”“先放宽预算”。
+4. 在检索前做 rule-only conversation state merge，例如预算更新、预算取消、排除条件继承和短追问补全。
 5. 调用检索层得到候选商品、证据文本和 trace。
 6. 调用 Doubao / Ark 生成导购回答。
 7. 对模型输出做 guardrail 校验，必要时二次改写或安全兜底。
@@ -78,6 +81,7 @@ flowchart TD
 关键文件：
 
 - `main.py`：API 路由、SSE 事件、上下文合并、静态图片服务。
+- `conversation_state.py`：检索前的多轮状态合并，负责继承/覆盖/放宽预算、类目、肤质、功效、场景、排除条件和偏好。
 - `config.py`：读取 `.env` 和本地路径配置。
 - `data_loader.py`：加载 raw / enriched 商品数据。
 - `models.py`：Pydantic 数据结构。
@@ -203,7 +207,7 @@ SSE 事件：
 
 1. 后端脚本级验证：
    - 8 条 golden queries。
-   - 4 条多轮 conversation cases。
+   - 5 条多轮 conversation cases。
    - 真实 Doubao 三轮 probe。
    - 生成层 guardrail。
 2. Android 模拟器验证：

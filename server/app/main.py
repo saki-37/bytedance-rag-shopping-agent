@@ -8,6 +8,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.conversation_state import build_retrieval_message
 from app.data_loader import load_enriched_products, load_raw_products
 from app.llm import stream_answer
 from app.models import ChatRequest, HealthResponse
@@ -42,7 +43,8 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     async def events() -> AsyncIterator[str]:
         try:
             yield _event("status", {"status": "retrieving"})
-            retrieval_message = _message_for_retrieval(request)
+            retrieval_build = build_retrieval_message(request)
+            retrieval_message = retrieval_build.message
             result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
             yield _event("products", {"products": [card.model_dump() for card in result.cards]})
             yield _event("status", {"status": "generating"})
@@ -67,10 +69,12 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
 @app.post("/api/debug/retrieve")
 def debug_retrieve(request: ChatRequest) -> dict:
-    retrieval_message = _message_for_retrieval(request)
+    retrieval_build = build_retrieval_message(request)
+    retrieval_message = retrieval_build.message
     result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
     return {
         "retrieval_message": retrieval_message,
+        "conversation_state": retrieval_build.trace,
         "products": [card.model_dump() for card in result.cards],
         "clarification_question": result.clarification_question,
         "trace": result.trace.model_dump(),
@@ -85,27 +89,3 @@ async def _stream_text(text: str) -> AsyncIterator[str]:
     for char in text:
         yield char
         await asyncio.sleep(0.005)
-
-
-def _message_for_retrieval(request: ChatRequest) -> str:
-    previous_user_messages = [
-        item.content.strip()
-        for item in request.history
-        if item.role == "user" and item.content.strip()
-    ]
-    if not previous_user_messages:
-        return request.message
-
-    short_follow_up = len(request.message) <= 20
-    explicit_relaxation = any(term in request.message for term in ["放宽", "先看", "优先", "预算", "排除", "条件"])
-    if not short_follow_up and not explicit_relaxation:
-        return request.message
-
-    return "\n".join(
-        [
-            "上一轮用户需求：",
-            *previous_user_messages[-2:],
-            "本轮补充：",
-            request.message,
-        ]
-    )

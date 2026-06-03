@@ -334,7 +334,7 @@ server/.venv/bin/python scripts/run_comparison_queries.py \
 | golden queries | 8 / 8 PASS |
 | beauty subcategory queries | 6 / 6 PASS |
 | apparel queries | 5 / 5 PASS |
-| conversation cases | 4 / 4 PASS |
+| conversation cases | 5 / 5 PASS |
 | generation guardrails | PASS |
 
 命令：
@@ -378,13 +378,52 @@ server/.venv/bin/python scripts/run_groundedness_cases.py \
 
 抽样结果：2 / 2 PASS。`GRD-07` 中真实模型先输出了库存、优惠、优惠券、下单相关内容，触发 generation guardrail；repair 后仍未通过，最终使用本地 grounded fallback，通过“不能补资料外商业信息”的检查。
 
-主要发现：
+初跑发现：
 
 1. 检索层已经能通过短事实 case、商业承诺 case 和一条长卸妆油对话，但多轮上下文继承仍不稳。
-2. 预算更新存在问题：`预算可以放宽到300` 和长对话里的预算变化没有稳定覆盖上一轮预算。
+2. 预算更新存在问题：`预算可以放宽到300` 和长对话里的预算变化没有稳定覆盖上一轮预算。该问题已在下方 rule-only conversation state merge 中先修复显式规则部分。
 3. 产品角色继承存在问题：用户后续问“水杨酸 / 屏障 / 不过敏保证”时，系统会丢失上一轮核心商品。
 4. mock / fallback 生成只能给出通用安全回答，不会细粒度引用 PITERA、烟酰胺、无香料无酒精等证据，因此 answer-level 检查大量失败。
 5. Guardrail 对商业承诺有效，但对成分/功效 groundedness 还不是完整 judge。
+
+## Conversation State Merge 回归
+
+目标：把多轮对话里最容易丢的“硬约束状态”先做成规则基线，验证不依赖 LLM Planner 时能否稳定处理显式约束。
+
+实现点：
+
+1. 新增 `server/app/conversation_state.py`，在 `retrieve()` 前把 `history + current_message` 合并成结构化检索状态。
+2. 最新明确预算覆盖旧预算，例如“预算可以放宽到300”会解析成 `budget_max=300`。
+3. “先放宽预算 / 先不看预算”在没有新数字时才取消预算。
+4. 排除条件默认继承，例如前文“不要酒精/刺激”不会在“更便宜一点”后丢失。
+5. Debug 接口返回 `conversation_state` trace，记录 state merge 是否应用、预算/排除/类目/功效/场景和 actions。
+
+新增 case：
+
+```text
+CQ-05: 5轮预算更新、取消预算和排除条件继承
+```
+
+覆盖路径：
+
+1. 油皮 + 200元以内 + 通勤防晒 + 不要酒精/刺激。
+2. 预算可以放宽到300。
+3. 有没有更便宜一点的。
+4. 我想把预算降到150元。
+5. 先不看预算，但酒精刺激还是不要。
+
+回归结果：
+
+| Benchmark | Result | Output |
+| --- | --- | --- |
+| conversation cases | 5 / 5 PASS | `/private/tmp/bytedance-rag-conversation-rule-state.jsonl` |
+| golden queries | 8 / 8 PASS | `/private/tmp/bytedance-rag-golden-rule-state.jsonl` |
+| beauty subcategory queries | 6 / 6 PASS | `/private/tmp/bytedance-rag-subcategory-rule-state.jsonl` |
+| apparel queries | 5 / 5 PASS | `/private/tmp/bytedance-rag-apparel-rule-state.jsonl` |
+| comparison queries | 3 / 3 PASS | `/private/tmp/bytedance-rag-comparison-rule-state.jsonl` |
+| generation guardrails | PASS | terminal output |
+
+注意：这一步只解决显式规则能覆盖的多轮约束，不解决代词商品指代、上一轮商品卡引用和复杂抽象偏好。后者仍是后续 LLM Planner / retrieval plan validator 的目标。
 
 下一步建议：
 

@@ -47,3 +47,16 @@
 - 新增 [官方采分点逐项对照表](18_official_scoring_checklist.md)：完全按官方“必做最小闭环、明确不能踩的线、评分权重、基础/进阶/高级场景”逐条标注 ✅ / ◯ / △ / ✕ / ⏸，用于判断哪些得分点已踩到、哪些还需要 benchmark 或提交材料收口。
 - 新增 `data/eval/groundedness_cases.json`：把反编造/可溯源 case 扩展为 11 条人工标注 benchmark 草案，覆盖成分存在性、功效外推、约束过紧、多轮排除继承、过敏风险、有证据的无添加声明、商业承诺陷阱和孕期/不过敏安全边界；其中 3 条为 5-8 轮长对话。
 - 新增 `scripts/run_groundedness_cases.py` 并完成初跑：mock 全链路 2/11 PASS，retrieval-only 7/11 PASS；真实 Ark / Doubao 抽样 `GRD-03`、`GRD-07` 为 2/2 PASS，且 `GRD-07` 验证了商业承诺触发 guardrail 后可回落到安全回答。
+
+## 2026-05-31
+
+- 新增 [Agentic RAG / LLM Planner 调研补充](19_agentic_rag_planner_research.md)：梳理为什么 groundedness benchmark 促使我们调研多轮 Planner、最新 agentic retrieval / logical retrieval / self-query / router 工作如何启发本项目，以及为什么短期不直接接入重框架，而是保留 `rule-only state merge -> optional lightweight planner -> validator` 的轻量路线。
+
+## 2026-06-03
+
+- 完成 rule-only conversation state merge 第一版：新增 `server/app/conversation_state.py`，在检索前合并多轮预算、类目、肤质、功效、场景、排除条件和偏好。
+- 修复“预算可以放宽到300”被误当成取消预算的问题；现在有具体数字时更新预算，无具体数字时才取消预算。
+- 修复“先不看预算，但酒精刺激还是不要”被误判成放宽排除条件的问题；排除条件会在多轮中默认继承。
+- `POST /api/debug/retrieve` 新增 `conversation_state` trace，方便查看 state merge 是否应用以及具体 actions。
+- 扩展 `data/eval/conversation_cases.json`：新增 `CQ-05` 5轮预算更新/取消预算/排除继承 case；conversation benchmark 从 4/4 扩展为 5/5 PASS。
+- 同步回归：golden 8/8、beauty subcategory 6/6、apparel 5/5、comparison 3/3、generation guardrail PASS。

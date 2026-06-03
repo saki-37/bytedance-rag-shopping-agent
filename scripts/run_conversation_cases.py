@@ -110,6 +110,7 @@ def run_case(case: dict[str, Any], client: Any) -> dict[str, Any]:
                 "passed": not failures,
                 "failures": failures,
                 "retrieval_message": debug.get("retrieval_message"),
+                "conversation_state": debug.get("conversation_state", {}),
                 "products": [product["product_id"] for product in debug["products"]],
                 "clarification_question": debug["clarification_question"],
                 "parsed_intent": debug["trace"]["parsed_intent"],
@@ -136,6 +137,8 @@ def evaluate_turn(expectation: dict[str, Any], debug: dict[str, Any]) -> list[st
     product_ids = [product["product_id"] for product in products]
     clarification = debug["clarification_question"] or ""
     retrieval_message = debug.get("retrieval_message") or ""
+    conversation_state = debug.get("conversation_state") or {}
+    merged_state = conversation_state.get("state", {})
     intent = debug["trace"]["parsed_intent"]
     failures: list[str] = []
 
@@ -195,6 +198,18 @@ def evaluate_turn(expectation: dict[str, Any], debug: dict[str, Any]) -> list[st
     for text in expectation.get("retrieval_message_contains", []):
         if text not in retrieval_message:
             failures.append(f"retrieval_message_missing_text={text}")
+
+    if "state_merge_applied" in expectation:
+        expected = bool(expectation["state_merge_applied"])
+        actual = bool(conversation_state.get("applied"))
+        if actual != expected:
+            failures.append(f"state_merge_applied_mismatch expected={expected} got={actual}")
+
+    if "expected_state_actions_contains" in expectation:
+        actions = merged_state.get("actions", [])
+        for text in expectation["expected_state_actions_contains"]:
+            if not any(text in action for action in actions):
+                failures.append(f"state_action_missing={text} actual={actions}")
 
     return failures
 
