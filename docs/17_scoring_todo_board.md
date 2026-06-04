@@ -18,8 +18,8 @@
 | --- | --- | --- | --- |
 | 基础功能完整性 | 稳定可拿 | Android -> FastAPI -> RAG -> Doubao/Mock -> SSE -> 商品卡片；图片和详情弹窗已跑通 | 录屏可更干净；最终演示前再人工复验一次 |
 | 工程质量 | 基本可拿 | monorepo、README、API 契约、架构文档、评测报告、安全配置、密钥扫描、依赖版本与复现说明 | 最终提交前按复现检查表再跑一轮 |
-| 效果与可靠性 | 第一版可讲，但真实生成层需要继续加固 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮 8/8 stable PASS；guardrail；RetrievalTrace；graph relation score；evidence-aware fallback | 真实 API groundedness 三轮仅 3/11 stable PASS，下一步优先修真实生成层边界表达、repair prompt 或 claim-level judge |
-| 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema、服饰样例、轻量反馈闭环后端第一版 | 多模态/购物车不建议作为主线 |
+| 效果与可靠性 | 已有可讲证据，仍可继续补强 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮 8/8 stable PASS；`GRD-L03/05/08/L01` 高风险真实 API + AI review；guardrail；RetrievalTrace；graph relation score；evidence-aware fallback | 不建议继续无限扩 benchmark；若补强，应做小范围真实 API 复验或 claim-level judge 样例 |
+| 加分项深度 | 已有主打方向，还差一个可见闭环增强 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema、服饰样例、轻量反馈闭环后端第一版 | 如果还有 6 天，最值得补的是 Android 端反馈按钮，把后端反馈闭环变成 Demo 可见能力 |
 
 ## 能确认已经完成的点
 
@@ -59,7 +59,10 @@
 4. 如果真实 API 输出和关键词判定冲突，优先看 AI review / 人工语义核验，不直接按硬字符串定生死。
 5. 用户可见回答只展示必要结论；约束继承、来源边界和安全判断进入 trace，供 debug、评测和答辩使用。
 
-当前下一步：**最终复验与提交前检查**。P1-2 第一版已经完成；接下来不要再扩功能，优先按 `docs/20_reproducibility_and_dependencies.md` 和 `docs/14_submission_package.md` 跑一次真实 API、Android、secret scan 和录屏安全检查。
+当前下一步分两种情况：
+
+- 如果马上提交：做 **最终复验与提交前检查**，按 `docs/20_reproducibility_and_dependencies.md` 和 `docs/14_submission_package.md` 跑真实 API、Android、secret scan 和录屏安全检查。
+- 如果还有 5-7 天：优先做 **P1-1 Android 反馈按钮**。后端反馈闭环已经完成，补上移动端 `有用/不准确` 入口后，可以把官方“质量评测与反馈闭环”从 debug 证据升级成 Demo 可见能力。
 
 ### P0：提交材料收口
 
