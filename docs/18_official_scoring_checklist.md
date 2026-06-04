@@ -151,16 +151,18 @@
 ```text
 data/eval/groundedness_cases.json
 scripts/run_groundedness_cases.py
+scripts/review_benchmark_with_ai.py
 ```
 
-当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版并在 2026-06-03 对齐 Android 商品卡 history；2026-06-04 加入 evidence-aware fallback 后，mock 全链路和 retrieval-only 均达到 11/11 PASS。同日真实 API 三轮全量复验显示：golden stream 8/8 stable PASS，groundedness real generation 3/11 stable PASS。结论是检索和流式结构稳定，但真实生成层仍需要边界模板、repair prompt 或 claim-level judge 加固。
+当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版并在 2026-06-03 对齐 Android 商品卡 history；2026-06-04 加入 evidence-aware fallback 后，mock 全链路和 retrieval-only 均达到 11/11 PASS。同日真实 API 三轮全量复验显示：golden stream 8/8 stable PASS，groundedness real generation 3/11 stable PASS。结论是检索和流式结构稳定，但真实生成层仍需要边界模板、repair prompt 或 claim-level judge 加固。后续所有 benchmark 结果都应再经过 `scripts/review_benchmark_with_ai.py` 做 AI-assisted semantic review，避免只按硬字符串或单一匹配结果判断。
 
 ## 现在最清楚的下一步
 
 如果继续做代码，优先级：
 
-1. 修真实生成层稳定性：重点处理真实 Doubao 在成分缺失、安全边界、多轮排除继承下的资料外表达。
-2. 最终 Demo 复验：真实 API、Mock fallback、Android 构建、secret scan 和录屏安全。
-3. 可选增强：把 Android 端 `有用` / `不准确` 按钮接到 `/api/feedback`，或继续做 claim-level judge。
+1. 升级 benchmark 判定：在确定性初筛后追加 AI-assisted semantic review，并标出 false fail / false pass / source check 风险。
+2. 修真实生成层稳定性：重点处理真实 Doubao 在成分缺失、安全边界、多轮排除继承下的资料外表达。
+3. 最终 Demo 复验：真实 API、Mock fallback、Android 构建、secret scan 和录屏安全。
+4. 可选增强：把 Android 端 `有用` / `不准确` 按钮接到 `/api/feedback`，或继续做 claim-level judge。
 
 如果只做方向确认，停止在这里即可，不继续开新功能。

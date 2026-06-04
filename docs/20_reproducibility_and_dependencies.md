@@ -211,6 +211,23 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 
 当前最新一轮 groundedness full mock generation 和 retrieval-only 结果均为 11/11 PASS；真实 API 三轮全量复验为 golden stream 8/8 stable PASS、groundedness real generation 3/11 stable PASS。完整记录见 `docs/11_evaluation_report.md`。
 
+Benchmark 结束后的 AI 语义复核：
+
+```bash
+server/.venv/bin/python scripts/review_benchmark_with_ai.py \
+  --input data/tmp/evals/groundedness_cases_latest.jsonl \
+  --suite-name groundedness
+```
+
+该脚本读取任意 benchmark JSONL，并输出同目录的 `*_ai_review.jsonl`。每条记录会补充 `semantic_score`、`semantic_pass`、`likely_false_fail`、`likely_false_pass`、`needs_human_review` 和问题清单。没有真实 API key、只想检查脚本结构时可用：
+
+```bash
+server/.venv/bin/python scripts/review_benchmark_with_ai.py \
+  --input data/tmp/evals/groundedness_cases_latest.jsonl \
+  --suite-name groundedness \
+  --mock-review
+```
+
 轻量反馈闭环 smoke test：
 
 ```bash
@@ -228,6 +245,7 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 | 真实 Doubao 请求超时 | 网络代理或 Key/模型名配置异常 | 先用 retrieval-only 或 `MOCK_LLM=true` 验证链路，再检查 `.env` 和代理；不要把 fallback 结果记成真实 API 结果 |
 | Chroma 检索无结果 | 索引未构建或 enriched 数据未生成 | 重新运行 `python scripts/build_index.py` |
 | 反馈脚本写入失败 | `data/tmp/feedback/` 无写入权限或当前沙盒不允许写仓库临时目录 | 在真实本地终端运行，或确认仓库目录可写 |
+| AI 语义复核无法运行 | `.env` 缺少 `ARK_API_KEY` 或 `ARK_MODEL` | 先用 `--mock-review` 做离线烟测；真实复核前确认 `.env` 已配置 |
 | 提交前 secret scan 失败 | `.env`、文档或录屏说明中出现疑似 Key | 删除真实 Key，重新运行 `python3 scripts/scan_secrets.py --all` |
 
 ## 提交前复现检查表
@@ -241,3 +259,4 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 | 后端健康 | `curl http://127.0.0.1:8000/health` | 返回健康状态 |
 | Android 构建 | `./gradlew :client:android:app:assembleDebug` | `BUILD SUCCESSFUL` |
 | 核心评测 | golden / conversation / groundedness 脚本 | 结果与 `docs/11_evaluation_report.md` 当前记录一致或有解释 |
+| AI 复核 | `python scripts/review_benchmark_with_ai.py --input <benchmark.jsonl>` | 输出 `*_ai_review.jsonl`，高风险项有解释 |

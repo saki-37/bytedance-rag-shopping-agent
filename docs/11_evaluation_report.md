@@ -733,12 +733,14 @@ Failure case 初步归因：
 4. 升级 repair prompt / guardrail：对 `unsupported_absence_claims`、`unsupported_prices`、`forbidden_commercial_claims`、结果型绝对承诺给出更硬的删除规则。
 5. 给真实 API runner 增加语义复核字段，支持同义短语、AI-assisted judge 或人工核验，避免只按硬字符串判断。
 6. 长对话 benchmark 后续改成“每轮能力点 + evaluator 介入”的自适应协议，而不是完全固定逐轮标准答案。
+7. 所有 benchmark JSONL 输出后追加 `scripts/review_benchmark_with_ai.py` 复核，统一产出 `semantic_score`、`likely_false_fail`、`likely_false_pass` 和问题清单。
 
 ## 下一步
 
 1. 先升级 groundedness judge：硬字符串筛查 + 同义 claim + 语义/证据核验。
 2. 增加内部 `constraint_trace` / `safety_trace` / `source_trace`，让多轮继承、风险边界和强效果描述可解释。
-3. 再修真实生成层稳定性：repair prompt、guardrail、answer composer 分层处理。
-4. 给真实 API runner 增加 `--repeat`、per-turn timeout、三轮汇总和语义复核字段。
-5. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
-6. 扩展多商品对比到更多品类和更复杂约束。
+3. 给所有 benchmark 追加 AI 语义复核脚本，避免只看关键词匹配。
+4. 再修真实生成层稳定性：repair prompt、guardrail、answer composer 分层处理。
+5. 给真实 API runner 增加 `--repeat`、per-turn timeout、三轮汇总和语义复核字段。
+6. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
+7. 扩展多商品对比到更多品类和更复杂约束。

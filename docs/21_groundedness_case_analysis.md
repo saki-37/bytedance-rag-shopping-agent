@@ -31,6 +31,7 @@
 - 多轮里“本轮只放宽预算，前文排除条件仍保留”更适合进入内部 `constraint_trace` / `retrieval_trace`，用于展示系统状态和答辩解释，不应机械插入用户可见回答。
 - 长对话 benchmark 不宜完全依赖预设的逐轮标准答案。现实对话中，系统在信息不足时可以先给保守候选并继续追问；评测应按每轮能力点和最终对话结果做语义核验。
 - 后续 runner 需要形成两层判定：第一层是确定性结构检查，第二层是语义/证据核验。
+- 所有 benchmark 在机器初筛结束后，都应再通过 `scripts/review_benchmark_with_ai.py` 做一次 AI-assisted semantic review，用于识别 false fail、false pass、资料外承诺和需要人工复核的边界项。
 
 ## 总览
 
@@ -333,6 +334,7 @@
    - 把 `answer_must_contain` 从纯字符串改成同义短语组 + 语义核验。
    - 至少覆盖：`未看到/没有看到/没有提及`、`不能确认/无法确认/资料未说明`、`不能保证/无法保证/不能完全排除`、`修护屏障/屏障修护`。
    - 对高风险 case 增加人工/AI-assisted 复核字段：`semantic_pass`、`source_supported`、`needs_human_review`。
+   - 新增通用复核层：所有 benchmark JSONL 输出后追加 `scripts/review_benchmark_with_ai.py`，形成 `deterministic_passed` + `ai_review.semantic_score` 两套结果。
 
 2. **加内部 trace，而不是把推理句硬塞进用户回答。**
    - `constraint_trace`: 预算、肤质、排除项、放宽项、继承项。

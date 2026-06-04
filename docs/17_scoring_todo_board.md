@@ -35,18 +35,30 @@
 
 见下方执行顺序。这里的原则是：先把已完成能力变成稳定证据，再决定是否开反馈闭环或生成层增强。
 
-## 执行顺序
+## 当前执行顺序
 
-| 顺序 | 动作 | 目的 | 完成标志 |
-| --- | --- | --- | --- |
-| Step 0 | 提交当前采分表和待办看板 | 固定方向盘，避免后续继续口头漂移 | `17_scoring_todo_board.md`、`18_official_scoring_checklist.md` 已提交 |
-| Step 1 | Groundedness / 反编造 Benchmark | 把“不能编造”从原则变成可回归证据 | 已新增 groundedness cases 和脚本；retrieval-only 11/11 PASS |
-| Step 2 | 依赖版本 / 复现说明表 | 补工程质量里的复现友好度 | 已新增 `docs/20_reproducibility_and_dependencies.md`，集中说明 Android/Python/Chroma/模型配置与复现检查 |
-| Step 3 | Evidence-aware fallback | 让安全兜底回答也能引用商品证据和资料边界 | 已完成第一版；groundedness full mock 11/11 PASS |
-| Step 4 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 已新增 `POST /api/feedback` 和 smoke test，可记录 feedback JSONL |
-| Step 5 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | 文档状态已收口；最终提交前再做复现检查、Demo 检查和 secret scan |
+当前状态：**基础闭环、evidence-aware fallback、轻量反馈闭环后端、真实 API 三轮复验、AI 语义复核脚本均已有第一版**。下一步不再扩新大功能，而是把“真实回答是否可靠”变成可解释、可复跑、可答辩的证据链。
 
-当前状态：**evidence-aware fallback 和轻量反馈闭环均已完成第一版，真实 API 三轮复验也已完成**。结果说明检索、SSE 和商品卡结构稳定，但真实 Doubao 在严格 groundedness case 中仍会不稳定地产生资料外边界表达。下一条代码主线应优先修真实生成层稳定性，再做最终 Demo 安全检查。
+| 优先级 | 动作 | 目的 | 完成标志 | 主要文件 |
+| --- | --- | --- | --- | --- |
+| P0-0 | 提交当前 AI review 与文档修正 | 固定新的评测口径，避免后续又回到只看关键词 | `scripts/review_benchmark_with_ai.py` 和相关文档已提交 | `scripts/review_benchmark_with_ai.py`、`docs/11_*`、`docs/17_*`、`docs/18_*`、`docs/20_*`、`docs/21_*` |
+| P0-1 | 升级 groundedness judge | 把硬字符串匹配升级为“确定性初筛 + 同义 claim + source check + AI/人工语义核验” | `GRD-01/02/04/L01` 第一批 case 能标出 false fail / false pass / source risk | `data/eval/groundedness_cases.json`、`scripts/run_groundedness_cases.py`、`scripts/review_benchmark_with_ai.py` |
+| P0-2 | 增加内部 trace 分层 | 记录约束继承、风险边界和强 claim 来源，不把推理句硬塞给用户 | debug / benchmark 输出能看到 `constraint_trace`、`safety_trace`、`source_trace` | `server/app/models.py`、`server/app/retrieval.py`、`server/app/conversation_state.py` |
+| P0-3 | 加固真实生成层 guardrail / repair | 减少真实 Doubao 的资料外承诺和绝对安全说法 | 结果型绝对承诺被拦截或改写；supported / unsupported absence claims 分开处理 | `server/app/guardrails.py`、`server/app/llm.py` |
+| P0-4 | 真实 API 回归 + AI 复核 | 证明修复后不是只在 mock 或 retrieval-only 里好看 | golden / groundedness 跑真实 API；每份 JSONL 追加 AI review；报告更新 | `scripts/run_*`、`scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
+| P1-1 | Android 反馈按钮 | 把后端反馈闭环接到真实 demo 体验里 | 回答下方可点 `有用/不准确`，并写入 feedback JSONL | `client/android/...`、`server/app/feedback.py` |
+| P1-2 | Demo / 答辩材料收口 | 降低评委理解成本，确保能讲清架构链路和关键代码 | 录屏、架构解释、复现检查、secret scan 完成 | `docs/12_demo_script.md`、`docs/14_submission_package.md`、`docs/20_reproducibility_and_dependencies.md` |
+| P2 | 暂缓的大功能 | 防止主线扩张 | 多模态、购物车、下单、全量非美妆标注都不作为当前主线 | 暂不改 |
+
+执行原则：
+
+1. 每完成一个 P0 小步，都跑 `git diff --check` 和 secret scan。
+2. 涉及 benchmark 的改动，先跑确定性 runner，再跑 `scripts/review_benchmark_with_ai.py`。
+3. 先用 3-4 条代表 case 做窄修复，确认方向对，再全量跑 11 条 groundedness case。
+4. 如果真实 API 输出和关键词判定冲突，优先看 AI review / 人工语义核验，不直接按硬字符串定生死。
+5. 用户可见回答只展示必要结论；约束继承、来源边界和安全判断进入 trace，供 debug、评测和答辩使用。
+
+当前下一步：**P0-0 提交当前 AI review 与文档修正**，然后进入 **P0-1 groundedness judge 升级**。
 
 ### P0：提交材料收口
 
@@ -81,6 +93,7 @@
 ```text
 data/eval/groundedness_cases.json
 scripts/run_groundedness_cases.py
+scripts/review_benchmark_with_ai.py
 ```
 
 当前进展：
@@ -92,7 +105,7 @@ scripts/run_groundedness_cases.py
 - 初跑结果：mock 全链路 2/11 PASS，retrieval-only 7/11 PASS；真实 Ark / Doubao 抽样 2/2 PASS。
 - 2026-06-03 复跑：runner 已对齐 Android 商品卡 history，补了预算 `放到300`、补充语延续、`香精` 排除和商品/品牌别名引用；retrieval-only 提升到 9/11 PASS。
 - 已修正 `p_beauty_007` / `p_beauty_012` 价格证据和预算期望，并补上“控油精华 -> 修护面霜”的轻量意图切换规则；retrieval-only 进一步达到 11/11 PASS。
-- 当前位置：检索层和 mock 生成层都已能稳定证明“不乱召回、不乱放宽约束、兜底回答引用证据边界”；真实 API 三轮全量回归显示 golden stream 8/8 stable PASS，但 groundedness real generation 只有 3/11 stable PASS。下一步如果继续补可靠性，应优先修真实生成层稳定性，例如边界模板、repair prompt 或 claim-level judge，而不是继续扩 case 数量。
+- 当前位置：检索层和 mock 生成层都已能稳定证明“不乱召回、不乱放宽约束、兜底回答引用证据边界”；真实 API 三轮全量回归显示 golden stream 8/8 stable PASS，但 groundedness real generation 只有 3/11 stable PASS。已新增通用 AI 语义复核脚本 `scripts/review_benchmark_with_ai.py`，用于在任意 benchmark JSONL 结束后追加 `semantic_score`、`likely_false_fail`、`likely_false_pass` 和问题清单。下一步如果继续补可靠性，应优先把 groundedness judge 升级为“确定性初筛 + AI/人工语义核验 + source check”，而不是继续扩 case 数量。
 
 ### P2：轻量反馈闭环
 
