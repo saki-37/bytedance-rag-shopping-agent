@@ -175,11 +175,14 @@ server/.venv/bin/python scripts/check_generation_guardrails.py
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --mock-llm
+
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
   --mock-llm \
   --retrieval-only
 ```
 
-当前最新一轮 retrieval-only groundedness 结果为 11/11 PASS；完整记录见 `docs/11_evaluation_report.md`。
+当前最新一轮 groundedness full mock generation 和 retrieval-only 结果均为 11/11 PASS；完整记录见 `docs/11_evaluation_report.md`。
 
 ## 常见失败与处理
 
@@ -202,4 +205,3 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 | 后端健康 | `curl http://127.0.0.1:8000/health` | 返回健康状态 |
 | Android 构建 | `./gradlew :client:android:app:assembleDebug` | `BUILD SUCCESSFUL` |
 | 核心评测 | golden / conversation / groundedness 脚本 | 结果与 `docs/11_evaluation_report.md` 当前记录一致或有解释 |
-

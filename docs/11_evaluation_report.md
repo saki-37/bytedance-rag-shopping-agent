@@ -525,13 +525,63 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 下一步建议：
 
 1. 再单独补“相似替代推荐”：当用户要 100/200 内修护面霜但没有满足商品时，系统应明确无结果，并询问是否放宽预算或改看修护面膜/精华。
-2. 给生成层增加 evidence-aware answer builder，至少能在 fallback 中引用关键成分、注意事项、无添加证据和“资料未看到”的表达。
+2. 对真实 Doubao 长对话做抽样复验，继续沉淀 repair / fallback 的 failure cases。
 3. 再把 `answer_must_contain` 从纯字符串检查逐步升级为更稳定的 claim-level judge。
+
+### 2026-06-04 Evidence-aware fallback 复跑
+
+本轮目标：把安全兜底从“泛泛保守回答”升级为“证据化保守回答”。当真实模型输出触发 guardrail，或本地 mock / API 失败走 fallback 时，回答会尽量引用当前商品卡可见的证据，而不是只说“资料不足”。
+
+实现变化：
+
+1. `retrieval.py` 中 `ProductCard.description` 不再只带营销文案，而是合并商品营销文案、官方 FAQ 和用户评价。
+2. `guardrails.py` 中 `build_safe_answer` 改成 evidence-aware answer builder：
+   - 会引用商品数据源价格、卖点、使用场景、适合人群和注意事项。
+   - 对“是否有某成分”“能不能外推功效”“孕期/过敏是否保证安全”“是否有购买链接/优惠”等问题给出资料边界。
+   - 支持有证据的无添加声明，例如官方 FAQ 明确写到不含酒精/香精；没有证据时只说资料未说明或不能确认。
+3. `llm.py` 的 guardrail / mock fallback 会看到最近几轮用户问题，因此“只放宽预算，但仍保留酒精/刺激排除条件”这类多轮边界能进入兜底回答。
+
+复跑命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/check_generation_guardrails.py
+
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --mock-llm \
+  --output /private/tmp/groundedness_evidence_fallback_mock_v3.jsonl
+
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --mock-llm \
+  --retrieval-only \
+  --output /private/tmp/groundedness_evidence_fallback_retrieval_only.jsonl
+```
+
+结果：
+
+| Benchmark | Result | Output |
+| --- | --- | --- |
+| generation guardrails | PASS | terminal output |
+| groundedness full mock generation | 11 / 11 PASS | `/private/tmp/groundedness_evidence_fallback_mock_v3.jsonl` |
+| groundedness retrieval-only | 11 / 11 PASS | `/private/tmp/groundedness_evidence_fallback_retrieval_only.jsonl` |
+| golden queries | 8 / 8 PASS | `/private/tmp/bytedance-rag-golden-evidence-fallback.jsonl` |
+| conversation cases | 6 / 6 PASS | `/private/tmp/bytedance-rag-conversation-evidence-fallback.jsonl` |
+| beauty subcategory queries | 6 / 6 PASS | `/private/tmp/bytedance-rag-subcategory-evidence-fallback.jsonl` |
+| apparel queries | 5 / 5 PASS | 临时 in-process debug 检查 |
+| comparison queries | 3 / 3 PASS | `/private/tmp/bytedance-rag-comparison-evidence-fallback.jsonl` |
+| secret scan | PASS | 269 files checked |
+
+关键变化：
+
+- `GRD-07` 商业承诺陷阱现在会推荐 The Ordinary 的 59 元控油精华，但不会补库存、优惠券、现货、下单等资料外信息。
+- `GRD-L01` 能在“预算放到 300”时明确：这轮只放宽预算，仍然保留酒精和刺激排除条件。
+- `GRD-L02` 能把 The Ordinary 的烟酰胺/锌、非水杨酸、不能当刷酸，以及修护面霜不能保证去闭口区分开。
+- `GRD-L03` 能区分芳珂卸妆油的官方无添加资料和用户评价里的孕期/不堵塞体验，不把用户反馈当成官方安全保证。
 
 ## 当前边界
 
 1. Guardrail V1 是规则校验，不是完整 groundedness judge。
-2. 目前只校验价格和明显商业承诺，尚未对所有功效声明做细粒度证据匹配。
+2. Evidence-aware fallback 能覆盖当前 benchmark 中的关键证据边界，但尚未对所有模型生成 claim 做细粒度证据匹配。
 3. Android 端真实 Doubao 已完成第一轮复验；自动滚动已完成一轮模拟器复验，后续录屏前仍需做一次人工检查。
 4. Chroma 当前已索引 30 条 enriched 商品，其中美妆 25 条、服饰 5 条；数码和食品仍未进入 enriched。
 

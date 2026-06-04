@@ -195,8 +195,9 @@ python3 scripts/scan_secrets.py --all
 - `RetrievalTrace` 已显式输出 `metadata_filter`、`filter_summary` 和 `ranking_signals`，便于解释过滤和排序过程。
 - Graph-aware relation score 已有第一版：运行时派生 category、sub_category、budget、facet、preference 关系，并以小权重参与 rerank。
 - 图片输入、语音、购物车、下单不在当前版本。
-- 用户反馈闭环和更细 groundedness judge 是下一阶段增强项。
-- Guardrail 是规则版，不是完整 groundedness judge。
+- Evidence-aware fallback 已有第一版：兜底回答会引用商品资料、官方 FAQ、用户评价和“资料未说明/不能保证”边界。
+- 用户反馈闭环和更细 claim-level groundedness judge 是下一阶段增强项。
+- Guardrail / fallback 是规则版，不是完整 groundedness judge。
 
 ## Recommended Reading Order
 

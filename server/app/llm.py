@@ -31,9 +31,10 @@ async def stream_answer(
     context: str,
     cards: list[ProductCard],
 ):
+    guardrail_user_context = _compose_guardrail_user_context(user_message, history)
     if settings.mock_llm or not settings.ark_api_key or not settings.ark_model:
         logger.info("Streaming mock LLM response")
-        async for token in _stream_text(_mock_answer(user_message, cards)):
+        async for token in _stream_text(_mock_answer(guardrail_user_context, cards)):
             yield token
         return
 
@@ -49,12 +50,12 @@ async def stream_answer(
     except Exception as exc:
         logger.warning("Ark response failed; falling back to grounded local answer: %s", exc)
         raw_answer = ""
-    guardrail = guard_answer(raw_answer, user_message=user_message, cards=cards)
+    guardrail = guard_answer(raw_answer, user_message=guardrail_user_context, cards=cards)
     if not guardrail.passed:
         logger.warning("LLM answer blocked by generation guardrails: %s", guardrail.issues)
         guardrail = await _try_repair_answer(
             settings=settings,
-            user_message=user_message,
+            user_message=guardrail_user_context,
             context=context,
             cards=cards,
             raw_answer=raw_answer,
@@ -168,6 +169,16 @@ def _mock_answer(user_message: str, cards: list[ProductCard]) -> str:
     if "护肤品" in user_message and not any(word in user_message for word in ["油皮", "干皮", "敏感", "预算", "防晒", "修护"]):
         return "我可以先帮你缩小范围：你更在意肤质适配、预算，还是防晒/修护/控油这类具体功效？"
     return build_safe_answer(cards, user_message=user_message)
+
+
+def _compose_guardrail_user_context(user_message: str, history: list[ChatMessage]) -> str:
+    user_turns = [
+        item.content
+        for item in history[-6:]
+        if item.role == "user" and item.content.strip()
+    ]
+    user_turns.append(user_message)
+    return "\n".join(user_turns)
 
 
 async def _stream_text(text: str) -> AsyncIterator[str]:

@@ -914,7 +914,7 @@ def _to_card(item: dict, query: str) -> ProductCard:
         cautions=_string_list(attrs.get("cautions", [])),
         suitable_for=_string_list(attrs.get("suitable_for", [])),
         avoid_for=_string_list(attrs.get("avoid_for", [])),
-        description=knowledge.get("marketing_description", ""),
+        description=_knowledge_text(knowledge),
     )
 
 
@@ -922,6 +922,27 @@ def _string_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [str(item) for item in value if str(item).strip()]
+
+
+def _knowledge_text(knowledge: dict) -> str:
+    parts: list[str] = []
+    marketing_description = knowledge.get("marketing_description", "")
+    if marketing_description:
+        parts.append(str(marketing_description))
+    for item in knowledge.get("official_faq", []):
+        if not isinstance(item, dict):
+            continue
+        question = str(item.get("question", "")).strip()
+        answer = str(item.get("answer", "")).strip()
+        if question or answer:
+            parts.append(f"官方FAQ：{question} {answer}".strip())
+    for item in knowledge.get("user_reviews", []):
+        if not isinstance(item, dict):
+            continue
+        content = str(item.get("content", "")).strip()
+        if content:
+            parts.append(f"用户评价：{content}")
+    return "\n".join(parts)
 
 
 def _context_block(item: dict) -> str:
@@ -942,5 +963,5 @@ def _context_block(item: dict) -> str:
 品类属性: {category_attrs}
 变体维度: {variants}
 证据来源: {source}
-商品资料: {knowledge.get('marketing_description', '')}
+商品资料: {_knowledge_text(knowledge)}
 """

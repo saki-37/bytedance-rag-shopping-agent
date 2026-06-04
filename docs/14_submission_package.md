@@ -32,11 +32,11 @@
 | 商品详情弹窗 | 已完成 | Demo 录屏、`docs/11_evaluation_report.md` |
 | 真实 Doubao 接入 | 已完成第一版 | `docs/11_evaluation_report.md` |
 | RAG 检索 trace | 已完成 V1 | `docs/08_rag_retrieval_strategy.md`、`docs/10_architecture.md` |
-| 反幻觉 guardrail | 已完成 V1 | `docs/11_evaluation_report.md`、`server/app/guardrails.py` |
+| 反幻觉 guardrail / evidence-aware fallback | 已完成 V1+ | `docs/11_evaluation_report.md`、`server/app/guardrails.py` |
 | Golden query 评测 | 已完成第一轮 | `scripts/run_golden_queries.py`、`docs/11_evaluation_report.md` |
 | 子类 query 评测 | 已完成第一轮 | `scripts/run_subcategory_queries.py`、`docs/11_evaluation_report.md` |
 | 多商品对比 | 已完成第一版 | `scripts/run_comparison_queries.py`、`docs/11_evaluation_report.md` |
-| Groundedness 陷阱评测 | 已完成检索层第一版 | `data/eval/groundedness_cases.json`、`scripts/run_groundedness_cases.py`、`docs/11_evaluation_report.md` |
+| Groundedness 陷阱评测 | 已完成生成层第一版 | `data/eval/groundedness_cases.json`、`scripts/run_groundedness_cases.py`、`docs/11_evaluation_report.md` |
 | 依赖版本与复现说明 | 已完成 | `docs/20_reproducibility_and_dependencies.md` |
 
 ## 评分点对照
@@ -45,8 +45,8 @@
 | --- | --- | --- |
 | 基础功能完整性 | Android -> FastAPI -> RAG -> Doubao -> SSE -> 商品卡片 | 第一版真实模型端到端闭环已跑通 |
 | 工程质量 | monorepo、API 契约、架构文档、安全配置、评测脚本、依赖复现说明 | README 已作为提交入口；`docs/` 可支撑复盘和答辩 |
-| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness retrieval-only、guardrail、真实 probe | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框 |
-| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、移动端流式体验 | 下一阶段可继续做反馈闭环或 evidence-aware fallback |
+| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only、guardrail、真实 probe | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框 |
+| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、移动端流式体验 | 下一阶段可继续做反馈闭环或真实 Doubao failure case 沉淀 |
 
 ## Demo 讲解顺序
 
@@ -113,6 +113,7 @@ server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 server/.venv/bin/python scripts/run_conversation_cases.py
 server/.venv/bin/python scripts/run_comparison_queries.py --require-vector
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm
 PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm --retrieval-only
 server/.venv/bin/python scripts/check_generation_guardrails.py
 ```
@@ -160,6 +161,6 @@ git diff --check
 
 ## 下一阶段建议
 
-1. 给生成层增加 evidence-aware fallback，让兜底回答更具体地引用证据和“资料未说明”边界。
-2. 增加用户反馈按钮或 debug 反馈接口，沉淀失败 query 和推荐修正记录。
+1. 增加用户反馈按钮或 debug 反馈接口，沉淀失败 query 和推荐修正记录。
+2. 用真实 Doubao 对长对话、商业陷阱和安全边界做小批量复验，继续沉淀 failure cases。
 3. 最终提交前按 `docs/20_reproducibility_and_dependencies.md` 跑一轮复现检查，并确认 Demo 录屏没有敏感信息。

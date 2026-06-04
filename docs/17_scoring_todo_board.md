@@ -18,7 +18,7 @@
 | --- | --- | --- | --- |
 | 基础功能完整性 | 稳定可拿 | Android -> FastAPI -> RAG -> Doubao/Mock -> SSE -> 商品卡片；图片和详情弹窗已跑通 | 录屏可更干净；最终演示前再人工复验一次 |
 | 工程质量 | 基本可拿 | monorepo、README、API 契约、架构文档、评测报告、安全配置、密钥扫描、依赖版本与复现说明 | 最终提交前按复现检查表再跑一轮 |
-| 效果与可靠性 | 第一版可拿，仍值得补强 | golden、subcategory、apparel、comparison、conversation、groundedness retrieval-only benchmark；guardrail；RetrievalTrace；graph relation score | 生成层 evidence-aware fallback 和真实 Doubao failure cases 还可以继续沉淀 |
+| 效果与可靠性 | 第一版可拿，证据更完整 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only 11/11；guardrail；RetrievalTrace；graph relation score；evidence-aware fallback | 真实 Doubao failure cases 和 claim-level judge 还可以继续沉淀 |
 | 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema 和服饰样例 | 反馈闭环还没做；多模态/购物车不建议作为主线 |
 
 ## 能确认已经完成的点
@@ -42,10 +42,11 @@
 | Step 0 | 提交当前采分表和待办看板 | 固定方向盘，避免后续继续口头漂移 | `17_scoring_todo_board.md`、`18_official_scoring_checklist.md` 已提交 |
 | Step 1 | Groundedness / 反编造 Benchmark | 把“不能编造”从原则变成可回归证据 | 已新增 groundedness cases 和脚本；retrieval-only 11/11 PASS |
 | Step 2 | 依赖版本 / 复现说明表 | 补工程质量里的复现友好度 | 已新增 `docs/20_reproducibility_and_dependencies.md`，集中说明 Android/Python/Chroma/模型配置与复现检查 |
-| Step 3 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 后端或 debug 入口能记录 feedback JSONL |
-| Step 4 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | 文档状态已收口；最终提交前再做复现检查、Demo 检查和 secret scan |
+| Step 3 | Evidence-aware fallback | 让安全兜底回答也能引用商品证据和资料边界 | 已完成第一版；groundedness full mock 11/11 PASS |
+| Step 4 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 后端或 debug 入口能记录 feedback JSONL |
+| Step 5 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | 文档状态已收口；最终提交前再做复现检查、Demo 检查和 secret scan |
 
-当前状态：**文档状态收口已完成，正在选择下一条代码主线**。候选是 `evidence-aware fallback` 和 `轻量反馈闭环`；如果只求稳，先做最终复现检查也可以。
+当前状态：**evidence-aware fallback 已完成第一版**。下一条代码主线可以在 `轻量反馈闭环`、真实 API 抽样复验、最终 Demo 安全检查之间选择；如果只求稳，先做最终复现检查也可以。
 
 ### P0：提交材料收口
 
@@ -91,7 +92,7 @@ scripts/run_groundedness_cases.py
 - 初跑结果：mock 全链路 2/11 PASS，retrieval-only 7/11 PASS；真实 Ark / Doubao 抽样 2/2 PASS。
 - 2026-06-03 复跑：runner 已对齐 Android 商品卡 history，补了预算 `放到300`、补充语延续、`香精` 排除和商品/品牌别名引用；retrieval-only 提升到 9/11 PASS。
 - 已修正 `p_beauty_007` / `p_beauty_012` 价格证据和预算期望，并补上“控油精华 -> 修护面霜”的轻量意图切换规则；retrieval-only 进一步达到 11/11 PASS。
-- 当前位置：检索层已经能稳定证明“不乱召回、不乱放宽约束”；下一步如果继续补可靠性，应优先做 evidence-aware fallback 或相似替代推荐，而不是继续扩 case 数量。
+- 当前位置：检索层和 mock 生成层都已能稳定证明“不乱召回、不乱放宽约束、兜底回答引用证据边界”；下一步如果继续补可靠性，应优先做真实 Doubao failure case 沉淀、claim-level judge 或相似替代推荐，而不是继续扩 case 数量。
 
 ### P2：轻量反馈闭环
 
@@ -106,7 +107,7 @@ scripts/run_groundedness_cases.py
 优先级判断：
 
 - 它是贴近官方“质量评测与反馈闭环”的加分项。
-- 但它不是唯一下一步；如果想优先补可靠性，可以先做生成层 evidence-aware fallback。
+- 但它不是唯一下一步；生成层 evidence-aware fallback 已完成第一版，如果继续补可靠性，可以转向真实 Doubao 抽样或 claim-level judge。
 
 ### P3：暂不作为主线
 

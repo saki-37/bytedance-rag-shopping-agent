@@ -156,7 +156,7 @@ Doubao 生成层遵循 evidence-bound 设计：
 3. 后端先收集完整模型回答，再做 guardrail 校验。
 4. 如果校验失败：
    - 有真实模型和候选商品时，先尝试二次改写。
-   - 二次改写仍失败或模型不可用时，返回基于商品卡片的安全兜底回答。
+   - 二次改写仍失败或模型不可用时，返回基于商品卡片、官方 FAQ 和用户评价的 evidence-aware 安全兜底回答。
 
 当前 guardrail 覆盖：
 
@@ -164,6 +164,7 @@ Doubao 生成层遵循 evidence-bound 设计：
 - 库存、优惠、下单承诺。
 - 空回答。
 - 无证据的“不含/不会刺激/无酒精”等绝对断言。
+- 兜底回答会尽量引用数据源价格、卖点、使用场景、无添加证据、用户评价边界，以及“资料未说明/不能保证”的保守表达。
 
 这个设计的核心取舍是：
 
@@ -224,9 +225,9 @@ SSE 事件：
 
 1. 主线仍是美妆文字导购，不包含图片输入、语音、购物车或下单。
 2. enriched 数据已覆盖完整 25 条美妆商品和 5 条服饰运动样例，但当前 Android 演示主线仍以美妆垂类为主。
-3. Guardrail 是规则版，不是完整 groundedness judge。
+3. Guardrail 和 evidence-aware fallback 是规则版，不是完整 groundedness judge。
 4. Chroma 当前作为轻量向量召回通道，已使用统一 `products` collection 和 metadata filter；还没有做 embedding 模型对比 benchmark。
-5. Graph-aware retrieval、多商品对比和反馈闭环还没有进入主链路。
+5. Graph-aware retrieval 和多商品对比已进入主链路；反馈闭环还没有进入主链路。
 
 ## 后续演进
 
@@ -234,7 +235,7 @@ SSE 事件：
 
 1. 用 25 条美妆数据抽样复验 Android 端展示和推荐稳定性。
 2. 把更多真实模型 failure cases 沉淀到 guardrail / benchmark。
-3. 补一个轻量多商品对比能力，增强导购“决策辅助”感。
+3. 补一个轻量反馈闭环，增强“质量评测与迭代”证据。
 4. 继续同步 README、评测记录和提交材料。
 
 ### V2 增强
