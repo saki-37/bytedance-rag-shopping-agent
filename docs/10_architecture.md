@@ -93,6 +93,13 @@ flowchart TD
 - `retrieval.py`：意图解析、硬过滤、多路召回、排序和 trace。
 - `embeddings.py`：sentence-transformer embedding。
 
+Trace 设计边界：
+
+- `RetrievalTrace` 是后端记录的工程证据，不是 LLM chain-of-thought。
+- `constraint_trace` 记录当前轮、历史继承、放宽项和最终生效约束，用于解释多轮检索状态。
+- `safety_trace` 记录过敏、孕期、敏感肌、排除条件、绝对安全承诺等风险边界。
+- `source_trace` 记录商品事实、结构化属性、官方 FAQ 和用户评价来源，帮助区分“资料支持”与“仅来自评价/需要谨慎表达”。
+
 ## 数据层
 
 当前数据分三层：

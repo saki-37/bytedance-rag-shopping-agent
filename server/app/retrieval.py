@@ -3,10 +3,12 @@ import io
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from app.data_loader import CATEGORY_TO_CANONICAL, product_search_text
 from app.embeddings import sentence_model
 from app.models import (
+    ConstraintTrace,
     FilteredProduct,
     GuardrailChecks,
     ProductCard,
@@ -14,6 +16,9 @@ from app.models import (
     RetrievalChannels,
     RetrievalHit,
     RetrievalTrace,
+    SafetyTrace,
+    SourceClaim,
+    SourceTrace,
     UniversalConstraints,
 )
 
@@ -328,6 +333,8 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
             query=query,
             parsed_intent=intent,
             guardrail_checks=GuardrailChecks(needs_clarification=True),
+            constraint_trace=_constraint_trace_from_intent(intent),
+            safety_trace=_safety_trace(query, intent),
         )
         return RetrievalResult(
             cards=[],
@@ -439,6 +446,8 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
                 excluded_term_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("matches excluded")),
                 needs_clarification=True,
             ),
+            constraint_trace=_constraint_trace_from_intent(intent),
+            safety_trace=_safety_trace(query, intent),
         )
         return RetrievalResult(
             cards=[],
@@ -474,8 +483,127 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
             excluded_term_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("matches excluded")),
             needs_clarification=False,
         ),
+        constraint_trace=_constraint_trace_from_intent(intent),
+        safety_trace=_safety_trace(query, intent),
+        source_trace=_source_trace(selected),
     )
     return RetrievalResult(cards=cards, context=context, trace=trace)
+
+
+def _constraint_trace_from_intent(intent: QueryIntent) -> ConstraintTrace:
+    current_turn = _constraints_from_intent(intent)
+    return ConstraintTrace(
+        current_turn=current_turn,
+        inherited={},
+        relaxed=[],
+        effective=current_turn,
+        actions=[],
+    )
+
+
+def _constraints_from_intent(intent: QueryIntent) -> dict[str, object]:
+    constraints: dict[str, object] = {}
+    if intent.category_candidates:
+        constraints["category_candidates"] = intent.category_candidates
+    if intent.referenced_product_ids:
+        constraints["referenced_product_ids"] = intent.referenced_product_ids
+    if intent.universal_constraints.budget_max is not None:
+        constraints["budget_max"] = intent.universal_constraints.budget_max
+    if intent.facets:
+        constraints["facets"] = intent.facets
+    if intent.exclude_terms:
+        constraints["exclude_terms"] = intent.exclude_terms
+    if intent.soft_preferences:
+        constraints["soft_preferences"] = intent.soft_preferences
+    if intent.comparison_mode:
+        constraints["comparison_mode"] = True
+    return constraints
+
+
+def _safety_trace(query: str, intent: QueryIntent) -> SafetyTrace:
+    risks: list[str] = []
+    boundaries: list[str] = []
+    if any(term in query for term in ["过敏", "不耐受", "烂脸"]):
+        risks.append("allergy_or_intolerance")
+        boundaries.append("不能保证不过敏；只能按商品资料提示风险，并建议先做局部测试。")
+    if any(term in query for term in ["孕妇", "孕期", "怀孕", "哺乳"]):
+        risks.append("pregnancy_or_lactation")
+        boundaries.append("涉及孕期/哺乳期时不能替代医生或专业人士建议。")
+    if any(term in query for term in ["敏感肌", "屏障", "泛红", "刺痛"]):
+        risks.append("sensitive_skin_or_barrier")
+        boundaries.append("敏感肌相关回答需保守，避免绝对安全和资料外功效承诺。")
+    if intent.exclude_terms:
+        risks.append("exclusion_constraints")
+        boundaries.append("排除条件只能按商品资料和风险词过滤；没有明确证据时不能声称不含。")
+    if any(term in query for term in ["保证", "绝对", "一定不会", "不会过敏", "肯定安全"]):
+        risks.append("absolute_safety_claim")
+        boundaries.append("必须避免绝对安全、治疗和确定性结果承诺。")
+
+    risk_level: Literal["low", "medium", "high"] = "low"
+    if any(risk in risks for risk in ["allergy_or_intolerance", "pregnancy_or_lactation", "absolute_safety_claim"]):
+        risk_level = "high"
+    elif risks:
+        risk_level = "medium"
+    return SafetyTrace(
+        triggered_risks=list(dict.fromkeys(risks)),
+        required_boundaries=list(dict.fromkeys(boundaries)),
+        risk_level=risk_level,
+    )
+
+
+def _source_trace(items: list[dict]) -> SourceTrace:
+    supported_claims: list[SourceClaim] = []
+    review_only_claims: list[SourceClaim] = []
+    for item in items:
+        raw = item["raw"]
+        product_id = str(raw["product_id"])
+        supported_claims.extend(
+            [
+                SourceClaim(claim=f"品牌：{raw.get('brand', '')}", source="raw.brand", product_id=product_id),
+                SourceClaim(claim=f"价格：{raw.get('base_price', '')}", source="raw.base_price", product_id=product_id),
+                SourceClaim(
+                    claim=f"类目：{raw.get('category', '')}/{raw.get('sub_category', '')}",
+                    source="raw.category",
+                    product_id=product_id,
+                ),
+            ]
+        )
+        attrs = item.get("attributes", {})
+        for field_name, source_name in [
+            ("tags", "attributes.tags"),
+            ("selling_points", "attributes.selling_points"),
+            ("cautions", "attributes.cautions"),
+            ("suitable_for", "attributes.suitable_for"),
+            ("avoid_for", "attributes.avoid_for"),
+        ]:
+            for value in _limited_strings(attrs.get(field_name, []), limit=3):
+                supported_claims.append(SourceClaim(claim=value, source=source_name, product_id=product_id))
+
+        knowledge = raw.get("rag_knowledge", {})
+        for item_faq in knowledge.get("official_faq", [])[:2]:
+            if not isinstance(item_faq, dict):
+                continue
+            answer = str(item_faq.get("answer", "")).strip()
+            if answer:
+                supported_claims.append(SourceClaim(claim=answer, source="rag_knowledge.official_faq", product_id=product_id))
+        for review in knowledge.get("user_reviews", [])[:2]:
+            if not isinstance(review, dict):
+                continue
+            content = str(review.get("content", "")).strip()
+            if content:
+                review_only_claims.append(SourceClaim(claim=content, source="rag_knowledge.user_reviews", product_id=product_id))
+
+    return SourceTrace(
+        supported_claims=supported_claims[:40],
+        review_only_claims=review_only_claims[:20],
+        unsupported_claims=[],
+    )
+
+
+def _limited_strings(value: object, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value[:limit] if str(item).strip()]
 
 
 def _apply_catalog_product_references(intent: QueryIntent, query: str, products: list[dict]) -> None:

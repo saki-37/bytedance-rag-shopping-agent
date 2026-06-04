@@ -120,6 +120,9 @@ def run_case(case: dict[str, Any], client: Any) -> dict[str, Any]:
                 "graph_hits_count": len(debug["trace"]["retrieval_channels"]["graph"]),
                 "graph_hits": debug["trace"]["retrieval_channels"]["graph"],
                 "guardrail_checks": debug["trace"]["guardrail_checks"],
+                "constraint_trace": debug["trace"].get("constraint_trace", {}),
+                "safety_trace": debug["trace"].get("safety_trace", {}),
+                "source_trace": debug["trace"].get("source_trace", {}),
             }
         )
         product_ids = [product["product_id"] for product in debug["products"]]

@@ -12,7 +12,7 @@ from app.conversation_state import build_retrieval_message
 from app.data_loader import load_enriched_products, load_raw_products
 from app.feedback import save_feedback
 from app.llm import stream_answer
-from app.models import ChatRequest, FeedbackRequest, FeedbackResponse, HealthResponse
+from app.models import ChatRequest, ConstraintTrace, FeedbackRequest, FeedbackResponse, HealthResponse
 from app.retrieval import retrieve
 
 settings = get_settings()
@@ -47,6 +47,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             retrieval_build = build_retrieval_message(request)
             retrieval_message = retrieval_build.message
             result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
+            _attach_conversation_trace(result.trace, retrieval_build.trace)
             yield _event("products", {"products": [card.model_dump() for card in result.cards]})
             yield _event("status", {"status": "generating"})
             if result.clarification_question:
@@ -73,6 +74,7 @@ def debug_retrieve(request: ChatRequest) -> dict:
     retrieval_build = build_retrieval_message(request)
     retrieval_message = retrieval_build.message
     result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
+    _attach_conversation_trace(result.trace, retrieval_build.trace)
     return {
         "retrieval_message": retrieval_message,
         "conversation_state": retrieval_build.trace,
@@ -95,3 +97,9 @@ async def _stream_text(text: str) -> AsyncIterator[str]:
     for char in text:
         yield char
         await asyncio.sleep(0.005)
+
+
+def _attach_conversation_trace(retrieval_trace, conversation_trace: dict) -> None:
+    constraint_trace = conversation_trace.get("constraint_trace")
+    if constraint_trace:
+        retrieval_trace.constraint_trace = ConstraintTrace(**constraint_trace)

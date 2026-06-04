@@ -294,6 +294,9 @@ server/.venv/bin/python scripts/run_comparison_queries.py \
 | `metadata_filter` | 传给 Chroma `products` collection 的 metadata filter | `{"canonical_category": "beauty"}` |
 | `filter_summary` | 后端硬过滤原因计数 | `{"category": 5, "required_effect": 16}` |
 | `ranking_signals` | 每个最终商品的排序信号分桶 | `keyword`、`vector`、`facet`、`budget`、`soft_preference` |
+| `constraint_trace` | 当前轮约束、历史继承约束、放宽项和最终生效约束 | `relaxed=["budget_max"]`，同时 `exclude_terms` 仍保留 |
+| `safety_trace` | 过敏、孕期、敏感肌、排除条件、绝对安全承诺等风险边界 | `risk_level="high"` |
+| `source_trace` | 商品事实、结构化属性、官方 FAQ、用户评价来源 | `supported_claims` / `review_only_claims` |
 
 当前已覆盖的输出：
 
@@ -302,6 +305,7 @@ server/.venv/bin/python scripts/run_comparison_queries.py \
 3. `scripts/run_subcategory_queries.py` 输出 JSONL。
 4. `scripts/run_comparison_queries.py` 输出 JSONL。
 5. `scripts/run_conversation_cases.py` 输出 JSONL。
+6. `scripts/run_groundedness_cases.py` 输出 JSONL。
 
 复验命令：
 
@@ -738,9 +742,9 @@ Failure case 初步归因：
 ## 下一步
 
 1. 先升级 groundedness judge：硬字符串筛查 + 同义 claim + 语义/证据核验。
-2. 增加内部 `constraint_trace` / `safety_trace` / `source_trace`，让多轮继承、风险边界和强效果描述可解释。
+2. 继续加固真实生成层：repair prompt、guardrail、answer composer 分层处理，减少资料外承诺。
 3. 给所有 benchmark 追加 AI 语义复核脚本，避免只看关键词匹配。
-4. 再修真实生成层稳定性：repair prompt、guardrail、answer composer 分层处理。
+4. 跑真实 API 回归并追加 AI 复核，确认修复后不是只在 mock 下稳定。
 5. 给真实 API runner 增加 `--repeat`、per-turn timeout、三轮汇总和语义复核字段。
 6. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
 7. 扩展多商品对比到更多品类和更复杂约束。
@@ -763,3 +767,29 @@ Failure case 初步归因：
 | 全量 groundedness mock + mock AI review | 11/11 PASS |
 
 这一步解决的是“确定性 judge 太脆”的第一层问题；真实 API 生成层是否仍有资料外承诺，需要在 P0-4 真实 API 回归中继续验证。
+
+## P0-2 内部 Trace 分层
+
+本轮完成内部 trace 的第一批分层：
+
+- `RetrievalTrace` 新增 `constraint_trace`、`safety_trace`、`source_trace`。
+- `constraint_trace` 由后端规则状态生成，记录当前轮条件、历史继承条件、放宽项和最终生效条件；它是系统证据，不是 LLM CoT。
+- `safety_trace` 由 query / intent 触发，记录敏感肌、过敏/不耐受、孕期/哺乳期、排除条件和绝对安全承诺风险。
+- `source_trace` 从召回商品生成，区分 raw 商品事实、结构化属性、官方 FAQ 和用户评价。
+- `/api/debug/retrieve` 的最终 `trace` 会合并 conversation-state 约束 trace；groundedness / conversation / golden / subcategory / comparison runner 的 JSONL 都会输出三层 trace。
+
+验证结果：
+
+| 检查 | 结果 |
+| --- | --- |
+| 代表 case `GRD-04`、`GRD-L01` mock groundedness | PASS |
+| 全量 groundedness mock | 11/11 PASS |
+| conversation regression | 6/6 PASS |
+
+抽查结论：
+
+- `GRD-04` 第二轮和 `GRD-L01` 第四轮均记录 `relaxed=["budget_max"]`。
+- 同一 trace 的 `effective.exclude_terms` 仍保留 `酒精`、`刺激` 或 `酒精`、`香精`、`刺激`。
+- 用户提出“保证不过敏”等高风险诉求时，`safety_trace.risk_level` 会提升为 `high`。
+
+这一步解决的是“系统实际继承了哪些约束、哪些风险边界被触发、强 claim 能追到哪些资料来源”的可解释性问题。下一步仍然是 P0-3：继续加固真实 Doubao 输出层，减少资料外承诺和绝对安全说法。

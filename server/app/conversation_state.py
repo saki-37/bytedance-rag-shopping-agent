@@ -82,19 +82,27 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
         if item.role == "user" and item.content.strip()
     ]
     current_message = request.message.strip()
+    current_intent = parse_query_intent(current_message)
     if not previous_user_messages:
         return RetrievalMessageBuildResult(
             message=current_message,
             applied=False,
-            trace={"applied": False, "reason": "no_history"},
+            trace={
+                "applied": False,
+                "reason": "no_history",
+                "constraint_trace": _constraint_trace_from_intent(current_intent),
+            },
         )
 
-    current_intent = parse_query_intent(current_message)
     if not _is_follow_up(current_message, current_intent):
         return RetrievalMessageBuildResult(
             message=current_message,
             applied=False,
-            trace={"applied": False, "reason": "current_turn_is_self_contained"},
+            trace={
+                "applied": False,
+                "reason": "current_turn_is_self_contained",
+                "constraint_trace": _constraint_trace_from_intent(current_intent),
+            },
         )
 
     state = RuleConversationState()
@@ -118,6 +126,7 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
             "reason": "rule_only_state_merge",
             "source_user_turns": len(previous_user_messages[-4:]) + 1,
             "state": _state_trace(state),
+            "constraint_trace": _constraint_trace_from_state(state),
         },
     )
 
@@ -282,6 +291,142 @@ def _state_trace(state: RuleConversationState) -> dict:
         "comparison_mode": state.comparison_mode,
         "actions": state.actions,
     }
+
+
+def _constraint_trace_from_intent(intent: QueryIntent) -> dict:
+    current_turn = _constraints_from_intent(intent)
+    return {
+        "current_turn": current_turn,
+        "inherited": {},
+        "relaxed": [],
+        "effective": current_turn,
+        "actions": [],
+    }
+
+
+def _constraint_trace_from_state(state: RuleConversationState) -> dict:
+    current_actions = [action for action in state.actions if action.startswith("current:")]
+    history_actions = [action for action in state.actions if action.startswith("history:")]
+    current_turn = _constraints_from_actions(current_actions)
+    inherited = _constraints_from_actions(history_actions)
+    relaxed = _relaxed_constraints_from_actions(current_actions)
+    if _budget_was_relaxed(current_turn, inherited) and "budget_max" not in relaxed:
+        relaxed.append("budget_max")
+    return {
+        "current_turn": current_turn,
+        "inherited": inherited,
+        "relaxed": relaxed,
+        "effective": _effective_constraints_from_state(state),
+        "actions": state.actions,
+    }
+
+
+def _constraints_from_intent(intent: QueryIntent) -> dict[str, object]:
+    constraints: dict[str, object] = {}
+    if intent.category_candidates:
+        constraints["category_candidates"] = intent.category_candidates
+    if intent.referenced_product_ids:
+        constraints["referenced_product_ids"] = intent.referenced_product_ids
+    if intent.universal_constraints.budget_max is not None:
+        constraints["budget_max"] = intent.universal_constraints.budget_max
+    if intent.facets:
+        constraints["facets"] = intent.facets
+    if intent.exclude_terms:
+        constraints["exclude_terms"] = intent.exclude_terms
+    if intent.soft_preferences:
+        constraints["soft_preferences"] = intent.soft_preferences
+    if intent.comparison_mode:
+        constraints["comparison_mode"] = True
+    return constraints
+
+
+def _constraints_from_actions(actions: list[str]) -> dict[str, object]:
+    constraints: dict[str, object] = {}
+    facets: dict[str, list[str]] = {}
+    for action in actions:
+        body = action.split(":", 1)[1] if ":" in action else action
+        if body.startswith("set_budget="):
+            constraints["budget_max"] = _parse_float(body.removeprefix("set_budget="))
+        elif body == "relax_budget":
+            constraints["budget_relaxed"] = True
+        elif body == "relax_exclusions":
+            constraints["exclude_terms_relaxed"] = True
+        elif body.startswith("keep_exclusions="):
+            _merge_constraint_values(constraints, "exclude_terms", body.removeprefix("keep_exclusions="))
+        elif body.startswith("reference_products="):
+            _merge_constraint_values(constraints, "referenced_product_ids", body.removeprefix("reference_products="))
+        elif body.startswith(("replace_category=", "merge_category=")):
+            values = body.split("=", 1)[1]
+            _merge_constraint_values(constraints, "category_candidates", values)
+        elif body.startswith("replace_sub_category="):
+            facets["sub_category"] = _split_action_values(body.split("=", 1)[1])
+        elif body.startswith("replace_effect="):
+            facets["effect"] = _split_action_values(body.split("=", 1)[1])
+        elif body.startswith("merge_") and "=" in body:
+            facet_name, values = body.split("=", 1)
+            facet_name = facet_name.removeprefix("merge_")
+            if facet_name in FACET_LABELS:
+                bucket = facets.setdefault(facet_name, [])
+                _append_unique(bucket, _split_action_values(values))
+    if facets:
+        constraints["facets"] = facets
+    return {key: value for key, value in constraints.items() if value not in (None, [], {})}
+
+
+def _relaxed_constraints_from_actions(actions: list[str]) -> list[str]:
+    relaxed: list[str] = []
+    if any(action.endswith(":relax_budget") for action in actions):
+        relaxed.append("budget_max")
+    if any(action.endswith(":relax_exclusions") for action in actions):
+        relaxed.append("exclude_terms")
+    return relaxed
+
+
+def _budget_was_relaxed(current_turn: dict[str, object], inherited: dict[str, object]) -> bool:
+    current_budget = current_turn.get("budget_max")
+    inherited_budget = inherited.get("budget_max")
+    if not isinstance(current_budget, (int, float)) or not isinstance(inherited_budget, (int, float)):
+        return False
+    return float(current_budget) > float(inherited_budget)
+
+
+def _effective_constraints_from_state(state: RuleConversationState) -> dict[str, object]:
+    constraints: dict[str, object] = {}
+    if state.category_candidates:
+        constraints["category_candidates"] = state.category_candidates
+    if state.referenced_product_ids:
+        constraints["referenced_product_ids"] = state.referenced_product_ids
+    if state.budget_max is not None:
+        constraints["budget_max"] = state.budget_max
+    elif state.budget_relaxed:
+        constraints["budget_relaxed"] = True
+    if state.facets:
+        constraints["facets"] = state.facets
+    if state.exclude_terms:
+        constraints["exclude_terms"] = state.exclude_terms
+    if state.soft_preferences:
+        constraints["soft_preferences"] = state.soft_preferences
+    if state.comparison_mode:
+        constraints["comparison_mode"] = True
+    return constraints
+
+
+def _merge_constraint_values(constraints: dict[str, object], key: str, raw_values: str) -> None:
+    values = _split_action_values(raw_values)
+    existing = constraints.setdefault(key, [])
+    if isinstance(existing, list):
+        _append_unique(existing, values)
+
+
+def _split_action_values(raw_values: str) -> list[str]:
+    return [value for value in raw_values.split(",") if value]
+
+
+def _parse_float(value: str) -> float | None:
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def _append_unique(target: list[str], values: list[str]) -> None:

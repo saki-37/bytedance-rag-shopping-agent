@@ -76,6 +76,32 @@ class GuardrailChecks(BaseModel):
     needs_clarification: bool = False
 
 
+class ConstraintTrace(BaseModel):
+    current_turn: dict[str, object] = Field(default_factory=dict)
+    inherited: dict[str, object] = Field(default_factory=dict)
+    relaxed: list[str] = Field(default_factory=list)
+    effective: dict[str, object] = Field(default_factory=dict)
+    actions: list[str] = Field(default_factory=list)
+
+
+class SafetyTrace(BaseModel):
+    triggered_risks: list[str] = Field(default_factory=list)
+    required_boundaries: list[str] = Field(default_factory=list)
+    risk_level: Literal["low", "medium", "high"] = "low"
+
+
+class SourceClaim(BaseModel):
+    claim: str
+    source: str
+    product_id: str | None = None
+
+
+class SourceTrace(BaseModel):
+    supported_claims: list[SourceClaim] = Field(default_factory=list)
+    review_only_claims: list[SourceClaim] = Field(default_factory=list)
+    unsupported_claims: list[SourceClaim] = Field(default_factory=list)
+
+
 class RetrievalTrace(BaseModel):
     query: str
     parsed_intent: QueryIntent
@@ -86,6 +112,9 @@ class RetrievalTrace(BaseModel):
     final_ranking: list[RetrievalHit] = Field(default_factory=list)
     ranking_signals: dict[str, dict[str, list[str]]] = Field(default_factory=dict)
     guardrail_checks: GuardrailChecks = Field(default_factory=GuardrailChecks)
+    constraint_trace: ConstraintTrace = Field(default_factory=ConstraintTrace)
+    safety_trace: SafetyTrace = Field(default_factory=SafetyTrace)
+    source_trace: SourceTrace = Field(default_factory=SourceTrace)
 
 
 class HealthResponse(BaseModel):

@@ -156,6 +156,9 @@ def evaluate(case: dict[str, Any], debug: dict[str, Any], require_vector: bool) 
         "graph_hits_count": graph_hits_count,
         "graph_hits": trace["retrieval_channels"]["graph"],
         "guardrail_checks": trace["guardrail_checks"],
+        "constraint_trace": trace.get("constraint_trace", {}),
+        "safety_trace": trace.get("safety_trace", {}),
+        "source_trace": trace.get("source_trace", {}),
     }
 
 
