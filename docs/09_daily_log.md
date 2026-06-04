@@ -82,3 +82,4 @@
 - 修复真实 API 批量复验后的 `AsyncOpenAI` 客户端清理噪声：`_collect_ark_answer` 和 `_collect_ark_repair` 结束时显式 `await client.close()`。
 - 更新 `docs/11_evaluation_report.md`、`docs/17_scoring_todo_board.md` 和 `docs/18_official_scoring_checklist.md`，把下一步主线收敛为“先修真实生成层稳定性”，而不是继续扩 benchmark 数量。
 - 调整测试默认口径：代码和 `.env.example` 默认 `MOCK_LLM=false`；后续生成质量评测默认按真实 API generation 理解，mock / retrieval-only 只作为显式离线或结构检查。
+- 新增 `docs/21_groundedness_case_analysis.md`，逐条分析 11 个 groundedness case 的真实 API 三轮表现，区分稳定通过、硬字符串误判、真实边界表达缺失和资料外承诺风险。

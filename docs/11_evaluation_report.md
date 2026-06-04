@@ -711,6 +711,8 @@ Groundedness 三轮明细：
 3. 后置 guardrail 多次成功拦截真实模型输出；`GRD-07` 三轮稳定 PASS 说明商业承诺兜底有效。
 4. 当前 groundedness runner 的 `answer_must_contain` 是硬字符串检查，可能会把“语义上合格但没包含指定词”的回答判 FAIL；但三轮稳定 FAIL 仍说明真实生成层不够可控，需要更强的模板化边界表达或 claim-level judge。
 
+逐条 case 分析见 `docs/21_groundedness_case_analysis.md`。该文档把 11 个 case 分成稳定通过、评测器硬字符串误判、真实生成边界缺失和资料外承诺风险四类，并给出对应修复方向。
+
 Failure case 初步归因：
 
 | 类型 | 代表 case | 现象 | 初步判断 |
