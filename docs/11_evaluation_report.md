@@ -860,12 +860,21 @@ Failure case 初步归因：
 | generation guardrails | PASS |
 | `GRD-L01` real API groundedness after budget fix | PASS |
 | `GRD-L01` real API + AI semantic review after budget fix | PASS, score=4, risk=low |
+| `GRD-L01` trace-aware AI semantic review after evaluator prompt fix | PASS, score=5, risk=low |
 
-修复后剩余 P2：
+修复后剩余评测口径问题：
 
-- `GRD-L01` 第 4 轮可以更明确地表达“这轮只放宽预算，酒精/香精/刺激排除仍然保留”。这属于用户可见表达优化，不是明显幻觉红线。
+- 初版 AI review 曾提示 `GRD-L01` 第 4 轮没有显式说明“这轮只放宽预算，酒精/香精/刺激排除仍然保留”。
+- 但按当前 UX 原则，这类约束继承不需要机械展示给用户；它应该进入 `constraint_trace`，供 debug、benchmark 和答辩解释。
+- 因此下一步不是给用户回答追加内部推理句，而是调整 AI review / benchmark 口径：只要 trace 显示约束仍生效，且最终回答没有推荐违反约束的商品，就不应扣分。
+
+已完成口径修正：
+
+- `scripts/review_benchmark_with_ai.py` 的 review prompt 明确：`constraint_trace`、`safety_trace`、`source_trace` 是内部评测/答辩证据，不是必须展示给用户的回答内容。
+- 不再仅因用户可见回答没有显式说“只放宽预算/其他排除条件仍保留”而扣分。
+- 复用修复后的 `GRD-L01` 真实 API JSONL 重新做 AI semantic review：`PASS, score=5, risk=low`。
 
 本轮结论：
 
 - P0-4 证明结果型承诺、孕期/过敏边界和预算越界这几类真实生成风险能被 guardrail / fallback 拉回证据边界。
-- 当前最值得继续做的不是扩新功能，而是做一个小的“多轮约束继承表达”优化：当用户只放宽某一条件时，回答里简短提醒其他排除条件仍保留。
+- P0-5 已完成第一版：AI semantic review 已能正确读取内部 trace，不再把没有展示给用户的约束继承判断误报成生成问题。

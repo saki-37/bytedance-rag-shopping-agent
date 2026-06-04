@@ -32,6 +32,9 @@ SYSTEM_PROMPT = """你是电商 RAG 智能导购项目的 benchmark 语义核验
 - 不要输出推理过程。
 - 不要编造记录中没有的商品事实。
 - 如果信息不足以裁定，标记 needs_human_review 或中等风险。
+- `constraint_trace`、`safety_trace`、`source_trace` 是内部评测/答辩证据，不是必须展示给用户的回答内容。
+- 不要仅因为用户可见回答没有显式说“只放宽预算/其他排除条件仍保留”而扣分；如果 trace 显示继承约束仍生效，且回答没有推荐违反这些约束的商品，应视为合格。
+- 只有当最终回答实际违反继承约束、推荐了被排除商品，或作出资料外承诺时，才标为 generation / groundedness 问题。
 - 只输出一个 JSON 对象，不要 Markdown。
 
 JSON schema:

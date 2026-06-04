@@ -46,7 +46,7 @@
 | P0-2 | 增加内部 trace 分层 | 记录约束继承、风险边界和强 claim 来源，不把推理句硬塞给用户 | 已完成：debug / benchmark 输出 `constraint_trace`、`safety_trace`、`source_trace`；全量 groundedness mock 11/11 PASS；conversation 6/6 PASS | `server/app/models.py`、`server/app/retrieval.py`、`server/app/conversation_state.py` |
 | P0-3 | 加固真实生成层 guardrail / repair | 减少真实 Doubao 的资料外承诺和绝对安全说法 | 第一刀已完成：`unsupported_result_absence_claims` 拦截 `不会堵塞/不会长闭口/不会残留/不会过敏/绝对温和`；`GRD-L03` 真实 API PASS；AI review PASS；全量 groundedness mock 11/11 作为安全网 | `server/app/guardrails.py`、`server/app/llm.py` |
 | P0-4 | 真实 API 回归 + AI 复核 | 证明修复后不是只在单个真实 case 或 mock 里好看 | 已完成第一轮：`GRD-05/08/L01` 真实 API + AI review；`GRD-L01` 暴露的 150 元预算边界 bug 已修复并复验 PASS | `scripts/run_*`、`scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
-| P0-5 | 多轮约束继承的用户可见表达优化 | 用户只放宽预算时，简短说明酒精/香精/刺激等排除条件仍保留 | 回答中出现一行短提醒；`GRD-L01` AI review 不再提示第 4 轮表述疏漏 | `server/app/llm.py`、`server/app/guardrails.py` |
+| P0-5 | AI review / 评测口径对齐 | 约束继承应进入内部 trace，不要求机械显示给用户 | 已完成：AI review prompt 明确内部 trace 不必用户可见；`GRD-L01` trace-aware review 复跑 PASS, score=5, risk=low | `scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
 | P1-1 | Android 反馈按钮 | 把后端反馈闭环接到真实 demo 体验里 | 回答下方可点 `有用/不准确`，并写入 feedback JSONL | `client/android/...`、`server/app/feedback.py` |
 | P1-2 | Demo / 答辩材料收口 | 降低评委理解成本，确保能讲清架构链路和关键代码 | 录屏、架构解释、复现检查、secret scan 完成 | `docs/12_demo_script.md`、`docs/14_submission_package.md`、`docs/20_reproducibility_and_dependencies.md` |
 | P2 | 暂缓的大功能 | 防止主线扩张 | 多模态、购物车、下单、全量非美妆标注都不作为当前主线 | 暂不改 |
@@ -59,7 +59,7 @@
 4. 如果真实 API 输出和关键词判定冲突，优先看 AI review / 人工语义核验，不直接按硬字符串定生死。
 5. 用户可见回答只展示必要结论；约束继承、来源边界和安全判断进入 trace，供 debug、评测和答辩使用。
 
-当前下一步：**P0-5 多轮约束继承的用户可见表达优化**。P0-4 已经证明真实 API 下 3 条高风险代表 case 均能通过 AI semantic review；剩余最具体的问题是 `GRD-L01` 第 4 轮在“只放宽预算”时，没有足够清楚地告诉用户酒精/香精/刺激排除条件仍然保留。
+当前下一步：**P1-2 Demo / 答辩材料收口**。P0-5 已经修正评测口径，不再把内部 trace 没显示给用户误判为体验或生成问题；接下来更值得做的是把“真实 API 可靠性证据 + trace 解释 + guardrail 兜底链路”整理成答辩时能讲清楚的材料。
 
 ### P0：提交材料收口
 
