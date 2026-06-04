@@ -37,15 +37,15 @@
 
 ## 当前执行顺序
 
-当前状态：**基础闭环、evidence-aware fallback、轻量反馈闭环后端、真实 API 三轮复验、AI 语义复核脚本、内部 trace 分层均已有第一版**。下一步不再扩新大功能，而是把“真实回答是否可靠”变成可解释、可复跑、可答辩的证据链。
+当前状态：**基础闭环、evidence-aware fallback、轻量反馈闭环后端、真实 API 三轮复验、AI 语义复核脚本、内部 trace 分层、结果型绝对承诺 guardrail 均已有第一版**。下一步不再扩新大功能，而是把“真实回答是否可靠”变成可解释、可复跑、可答辩的证据链。
 
 | 优先级 | 动作 | 目的 | 完成标志 | 主要文件 |
 | --- | --- | --- | --- | --- |
 | P0-0 | 提交当前 AI review 与文档修正 | 固定新的评测口径，避免后续又回到只看关键词 | `scripts/review_benchmark_with_ai.py` 和相关文档已提交 | `scripts/review_benchmark_with_ai.py`、`docs/11_*`、`docs/17_*`、`docs/18_*`、`docs/20_*`、`docs/21_*` |
 | P0-1 | 升级 groundedness judge | 把硬字符串匹配升级为“确定性初筛 + 同义 claim + source check + AI/人工语义核验” | 第一批已完成：`GRD-01/02/04/L01` 新增 claim 配置；runner 输出 `judge_checks`；全量 mock groundedness 11/11 PASS | `data/eval/groundedness_cases.json`、`scripts/run_groundedness_cases.py`、`scripts/review_benchmark_with_ai.py` |
 | P0-2 | 增加内部 trace 分层 | 记录约束继承、风险边界和强 claim 来源，不把推理句硬塞给用户 | 已完成：debug / benchmark 输出 `constraint_trace`、`safety_trace`、`source_trace`；全量 groundedness mock 11/11 PASS；conversation 6/6 PASS | `server/app/models.py`、`server/app/retrieval.py`、`server/app/conversation_state.py` |
-| P0-3 | 加固真实生成层 guardrail / repair | 减少真实 Doubao 的资料外承诺和绝对安全说法 | 结果型绝对承诺被拦截或改写；supported / unsupported absence claims 分开处理 | `server/app/guardrails.py`、`server/app/llm.py` |
-| P0-4 | 真实 API 回归 + AI 复核 | 证明修复后不是只在 mock 或 retrieval-only 里好看 | golden / groundedness 跑真实 API；每份 JSONL 追加 AI review；报告更新 | `scripts/run_*`、`scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
+| P0-3 | 加固真实生成层 guardrail / repair | 减少真实 Doubao 的资料外承诺和绝对安全说法 | 第一刀已完成：`unsupported_result_absence_claims` 拦截 `不会堵塞/不会长闭口/不会残留/不会过敏/绝对温和`；`GRD-L03` 真实 API PASS；AI review PASS；全量 groundedness mock 11/11 作为安全网 | `server/app/guardrails.py`、`server/app/llm.py` |
+| P0-4 | 真实 API 回归 + AI 复核 | 证明修复后不是只在单个真实 case 或 mock 里好看 | 再选 2-3 条 groundedness 代表 case 跑真实 API；每份 JSONL 追加 AI review；报告更新 | `scripts/run_*`、`scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
 | P1-1 | Android 反馈按钮 | 把后端反馈闭环接到真实 demo 体验里 | 回答下方可点 `有用/不准确`，并写入 feedback JSONL | `client/android/...`、`server/app/feedback.py` |
 | P1-2 | Demo / 答辩材料收口 | 降低评委理解成本，确保能讲清架构链路和关键代码 | 录屏、架构解释、复现检查、secret scan 完成 | `docs/12_demo_script.md`、`docs/14_submission_package.md`、`docs/20_reproducibility_and_dependencies.md` |
 | P2 | 暂缓的大功能 | 防止主线扩张 | 多模态、购物车、下单、全量非美妆标注都不作为当前主线 | 暂不改 |
@@ -58,7 +58,7 @@
 4. 如果真实 API 输出和关键词判定冲突，优先看 AI review / 人工语义核验，不直接按硬字符串定生死。
 5. 用户可见回答只展示必要结论；约束继承、来源边界和安全判断进入 trace，供 debug、评测和答辩使用。
 
-当前下一步：**P0-3 加固真实生成层 guardrail / repair**。P0-2 已经把多轮约束继承、风险边界和来源证据放进内部 trace；后续如果真实 API 复核暴露新的资料外承诺，优先在生成层和 guardrail 修，而不是继续把内部推理句塞进用户可见回答。
+当前下一步：**P0-4 扩到 2-3 条真实 API 代表 case + AI 复核**。`GRD-L03` 已经真实 API PASS，不要再只看 mock；下一步选 `GRD-L01`、`GRD-05`、`GRD-08` 这类高风险 case 做窄回归。
 
 ### P0：提交材料收口
 

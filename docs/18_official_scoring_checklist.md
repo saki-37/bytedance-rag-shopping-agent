@@ -70,7 +70,7 @@
 | --- | --- | --- | --- |
 | 不能用纯 Web / H5 方案替代原生 App | ✅ | Android Kotlin 原生 App | 无明显缺口 |
 | Demo 不能需要大量手动配置 | ✅ | README、`.env.example`、Mock fallback、Demo 脚本和 `docs/20_reproducibility_and_dependencies.md` 已有 | 最终提交前再按检查表跑一轮 |
-| 不能出现明显幻觉 | ◯ | 商品卡来自数据源；guardrail 拦截价格/库存/优惠/下单/部分无证据断言；evidence-aware fallback 已让 groundedness full mock / retrieval-only 达到 11/11；真实 API 三轮复验中商业承诺陷阱稳定 PASS | 真实 Doubao 对成分缺失、刺激/香精/酒精等安全边界和长对话继承仍不稳定，需要继续加固 |
+| 不能出现明显幻觉 | ◯ | 商品卡来自数据源；guardrail 拦截价格/库存/优惠/下单/部分无证据断言；evidence-aware fallback 已让 groundedness full mock / retrieval-only 达到 11/11；P0-3 已补结果型绝对承诺拦截；`GRD-L03` 真实 API + AI review 已 PASS | 仍需扩到 2-3 条真实 API 高风险代表 case，确认不是单个 case 偶然通过 |
 | 答辩时必须能解释架构、链路和关键代码细节 | ◯ | 架构文档、RAG 策略、`constraint_trace` / `safety_trace` / `source_trace`、评测报告已有 | 需要准备 3-5 句口头解释和关键代码入口 |
 
 ## 评分权重逐项对照
@@ -154,7 +154,7 @@ scripts/run_groundedness_cases.py
 scripts/review_benchmark_with_ai.py
 ```
 
-当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版并在 2026-06-03 对齐 Android 商品卡 history；2026-06-04 加入 evidence-aware fallback 后，mock 全链路和 retrieval-only 均达到 11/11 PASS。同日真实 API 三轮全量复验显示：golden stream 8/8 stable PASS，groundedness real generation 3/11 stable PASS。P0-2 已新增 `constraint_trace`、`safety_trace`、`source_trace`，使多轮约束继承、风险边界和来源证据可以在 debug / benchmark 中解释。结论是检索、流式结构和内部证据链稳定，但真实生成层仍需要边界模板、repair prompt 或 claim-level judge 加固。后续所有 benchmark 结果都应再经过 `scripts/review_benchmark_with_ai.py` 做 AI-assisted semantic review，避免只按硬字符串或单一匹配结果判断。
+当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版并在 2026-06-03 对齐 Android 商品卡 history；2026-06-04 加入 evidence-aware fallback 后，mock 全链路和 retrieval-only 均达到 11/11 PASS。同日真实 API 三轮全量复验显示：golden stream 8/8 stable PASS，groundedness real generation 3/11 stable PASS。P0-2 已新增 `constraint_trace`、`safety_trace`、`source_trace`，使多轮约束继承、风险边界和来源证据可以在 debug / benchmark 中解释。P0-3 已补 `unsupported_result_absence_claims`，拦截 `不会堵塞/不会长闭口/不会残留/不会过敏/绝对温和` 等结果型绝对承诺；`GRD-L03` 已完成真实 API 回归并通过 AI semantic review。结论是检索、流式结构和内部证据链稳定，P0-3 对目标风险有效；下一步需要扩到 2-3 条真实 API 高风险代表 case。后续所有 benchmark 结果都应再经过 `scripts/review_benchmark_with_ai.py` 做 AI-assisted semantic review，避免只按硬字符串或单一匹配结果判断。
 
 ## 现在最清楚的下一步
 

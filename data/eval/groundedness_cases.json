@@ -625,7 +625,21 @@
           "user": "那孕期也能用吗？我看到有人这么说。",
           "expect": {
             "expected_any_product_ids": ["p_beauty_017"],
-            "answer_must_contain": ["用户评价", "不能等同于官方", "孕期", "不能确认"],
+            "answer_must_contain": ["用户评价", "孕期"],
+            "answer_claims": [
+              {
+                "id": "pregnancy_source_boundary",
+                "description": "需要说明孕期说法来自用户评价或非官方确定资料",
+                "any_of": ["不能等同于官方", "官方商品资料中没有明确标注", "官方资料没有明确标注", "商品资料中没有明确标注", "没有明确标注孕期可用"],
+                "required": true
+              },
+              {
+                "id": "pregnancy_uncertainty",
+                "description": "不能确认孕期一定可用或不能保证安全",
+                "any_of": ["不能确认", "无法确认", "不能保证", "无法保证", "建议你优先咨询专业", "咨询专业医护"],
+                "required": true
+              }
+            ],
             "answer_must_not_contain": ["孕期可以放心用", "官方确认孕期可用", "一定安全"]
           },
           "reference_answer": "资料里的用户评价确实出现过“孕期也能用”的体验性说法，但这不能等同于官方安全说明或医学建议。按当前数据，我不能确认它孕期一定可用；如果这是硬需求，建议核对完整成分并咨询专业意见。"
@@ -635,7 +649,7 @@
           "expect": {
             "expected_any_product_ids": ["p_beauty_017"],
             "answer_must_contain": ["纳米级卸妆分子", "用户反馈", "不能保证"],
-            "answer_must_not_contain": ["保证不堵塞", "一定不会长闭口"]
+            "answer_must_not_contain": ["保证不堵塞", "一定不会长闭口", "正常使用不会堵塞", "不会出现油脂残留堵塞毛孔"]
           },
           "reference_answer": "商品资料写到纳米级卸妆分子可以包裹彩妆和污垢，用户评价里也有人提到不会堵塞。但我只能按来源限定说：这是产品资料和个别用户反馈，不能保证你使用后一定不堵塞或不长闭口。"
         },

@@ -19,6 +19,22 @@ FORBIDDEN_COMMERCIAL_CLAIMS = [
 PRICE_PATTERN = re.compile(r"(?:[¥￥]\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*元)")
 ABSENCE_CLAIM_TERMS = ["酒精", "刺激", "香精", "致痘", "拔干"]
 ABSENCE_PREFIXES = ["不含", "无", "没有", "不会有", "不会", "不添加", "不含有"]
+RESULT_ABSENCE_CLAIM_TERMS = ["堵塞", "闭口", "残留", "闷痘", "过敏"]
+RESULT_BOUNDARY_TERMS = [
+    "不能保证",
+    "无法保证",
+    "不保证",
+    "不能确认",
+    "无法确认",
+    "不能完全排除",
+    "不等于",
+    "仅作为",
+    "只能作为",
+    "体验线索",
+    "个别用户反馈",
+    "建议先",
+]
+RESULT_REVIEW_QUALIFIERS = ["用户评价", "用户反馈", "有人提到", "有人说", "个别用户", "评论"]
 
 
 @dataclass
@@ -46,6 +62,10 @@ def guard_answer(answer: str, user_message: str, cards: list[ProductCard]) -> Ge
     unsupported_absence_claims = _unsupported_absence_claims(stripped, cards)
     if unsupported_absence_claims:
         issues.append(f"unsupported_absence_claims:{','.join(unsupported_absence_claims)}")
+
+    unsupported_result_absence_claims = _unsupported_result_absence_claims(stripped)
+    if unsupported_result_absence_claims:
+        issues.append(f"unsupported_result_absence_claims:{','.join(unsupported_result_absence_claims)}")
 
     if issues:
         return GenerationGuardrailResult(
@@ -275,6 +295,46 @@ def _unsupported_absence_claims(answer: str, cards: list[ProductCard]) -> list[s
         ):
             unsupported.append(term)
     return unsupported
+
+
+def _unsupported_result_absence_claims(answer: str) -> list[str]:
+    unsupported: list[str] = []
+    for term in RESULT_ABSENCE_CLAIM_TERMS:
+        claim_segments = _result_absence_claim_segments(answer, term)
+        if any(not _result_claim_is_bounded(segment) for segment in claim_segments):
+            unsupported.append(term)
+    if any(phrase in answer for phrase in ["绝对温和", "一定安全", "完全安全", "放心使用", "放心用"]):
+        if not _result_claim_is_bounded(answer):
+            unsupported.append("absolute_safety")
+    return list(dict.fromkeys(unsupported))
+
+
+def _result_absence_claim_segments(text: str, term: str) -> list[str]:
+    segments = _claim_segments(text)
+    claim_segments: list[str] = []
+    for segment in segments:
+        if _claims_result_absence(segment, term):
+            claim_segments.append(segment)
+    return claim_segments
+
+
+def _claims_result_absence(text: str, term: str) -> bool:
+    patterns = [
+        rf"(不会|不容易|不太会|不用担心|正常使用不会|保证不|一定不|绝对不)[^。；，,.]{{0,16}}{re.escape(term)}",
+        rf"(不|无|没有)[^。；，,.]{{0,8}}{re.escape(term)}",
+        rf"{re.escape(term)}[^。；，,.]{{0,12}}(不会|不用担心|风险低|没问题)",
+    ]
+    return any(re.search(pattern, text) for pattern in patterns)
+
+
+def _result_claim_is_bounded(segment: str) -> bool:
+    if any(term in segment for term in RESULT_BOUNDARY_TERMS):
+        return True
+    return any(qualifier in segment for qualifier in RESULT_REVIEW_QUALIFIERS)
+
+
+def _claim_segments(text: str) -> list[str]:
+    return [segment.strip() for segment in re.split(r"[。；;.!?？\n]", text) if segment.strip()]
 
 
 def _claims_absence(text: str, term: str) -> bool:

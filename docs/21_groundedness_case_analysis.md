@@ -322,7 +322,7 @@
 | 硬字符串 judge 太脆 | GRD-01、GRD-02、GRD-08、GRD-L02、GRD-L03 | 语义合格但没有命中精确词；也可能出现命中关键词但含义错误 | 同义短语组 + AI-assisted / human semantic judge |
 | 高风险边界结构化记录已有第一版 | GRD-04、GRD-05、GRD-L01、GRD-L02 | P0-2 已新增 `constraint_trace` / `safety_trace`，但真实生成层还未稳定使用这些边界组织回答 | answer composer / guardrail repair |
 | 支持的无添加和无证据无添加没有区分清楚 | GRD-06、GRD-L01 | 有证据时可以说“无酒精/香精”，无证据时不能说 | supported absence allowlist |
-| 真实资料外承诺漏拦 | GRD-L03、部分长对话 | `不会堵塞 / 正常使用不会...` 这类不是商业承诺，但也是资料外保证 | 扩展 guardrail 类型 |
+| 真实资料外承诺漏拦 | GRD-L03、部分长对话 | `不会堵塞 / 正常使用不会...` 这类不是商业承诺，但也是资料外保证 | P0-3 第一刀已新增 `unsupported_result_absence_claims`；`GRD-L03` 已真实 API + AI review PASS，下一步扩到其他高风险 case |
 | 长对话评测脚本太硬 | GRD-L01、GRD-L02 | 预设逐轮答案无法覆盖“先保守推荐再追问”等合理路径 | adaptive dialogue judge / per-turn capability checks |
 | 长对话总结丢上下文 | GRD-L01、GRD-L02 | 最终总结未稳定保留所有前文硬边界和路线 | summary planner / conversation state snapshot |
 | 安全优先级低于产品对比 | GRD-05、GRD-L02 | 先比较商品，后说风险，用户体验上不够保守 | safety-first response ordering |
@@ -344,8 +344,9 @@
    - 用户回答仍只展示自然、必要的边界提醒，不展示内部 trace 本身。
 
 3. **扩展 guardrail 和 answer composer。**
-   - 在商业承诺之外，增加结果型绝对承诺拦截：`不会堵塞 / 不会长闭口 / 不会残留 / 一定不闷痘 / 绝对温和`。
-   - 对确实需要强边界的话术，由 answer composer 生成自然短句，不展示内部 trace。
+   - P0-3 第一刀已加入结果型绝对承诺拦截：`不会堵塞 / 不会长闭口 / 不会残留 / 不会过敏 / 绝对温和`。
+   - 对“用户评价里有人提到不会堵塞”这类场景，允许保留来源限定，但必须补充“不能保证你使用后也一定如此”。
+   - `GRD-L03` 已完成一轮真实 API 回归并通过 AI semantic review；下一步不再只看 mock，扩到 `GRD-L01`、`GRD-05`、`GRD-08` 等高风险代表 case。
 
 4. **调整长对话 benchmark。**
    - 不再要求每轮都严格命中预设文本。

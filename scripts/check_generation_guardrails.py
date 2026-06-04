@@ -50,6 +50,23 @@ def main() -> None:
     assert unsupported_absence.fallback_used, unsupported_absence
     assert "unsupported_absence_claims" in ",".join(unsupported_absence.issues), unsupported_absence.issues
 
+    cleansing_oil = retrieve("敏感肌卸妆油，不要堵塞毛孔", products, index_dir=settings.index_dir)
+    result_absence = guard_answer(
+        "这款卸妆油正常使用不会堵塞毛孔，也不会长闭口，可以放心使用。",
+        user_message="它是不是能深入毛孔，而且不会堵塞？",
+        cards=cleansing_oil.cards,
+    )
+    assert not result_absence.passed, result_absence
+    assert result_absence.fallback_used, result_absence
+    assert "unsupported_result_absence_claims" in ",".join(result_absence.issues), result_absence.issues
+
+    qualified_result_absence = guard_answer(
+        "商品资料写到纳米级卸妆分子可以包裹彩妆和污垢，用户评价里有人提到不会堵塞；但这只能作为体验线索，不能保证你使用后也一定如此。",
+        user_message="它是不是能深入毛孔，而且不会堵塞？",
+        cards=cleansing_oil.cards,
+    )
+    assert qualified_result_absence.passed, qualified_result_absence
+
     empty = guard_answer("", user_message="我想买护肤品", cards=[])
     assert not empty.passed, empty
     assert empty.fallback_used, empty

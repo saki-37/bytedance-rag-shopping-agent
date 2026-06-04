@@ -169,6 +169,10 @@ def compact_record(record: dict[str, Any]) -> dict[str, Any]:
         "filter_summary",
         "ranking_signals",
         "guardrail_checks",
+        "constraint_trace",
+        "safety_trace",
+        "source_trace",
+        "judge_checks",
         "answer",
     ]
     compact = {key: record.get(key) for key in keys if key in record}
@@ -191,12 +195,16 @@ def compact_turn(turn: dict[str, Any]) -> dict[str, Any]:
         "filter_summary",
         "ranking_signals",
         "guardrail_checks",
+        "constraint_trace",
+        "safety_trace",
+        "source_trace",
+        "judge_checks",
         "answer",
     ]
     return {key: turn.get(key) for key in keys if key in turn}
 
 
-def truncate_value(value: Any, max_text: int = 1600, max_items: int = 12) -> Any:
+def truncate_value(value: Any, max_text: int = 2000, max_items: int = 32) -> Any:
     if isinstance(value, str):
         return value if len(value) <= max_text else f"{value[:max_text]}...[truncated]"
     if isinstance(value, list):
