@@ -13,7 +13,7 @@
 - V2 多品类起步：新增 5 条服饰运动 enriched 样例，覆盖变体、规格、证据来源和第二品类 query benchmark。
 - Doubao / Ark OpenAI-compatible API 接入；默认评测口径使用真实 API，只有显式开启 `MOCK_LLM=true` 或缺少 Key/模型名时才走 mock / safe fallback。
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
-- 轻量反馈闭环：后端可记录 `有用` / `不准确` 反馈，以及最近上下文、回答、商品卡片和检索 trace 的有界快照。
+- 轻量反馈闭环：Android 端可在回答下方点击 `有用` / `不准确`；后端记录最近上下文、回答、商品卡片等有界快照，debug 脚本可额外带上检索 trace。
 - 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
 - Golden queries、conversation cases、真实 API 三轮回归和 Android 模拟器复验证据已整理在文档中。
 
@@ -211,7 +211,7 @@ python3 scripts/scan_secrets.py --all
 - Graph-aware relation score 已有第一版：运行时派生 category、sub_category、budget、facet、preference 关系，并以小权重参与 rerank。
 - 图片输入、语音、购物车、下单不在当前版本。
 - Evidence-aware fallback 已有第一版：兜底回答会引用商品资料、官方 FAQ、用户评价和“资料未说明/不能保证”边界。
-- 轻量用户反馈闭环已有后端第一版：反馈 JSONL 写入 `data/tmp/feedback/`，该目录被 `.gitignore` 忽略。
+- 轻量用户反馈闭环已有 Android 可见第一版：回答下方可点 `有用` / `不准确`，反馈 JSONL 写入 `data/tmp/feedback/`，该目录被 `.gitignore` 忽略。
 - 更细的 claim-level groundedness judge 是下一阶段增强项。
 - Guardrail / fallback 是规则版，不是完整 groundedness judge。
 

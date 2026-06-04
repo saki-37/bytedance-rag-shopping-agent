@@ -40,7 +40,7 @@
 6. V2 多品类 schema 第一版设计与外部电商字段参考调研。
 7. 服饰运动 5 条 enriched 样例和第二品类 query benchmark。
 8. 依赖版本与复现说明集中成表，补齐工程质量里的复现友好度。
-9. Evidence-aware fallback 和轻量反馈闭环后端第一版。
+9. Evidence-aware fallback 和轻量反馈闭环 Android + 后端第一版。
 10. 测试默认口径已调整为真实 API generation；mock / retrieval-only 只作为显式离线或结构检查。
 11. Groundedness 11 条 case 已完成逐条归因分析，P0-3/P0-4/P0-5 已补真实 API 高风险回归、预算边界修复和 trace-aware AI review。
 12. 答辩口袋稿已收口项目介绍、架构链路、可靠性证据、关键代码入口和当前边界。

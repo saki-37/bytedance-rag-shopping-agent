@@ -21,7 +21,7 @@
 | 基础功能完整性 35% | ✅ 基本稳 | Android 原生端到后端 RAG、模型流式、商品卡片和详情已经跑通 |
 | 工程质量 25% | ✅ 基本稳 | 目录、接口、文档、安全、评测、依赖版本表和复现说明都有；文档状态已收口，最终提交前再跑一轮复现检查 |
 | 效果与可靠性 20% | ◯ 已有可讲证据，仍是答辩重点 | 已有检索 benchmark、conversation、guardrail、三层 trace、evidence-aware fallback、groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮 8/8 stable PASS；`GRD-L03/05/08/L01` 高风险真实 API + AI review 均已通过语义复核 |
-| 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、多品类样例和轻量反馈闭环后端第一版已有 |
+| 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、多品类样例和 Android 可见轻量反馈闭环已有 |
 
 ## 必做最小闭环
 
@@ -114,7 +114,7 @@
 | 多商品对比 | ✅ | comparison benchmark 3 条 PASS | 可作为辅助决策亮点 |
 | 多品类扩展 | ◯ | 服饰 5 条样例 + schema 设计 | 说明“可扩展”，不要承诺全品类完成 |
 | Graph-aware retrieval | ◯ | 轻量 relation score 已进主链路 | 说明是轻量图关系，不是完整 GraphRAG |
-| 反馈闭环 | ◯ | `POST /api/feedback` 可记录 `有用` / `不准确`、最近上下文、回答、商品卡片和 retrieval trace 到本地 JSONL | Android 端反馈按钮还未接入；目前是后端/debug 第一版 |
+| 反馈闭环 | ◯ | Android 端回答下方可点击 `有用` / `不准确`；`POST /api/feedback` 可记录最近上下文、回答、商品卡片到本地 JSONL；debug smoke test 可额外记录 retrieval trace | 目前是轻量反馈第一版，尚未做自动归因或自动转 benchmark |
 | 拍照找货 / 多模态 | ⏸ | 尚未做 | 除非时间非常充裕，否则不抢主线 |
 | 购物车 / 下单 | ⏸ | 尚未做 | 与核心 RAG 可靠性关系较弱，暂不做 |
 
@@ -162,6 +162,6 @@ scripts/review_benchmark_with_ai.py
 
 1. Demo / 答辩材料收口：把真实 API 可靠性证据、trace 解释、guardrail 兜底链路整理成 3-5 句可讲清楚的话。
 2. 最终 Demo 复验：真实 API、Mock fallback、Android 构建、secret scan 和录屏安全。
-3. 可选增强：把 Android 端 `有用` / `不准确` 按钮接到 `/api/feedback`，或继续做 claim-level judge。
+3. 可选增强：继续做 claim-level judge，或把 `inaccurate` 反馈样例自动沉淀为 benchmark。
 
 如果只做方向确认，停止在这里即可，不继续开新功能。

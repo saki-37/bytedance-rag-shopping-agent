@@ -19,7 +19,7 @@
 | 基础功能完整性 | 稳定可拿 | Android -> FastAPI -> RAG -> Doubao/Mock -> SSE -> 商品卡片；图片和详情弹窗已跑通 | 录屏可更干净；最终演示前再人工复验一次 |
 | 工程质量 | 基本可拿 | monorepo、README、API 契约、架构文档、评测报告、安全配置、密钥扫描、依赖版本与复现说明 | 最终提交前按复现检查表再跑一轮 |
 | 效果与可靠性 | 已有可讲证据，仍可继续补强 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮 8/8 stable PASS；`GRD-L03/05/08/L01` 高风险真实 API + AI review；guardrail；RetrievalTrace；graph relation score；evidence-aware fallback | 不建议继续无限扩 benchmark；若补强，应做小范围真实 API 复验或 claim-level judge 样例 |
-| 加分项深度 | 已有主打方向，还差一个可见闭环增强 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema、服饰样例、轻量反馈闭环后端第一版 | 如果还有 6 天，最值得补的是 Android 端反馈按钮，把后端反馈闭环变成 Demo 可见能力 |
+| 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema、服饰样例、Android 可见轻量反馈闭环 | 继续补强时优先做最终复验或 claim-level judge 样例，不再扩新大功能 |
 
 ## 能确认已经完成的点
 
@@ -37,7 +37,7 @@
 
 ## 当前执行顺序
 
-当前状态：**基础闭环、evidence-aware fallback、轻量反馈闭环后端、真实 API 三轮复验、AI 语义复核脚本、内部 trace 分层、结果型绝对承诺 guardrail 均已有第一版**。下一步不再扩新大功能，而是把“真实回答是否可靠”变成可解释、可复跑、可答辩的证据链。
+当前状态：**基础闭环、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、AI 语义复核脚本、内部 trace 分层、结果型绝对承诺 guardrail 均已有第一版**。下一步不再扩新大功能，而是把“真实回答是否可靠”变成可解释、可复跑、可答辩的证据链。
 
 | 优先级 | 动作 | 目的 | 完成标志 | 主要文件 |
 | --- | --- | --- | --- | --- |
@@ -47,7 +47,7 @@
 | P0-3 | 加固真实生成层 guardrail / repair | 减少真实 Doubao 的资料外承诺和绝对安全说法 | 第一刀已完成：`unsupported_result_absence_claims` 拦截 `不会堵塞/不会长闭口/不会残留/不会过敏/绝对温和`；`GRD-L03` 真实 API PASS；AI review PASS；全量 groundedness mock 11/11 作为安全网 | `server/app/guardrails.py`、`server/app/llm.py` |
 | P0-4 | 真实 API 回归 + AI 复核 | 证明修复后不是只在单个真实 case 或 mock 里好看 | 已完成第一轮：`GRD-05/08/L01` 真实 API + AI review；`GRD-L01` 暴露的 150 元预算边界 bug 已修复并复验 PASS | `scripts/run_*`、`scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
 | P0-5 | AI review / 评测口径对齐 | 约束继承应进入内部 trace，不要求机械显示给用户 | 已完成：AI review prompt 明确内部 trace 不必用户可见；`GRD-L01` trace-aware review 复跑 PASS, score=5, risk=low | `scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
-| P1-1 | Android 反馈按钮 | 把后端反馈闭环接到真实 demo 体验里 | 回答下方可点 `有用/不准确`，并写入 feedback JSONL | `client/android/...`、`server/app/feedback.py` |
+| P1-1 | Android 反馈按钮 | 把后端反馈闭环接到真实 demo 体验里 | 已完成：回答下方可点 `有用/不准确`，并写入 feedback JSONL | `client/android/...`、`server/app/feedback.py` |
 | P1-2 | Demo / 答辩材料收口 | 降低评委理解成本，确保能讲清架构链路和关键代码 | 第一版已完成：`docs/22_defense_cheatsheet.md` 收口项目介绍、架构链路、可靠性证据、关键代码入口和边界说明 | `docs/12_demo_script.md`、`docs/14_submission_package.md`、`docs/20_reproducibility_and_dependencies.md`、`docs/22_defense_cheatsheet.md` |
 | P2 | 暂缓的大功能 | 防止主线扩张 | 多模态、购物车、下单、全量非美妆标注都不作为当前主线 | 暂不改 |
 
@@ -62,7 +62,7 @@
 当前下一步分两种情况：
 
 - 如果马上提交：做 **最终复验与提交前检查**，按 `docs/20_reproducibility_and_dependencies.md` 和 `docs/14_submission_package.md` 跑真实 API、Android、secret scan 和录屏安全检查。
-- 如果还有 5-7 天：优先做 **P1-1 Android 反馈按钮**。后端反馈闭环已经完成，补上移动端 `有用/不准确` 入口后，可以把官方“质量评测与反馈闭环”从 debug 证据升级成 Demo 可见能力。
+- 如果还有 5-7 天：P1-1 已完成，下一步优先做 **最终复验与提交前检查**；如果继续补技术深度，再选 1-2 条高风险 case 做 claim-level judge 样例。
 
 ### P0：提交材料收口
 
@@ -128,11 +128,12 @@ scripts/review_benchmark_with_ai.py
 - 每条反馈写入 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`，目录被 `.gitignore` 忽略。
 - 记录内容不是只保存当前一句，而是保存有界证据快照：当前 query、最近 8 条 history、最终回答、商品卡片、clarification、retrieval message 和 `RetrievalTrace`。
 - 已新增 `scripts/check_feedback_loop.py`，用 `/api/debug/retrieve` 构造一条带 trace 的反馈记录，验证端到端写入。
+- Android 端已接入 `有用` / `不准确` 按钮，能把当前回答、上一轮用户 query、最近对话历史和商品卡片写入 `/api/feedback`。
 
 优先级判断：
 
 - 它是贴近官方“质量评测与反馈闭环”的加分项。
-- Android 端按钮还没有接入；目前是后端/debug 第一版，足够支撑“反馈闭环可记录、可复盘”的工程证据。
+- Android 端按钮已经接入；当前是轻量反馈第一版，足够支撑“用户可标记、后端可记录、失败样例可复盘”的工程证据。Android 反馈记录暂不直接携带完整 `RetrievalTrace`，带 trace 的复盘证据仍通过 debug smoke test 构造。
 
 ### P3：暂不作为主线
 

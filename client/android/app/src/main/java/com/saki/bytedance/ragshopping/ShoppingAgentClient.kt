@@ -90,6 +90,44 @@ class ShoppingAgentClient(
         }
     }
 
+    suspend fun submitFeedback(
+        feedback: FeedbackType,
+        userMessage: String,
+        assistantAnswer: String,
+        products: List<ProductCard>,
+        history: List<ChatMessage>,
+        turnId: String,
+    ): String {
+        return withContext(Dispatchers.IO) {
+            val payload = JSONObject()
+                .put("conversation_id", "android-demo")
+                .put("turn_id", turnId)
+                .put("feedback", feedback.apiValue)
+                .put("message", userMessage)
+                .put("retrieval_message", userMessage)
+                .put("answer", assistantAnswer)
+                .put("history", history.toPayloadHistory())
+                .put("products", products.toPayloadProducts())
+                .put("trace", JSONObject.NULL)
+                .toString()
+            val request = Request.Builder()
+                .url("$baseUrl/api/feedback")
+                .post(payload.toRequestBody(jsonMediaType))
+                .build()
+
+            Log.d(TAG, "POST $baseUrl/api/feedback")
+            okHttpClient.newCall(request).execute().use { response ->
+                val body = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    val messageText = "HTTP ${response.code}"
+                    Log.w(TAG, "$messageText $body")
+                    throw IllegalStateException(messageText)
+                }
+                JSONObject(body).optString("record_id")
+            }
+        }
+    }
+
     private fun parseEvent(eventName: String, data: String): StreamEvent? {
         val json = if (data.isBlank()) JSONObject() else JSONObject(data)
         return when (eventName) {
@@ -120,6 +158,34 @@ class ShoppingAgentClient(
                 )
             }
         return array
+    }
+
+    private fun List<ProductCard>.toPayloadProducts(): JSONArray {
+        val array = JSONArray()
+        forEach { product ->
+            array.put(product.toPayloadJson())
+        }
+        return array
+    }
+
+    private fun ProductCard.toPayloadJson(): JSONObject {
+        return JSONObject()
+            .put("product_id", productId)
+            .put("title", title)
+            .put("brand", brand)
+            .put("category", category)
+            .put("sub_category", subCategory)
+            .put("price", price)
+            .put("image_path", imagePath)
+            .put("tags", JSONArray(tags))
+            .put("reason", reason)
+            .put("target_users", JSONArray(targetUsers))
+            .put("use_cases", JSONArray(useCases))
+            .put("selling_points", JSONArray(sellingPoints))
+            .put("cautions", JSONArray(cautions))
+            .put("suitable_for", JSONArray(suitableFor))
+            .put("avoid_for", JSONArray(avoidFor))
+            .put("description", description)
     }
 
     private fun parseProducts(array: JSONArray): List<ProductCard> {

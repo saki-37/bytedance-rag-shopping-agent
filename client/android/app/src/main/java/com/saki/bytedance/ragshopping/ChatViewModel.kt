@@ -38,6 +38,71 @@ class ChatViewModel(
         sendMessage(message.trim())
     }
 
+    fun submitFeedback(messageId: String, feedback: FeedbackType) {
+        val snapshot = state.value
+        val assistantIndex = snapshot.messages.indexOfFirst { it.id == messageId }
+        if (assistantIndex <= 0) return
+
+        val assistantMessage = snapshot.messages[assistantIndex]
+        if (
+            assistantMessage.role != Role.Assistant ||
+            assistantMessage.content.isBlank() ||
+            assistantMessage.isFeedbackSending ||
+            assistantMessage.feedback != null
+        ) {
+            return
+        }
+
+        val userMessage = snapshot.messages
+            .take(assistantIndex)
+            .lastOrNull { it.role == Role.User && it.content.isNotBlank() }
+            ?: return
+        val history = snapshot.messages
+            .take(assistantIndex + 1)
+            .filter { it.content.isNotBlank() && it.role in setOf(Role.User, Role.Assistant) }
+            .dropWhile { it.role != Role.User }
+
+        _state.update { current ->
+            current.copy(
+                messages = current.messages.mapMessageById(messageId) {
+                    it.copy(isFeedbackSending = true, feedbackError = null)
+                }
+            )
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                client.submitFeedback(
+                    feedback = feedback,
+                    userMessage = userMessage.content,
+                    assistantAnswer = assistantMessage.content,
+                    products = assistantMessage.products,
+                    history = history,
+                    turnId = messageId,
+                )
+            }.onSuccess {
+                _state.update { current ->
+                    current.copy(
+                        messages = current.messages.mapMessageById(messageId) {
+                            it.copy(feedback = feedback, isFeedbackSending = false, feedbackError = null)
+                        }
+                    )
+                }
+            }.onFailure { error ->
+                _state.update { current ->
+                    current.copy(
+                        messages = current.messages.mapMessageById(messageId) {
+                            it.copy(
+                                isFeedbackSending = false,
+                                feedbackError = error.localizedMessage ?: "反馈记录失败",
+                            )
+                        }
+                    )
+                }
+            }
+        }
+    }
+
     private fun sendMessage(message: String) {
         if (message.isEmpty() || state.value.isLoading) return
         val history = state.value.messages
@@ -101,5 +166,12 @@ class ChatViewModel(
         val index = indexOfLast { it.role == Role.Assistant }
         if (index < 0) return this
         return mapIndexed { itemIndex, item -> if (itemIndex == index) transform(item) else item }
+    }
+
+    private fun List<ChatMessage>.mapMessageById(
+        messageId: String,
+        transform: (ChatMessage) -> ChatMessage,
+    ): List<ChatMessage> {
+        return map { message -> if (message.id == messageId) transform(message) else message }
     }
 }

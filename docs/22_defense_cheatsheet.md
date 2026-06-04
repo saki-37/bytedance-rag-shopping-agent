@@ -6,7 +6,7 @@
 
 ## 30 秒项目介绍
 
-这是一个原生 Android + FastAPI 的美妆 RAG 导购 Agent。用户输入肤质、预算、使用场景和排除条件后，后端先做结构化约束解析和商品检索，再调用 Doubao / Ark 生成受商品证据约束的导购回复，最后在 Android 端流式展示回答、商品卡片、图片和详情弹窗。
+这是一个原生 Android + FastAPI 的美妆 RAG 导购 Agent。用户输入肤质、预算、使用场景和排除条件后，后端先做结构化约束解析和商品检索，再调用 Doubao / Ark 生成受商品证据约束的导购回复，最后在 Android 端流式展示回答、商品卡片、图片、详情弹窗和轻量反馈按钮。
 
 当前版本主线是“文字导购闭环”，不是购物车或拍照找货。我们更关注一件事：模型推荐必须能回到商品资料、价格、图片和注意事项上，而不是只生成一段看起来像导购的话。
 
@@ -48,15 +48,17 @@
 | RAG 检索怎么做 | `server/app/retrieval.py` | 硬过滤 + keyword/facet + Chroma 向量召回 + graph-aware relation score + rerank |
 | 为什么推荐这些商品 | `RetrievalTrace` / `/api/debug/retrieve` | 可以看到过滤、召回、排序、约束和来源证据 |
 | 反幻觉怎么做 | `server/app/guardrails.py`、`server/app/llm.py` | 先 prompt 约束，再生成后校验，失败时 repair 或 fallback |
-| Android 端怎么接 | `client/android/app/src/main/...` | OkHttp 消费 SSE，Compose 渲染消息、商品卡片和详情 |
+| Android 端怎么接 | `client/android/app/src/main/...` | OkHttp 消费 SSE，Compose 渲染消息、商品卡片、详情和反馈按钮 |
+| 反馈闭环怎么做 | `server/app/feedback.py`、`ShoppingAgentClient.submitFeedback` | Android 提交 `有用/不准确`，后端写入本地 JSONL；debug 脚本可构造带 trace 的复盘记录 |
 
 ## Demo 讲解顺序
 
 1. 打开 App，说明这是原生 Android 端，不是 H5。
 2. 点 `油皮通勤防晒`，展示真实流式回复和商品卡片。
 3. 点商品卡片，展示图片、价格、适合人群、场景、卖点和注意事项。
-4. 点 `信息不足追问`，展示系统不会在条件不足时强行推荐。
-5. 口头补一句可靠性：价格、图片和卡片字段来自数据源；模型回答会经过 guardrail 和 evidence-aware fallback。
+4. 可选点回答下方 `有用` / `不准确`，展示质量反馈闭环。
+5. 点 `信息不足追问`，展示系统不会在条件不足时强行推荐。
+6. 口头补一句可靠性：价格、图片和卡片字段来自数据源；模型回答会经过 guardrail 和 evidence-aware fallback。
 
 ## 当前边界
 

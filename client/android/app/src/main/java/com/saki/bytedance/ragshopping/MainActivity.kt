@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -101,8 +101,19 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(state.messages) { message ->
-                    MessageBubble(message = message, onProductClick = { selectedProduct = it })
+                itemsIndexed(
+                    items = state.messages,
+                    key = { _, message -> message.id },
+                ) { index, message ->
+                    val hasPriorUserMessage = state.messages
+                        .take(index)
+                        .any { it.role == Role.User && it.content.isNotBlank() }
+                    MessageBubble(
+                        message = message,
+                        showFeedback = !state.isLoading && hasPriorUserMessage,
+                        onProductClick = { selectedProduct = it },
+                        onFeedback = viewModel::submitFeedback,
+                    )
                 }
                 item("bottom-anchor") {
                     Spacer(modifier = Modifier.height(1.dp))
@@ -137,7 +148,12 @@ private fun Header() {
 }
 
 @Composable
-private fun MessageBubble(message: ChatMessage, onProductClick: (ProductCard) -> Unit) {
+private fun MessageBubble(
+    message: ChatMessage,
+    showFeedback: Boolean,
+    onProductClick: (ProductCard) -> Unit,
+    onFeedback: (String, FeedbackType) -> Unit,
+) {
     val alignment = if (message.role == Role.User) Alignment.End else Alignment.Start
     val background = when (message.role) {
         Role.User -> Color(0xFF0BAE5C)
@@ -158,9 +174,62 @@ private fun MessageBubble(message: ChatMessage, onProductClick: (ProductCard) ->
                     Text(message.content, color = textColor)
                 }
                 message.products.forEach { ProductCardView(product = it, onClick = { onProductClick(it) }) }
+                if (message.role == Role.Assistant && message.content.isNotBlank() && showFeedback) {
+                    FeedbackControls(message = message, onFeedback = onFeedback)
+                }
             }
         }
     }
+}
+
+@Composable
+private fun FeedbackControls(message: ChatMessage, onFeedback: (String, FeedbackType) -> Unit) {
+    when {
+        message.feedback != null -> {
+            Text(
+                text = "已记录：${message.feedback.label}",
+                color = Color(0xFF087A42),
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+
+        message.isFeedbackSending -> {
+            Text(
+                text = "正在记录反馈...",
+                color = Color(0xFF53635A),
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+
+        else -> {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FeedbackChip(label = "有用") { onFeedback(message.id, FeedbackType.Helpful) }
+                    FeedbackChip(label = "不准确") { onFeedback(message.id, FeedbackType.Inaccurate) }
+                }
+                if (message.feedbackError != null) {
+                    Text(
+                        text = "记录失败：${message.feedbackError}",
+                        color = Color(0xFFB54708),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FeedbackChip(label: String, onClick: () -> Unit) {
+    Text(
+        text = label,
+        modifier = Modifier
+            .background(Color(0xFFE4F6EA), RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        color = Color(0xFF087A42),
+        style = MaterialTheme.typography.labelMedium,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

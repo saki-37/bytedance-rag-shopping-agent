@@ -1,5 +1,7 @@
 package com.saki.bytedance.ragshopping
 
+import java.util.UUID
+
 data class ProductCard(
     val productId: String,
     val title: String,
@@ -23,6 +25,10 @@ data class ChatMessage(
     val role: Role,
     val content: String,
     val products: List<ProductCard> = emptyList(),
+    val feedback: FeedbackType? = null,
+    val isFeedbackSending: Boolean = false,
+    val feedbackError: String? = null,
+    val id: String = UUID.randomUUID().toString(),
 )
 
 enum class Role {
@@ -30,4 +36,9 @@ enum class Role {
     Assistant,
     Status,
     Error,
+}
+
+enum class FeedbackType(val apiValue: String, val label: String) {
+    Helpful("helpful", "有用"),
+    Inaccurate("inaccurate", "不准确"),
 }
