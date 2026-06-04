@@ -46,8 +46,8 @@
 | --- | --- | --- |
 | 基础功能完整性 | Android -> FastAPI -> RAG -> Doubao -> SSE -> 商品卡片 | 第一版真实模型端到端闭环已跑通 |
 | 工程质量 | monorepo、API 契约、架构文档、安全配置、评测脚本、依赖复现说明 | README 已作为提交入口；`docs/` 可支撑复盘和答辩 |
-| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only、真实 API golden stream 三轮、guardrail、真实 groundedness failure cases、三层 trace、结果型绝对承诺拦截、`GRD-L03` 真实 API + AI review | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框；下一步继续扩真实 API 高风险代表 case |
-| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、轻量反馈闭环、移动端流式体验 | 下一阶段优先修真实生成层稳定性，再考虑 Android 反馈按钮或 claim-level judge |
+| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only、真实 API golden stream 三轮、guardrail、真实 groundedness failure cases、三层 trace、结果型绝对承诺拦截、`GRD-L03/05/08/L01` 真实 API + AI review | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框；下一步把证据整理成答辩可讲版本 |
+| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、轻量反馈闭环、移动端流式体验 | 下一阶段优先做 Demo / 答辩材料收口；Android 反馈按钮或 claim-level judge 属于可选增强 |
 
 ## Demo 讲解顺序
 
@@ -160,7 +160,7 @@ git diff --check
 1. 图片输入、语音输入、购物车和下单。
 2. 全品类导购主线。
 3. 完整重型 GraphRAG / Neo4j 图数据库。
-4. 完整 groundedness judge 或 LLM judge。
+4. 完整自动化 claim-level groundedness judge。
 5. Android 端用户反馈按钮。
 
 这些不是当前版本的失败点，而是下一阶段路线。当前版本主打的是：
@@ -169,6 +169,6 @@ git diff --check
 
 ## 下一阶段建议
 
-1. 当前下一步优先做 P0-4：`GRD-L03` 已真实 API PASS，接下来再选 2-3 条高风险 groundedness 代表 case 做真实 API + AI review。
-2. 后端/debug 反馈接口已完成；可在 P0-3 后增加 Android 用户反馈按钮，沉淀失败 query 和推荐修正记录。
+1. 当前下一步优先做 P1-2：Demo / 答辩材料收口，把真实 API 可靠性证据、trace 解释、guardrail 兜底链路整理成 3-5 句能讲清楚的话。
+2. 后端/debug 反馈接口已完成；可选增强是增加 Android 用户反馈按钮，沉淀失败 query 和推荐修正记录。
 3. 最终提交前按 `docs/20_reproducibility_and_dependencies.md` 跑一轮复现检查，并确认 Demo 录屏没有敏感信息。
