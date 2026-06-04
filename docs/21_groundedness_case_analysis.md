@@ -131,10 +131,11 @@
 
 建议：
 
-- 增加 `constraint_trace` 字段，记录：
-  - `updated_constraints`: 本轮新修改的条件，例如预算从 200 放宽到 300。
-  - `inherited_constraints`: 前文继续生效的条件，例如酒精/刺激排除。
-  - `relaxed_constraints`: 被用户明确放宽的条件。
+- 已实现第一版 `constraint_trace`，记录：
+  - `current_turn`: 本轮新修改的条件，例如预算从 200 放宽到 300。
+  - `inherited`: 前文继续生效的条件，例如酒精/刺激排除。
+  - `relaxed`: 被用户明确放宽的条件。
+  - `effective`: 最终送入检索的生效约束。
 - benchmark 不应要求最终回答固定出现“仍然保留”四个字，而应检查 trace 和回答语义是否一致。
 
 ### GRD-05 过敏风险：用户明确不耐受时不能只看功效推荐
@@ -319,7 +320,7 @@
 | 根因 | 涉及 case | 说明 | 修复方向 |
 | --- | --- | --- | --- |
 | 硬字符串 judge 太脆 | GRD-01、GRD-02、GRD-08、GRD-L02、GRD-L03 | 语义合格但没有命中精确词；也可能出现命中关键词但含义错误 | 同义短语组 + AI-assisted / human semantic judge |
-| 高风险边界没有结构化记录 | GRD-04、GRD-05、GRD-L01、GRD-L02 | 模型可能知道风险，但用户可见文本和系统内部状态没有分层 | `constraint_trace` / `safety_trace` + answer composer |
+| 高风险边界结构化记录已有第一版 | GRD-04、GRD-05、GRD-L01、GRD-L02 | P0-2 已新增 `constraint_trace` / `safety_trace`，但真实生成层还未稳定使用这些边界组织回答 | answer composer / guardrail repair |
 | 支持的无添加和无证据无添加没有区分清楚 | GRD-06、GRD-L01 | 有证据时可以说“无酒精/香精”，无证据时不能说 | supported absence allowlist |
 | 真实资料外承诺漏拦 | GRD-L03、部分长对话 | `不会堵塞 / 正常使用不会...` 这类不是商业承诺，但也是资料外保证 | 扩展 guardrail 类型 |
 | 长对话评测脚本太硬 | GRD-L01、GRD-L02 | 预设逐轮答案无法覆盖“先保守推荐再追问”等合理路径 | adaptive dialogue judge / per-turn capability checks |
@@ -336,11 +337,11 @@
    - 对高风险 case 增加人工/AI-assisted 复核字段：`semantic_pass`、`source_supported`、`needs_human_review`。
    - 新增通用复核层：所有 benchmark JSONL 输出后追加 `scripts/review_benchmark_with_ai.py`，形成 `deterministic_passed` + `ai_review.semantic_score` 两套结果。
 
-2. **加内部 trace，而不是把推理句硬塞进用户回答。**
+2. **内部 trace 已完成第一版，下一步让生成层更好使用它。**
    - `constraint_trace`: 预算、肤质、排除项、放宽项、继承项。
    - `safety_trace`: 过敏、孕期、屏障受损、资料外保证风险。
-   - `source_trace`: 强效果描述来自官方字段、用户评价、增强字段，还是无法回连。
-   - 用户回答只展示自然、必要的边界提醒。
+   - `source_trace`: 商品事实、结构化属性、官方 FAQ、用户评价来源。
+   - 用户回答仍只展示自然、必要的边界提醒，不展示内部 trace 本身。
 
 3. **扩展 guardrail 和 answer composer。**
    - 在商业承诺之外，增加结果型绝对承诺拦截：`不会堵塞 / 不会长闭口 / 不会残留 / 一定不闷痘 / 绝对温和`。
