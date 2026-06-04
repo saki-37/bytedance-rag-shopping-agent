@@ -709,7 +709,7 @@ Groundedness 三轮明细：
    - 库存、优惠、优惠券、购买链接、下单等商业承诺。
    - 把预算数字或上下文数字写成价格相关表述。
 3. 后置 guardrail 多次成功拦截真实模型输出；`GRD-07` 三轮稳定 PASS 说明商业承诺兜底有效。
-4. 当前 groundedness runner 的 `answer_must_contain` 是硬字符串检查，可能会把“语义上合格但没包含指定词”的回答判 FAIL；但三轮稳定 FAIL 仍说明真实生成层不够可控，需要更强的模板化边界表达或 claim-level judge。
+4. 当前 groundedness runner 的 `answer_must_contain` 是硬字符串检查，可能会把“语义上合格但没包含指定词”的回答判 FAIL；也可能放过“命中关键词但含义不正确”的回答。因此三轮结果应被视为第一层筛查，后续需要语义/证据核验，而不是只按关键词定生死。
 
 逐条 case 分析见 `docs/21_groundedness_case_analysis.md`。该文档把 11 个 case 分成稳定通过、评测器硬字符串误判、真实生成边界缺失和资料外承诺风险四类，并给出对应修复方向。
 
@@ -717,24 +717,28 @@ Failure case 初步归因：
 
 | 类型 | 代表 case | 现象 | 初步判断 |
 | --- | --- | --- | --- |
-| 判定器硬字符串误判 | `GRD-01`、`GRD-02`、`GRD-08`、`GRD-L02` 部分轮次 | 回答说了“没有提及/无法保证/角质调理/烟酰胺浓度高达10%”，但没有命中 `answer_must_contain` 里的精确词 | 不应简单算作模型失败，需要把 `answer_must_contain` 升级为同义短语集合或 claim-level judge |
-| 硬边界没有稳定显式说出 | `GRD-04`、`GRD-L01` | 检索层继承了预算和排除条件，但回答没有稳定说“只放宽预算，酒精/刺激排除仍保留” | 检索状态正确，生成表达不稳定；适合加 deterministic boundary prefix |
-| 真实资料外承诺 | `GRD-L01`、`GRD-L03` | 长对话里仍出现“明确不含酒精/香精”“正常使用不会堵塞”等强说法 | 这是需要修的真实 groundedness 风险，当前 regex guardrail 覆盖不足 |
+| 判定器硬字符串误判 | `GRD-01`、`GRD-02`、`GRD-08`、`GRD-L02` 部分轮次 | 回答说了“没有提及/无法保证/角质调理/烟酰胺浓度高达10%”，但没有命中 `answer_must_contain` 里的精确词 | 不应简单算作模型失败，需要把 `answer_must_contain` 升级为同义短语集合 + 语义/证据核验 |
+| 硬边界缺少结构化 trace | `GRD-04`、`GRD-L01` | 检索层继承了预算和排除条件，但最终回答不一定显式解释“只放宽预算，其他排除仍保留” | 检索状态正确；应记录 `constraint_trace` 供调试、评测和答辩使用，用户回答不必机械展示推理句 |
+| 真实资料外承诺 | `GRD-L01`、`GRD-L03` | 长对话里仍出现“明确不含酒精/香精”“正常使用不会堵塞”等强说法 | 这是需要修的真实 groundedness 风险，当前 regex guardrail 和 source trace 覆盖不足 |
 | 风险建议不够靠前 | `GRD-05`、`GRD-L02` | 用户提到发酵不耐受、屏障不稳或叠加使用时，回答有提示，但先进入商品对比或推荐，缺少“先不建议直接用”的强边界 | 需要把过敏/孕期/屏障受损/排除条件这类高风险 query 提升为前置安全策略 |
 | 检索与生成证明范围混淆 | 多数 FAIL | 商品召回通常合理，`products/done` 结构稳定，但回答文本没有稳定满足 groundedness 断言 | 说明主要问题不在 retrieval，而在真实模型输出控制和评测判定方式 |
 
-因此，`3/11 stable PASS` 不能粗暴理解成“系统整体只有 3 条能跑”。更准确的解释是：**检索和流式链路已经稳定，真实生成层在高风险声明上的可控性不足，而当前 benchmark 也需要从硬字符串升级成更贴近 claim 的判定。**
+因此，`3/11 stable PASS` 不能粗暴理解成“系统整体只有 3 条能跑”。更准确的解释是：**检索和流式链路已经稳定，真实生成层在高风险声明上的可控性不足，而当前 benchmark 也需要从硬字符串升级成“结构检查 + 语义/证据核验”的两层判定。**
 
 建议下一步：
 
-1. 不急着扩更多 case，先修真实生成层稳定性。
-2. 对高风险场景增加 deterministic answer composer：当 query 涉及成分存在性、过敏、孕期、排除项继承、功效外推时，优先由后端模板化生成关键边界句，再让模型补充自然语言。
-3. 或升级 repair prompt：对 `unsupported_absence_claims`、`unsupported_prices`、`forbidden_commercial_claims` 给出更硬的删除规则。
-4. 给真实 API runner 增加 `--repeat`、per-turn timeout 和三轮汇总，避免人工跑长串行命令。
+1. 不急着扩更多 case，先修评测判定和真实生成层稳定性。
+2. 对高风险场景增加内部 trace：当 query 涉及成分存在性、过敏、孕期、排除项继承、功效外推时，记录 `constraint_trace`、`safety_trace`、`source_trace`，用于证明系统实际继承了哪些约束。
+3. 用户可见回答保持自然，只展示必要边界；不要把“本轮只放宽预算”等内部推理句机械塞进最终回复。
+4. 升级 repair prompt / guardrail：对 `unsupported_absence_claims`、`unsupported_prices`、`forbidden_commercial_claims`、结果型绝对承诺给出更硬的删除规则。
+5. 给真实 API runner 增加语义复核字段，支持同义短语、AI-assisted judge 或人工核验，避免只按硬字符串判断。
+6. 长对话 benchmark 后续改成“每轮能力点 + evaluator 介入”的自适应协议，而不是完全固定逐轮标准答案。
 
 ## 下一步
 
-1. 先修真实生成层稳定性：边界模板 / repair prompt / claim-level judge 三选一切入。
-2. 给真实 API runner 增加 `--repeat`、per-turn timeout 和三轮汇总。
-3. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
-4. 扩展多商品对比到更多品类和更复杂约束。
+1. 先升级 groundedness judge：硬字符串筛查 + 同义 claim + 语义/证据核验。
+2. 增加内部 `constraint_trace` / `safety_trace` / `source_trace`，让多轮继承、风险边界和强效果描述可解释。
+3. 再修真实生成层稳定性：repair prompt、guardrail、answer composer 分层处理。
+4. 给真实 API runner 增加 `--repeat`、per-turn timeout、三轮汇总和语义复核字段。
+5. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
+6. 扩展多商品对比到更多品类和更复杂约束。
