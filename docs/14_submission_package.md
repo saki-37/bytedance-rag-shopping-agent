@@ -46,8 +46,8 @@
 | --- | --- | --- |
 | 基础功能完整性 | Android -> FastAPI -> RAG -> Doubao -> SSE -> 商品卡片 | 第一版真实模型端到端闭环已跑通 |
 | 工程质量 | monorepo、API 契约、架构文档、安全配置、评测脚本、依赖复现说明 | README 已作为提交入口；`docs/` 可支撑复盘和答辩 |
-| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only、guardrail、真实 probe | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框 |
-| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、轻量反馈闭环、移动端流式体验 | 下一阶段可继续做 Android 反馈按钮、claim-level judge 或真实 Doubao failure case 沉淀 |
+| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only、真实 API golden stream 三轮、guardrail、真实 groundedness failure cases | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框；真实生成层仍需加固 |
+| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、轻量反馈闭环、移动端流式体验 | 下一阶段优先修真实生成层稳定性，再考虑 Android 反馈按钮或 claim-level judge |
 
 ## Demo 讲解顺序
 

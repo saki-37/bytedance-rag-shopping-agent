@@ -85,20 +85,23 @@ async def _collect_ark_answer(
             "content": f"用户问题：{user_message}\n\n可用商品资料：\n{context}",
         },
     ]
-    stream = await client.chat.completions.create(
-        model=settings.ark_model,
-        messages=messages,
-        stream=True,
-        temperature=0.2,
-    )
-    logger.info("Ark stream connected")
-    chunks: list[str] = []
-    async for chunk in stream:
-        delta = chunk.choices[0].delta.content
-        if delta:
-            chunks.append(delta)
-    logger.info("Ark stream completed")
-    return "".join(chunks)
+    try:
+        stream = await client.chat.completions.create(
+            model=settings.ark_model,
+            messages=messages,
+            stream=True,
+            temperature=0.2,
+        )
+        logger.info("Ark stream connected")
+        chunks: list[str] = []
+        async for chunk in stream:
+            delta = chunk.choices[0].delta.content
+            if delta:
+                chunks.append(delta)
+        logger.info("Ark stream completed")
+        return "".join(chunks)
+    finally:
+        await client.close()
 
 
 async def _try_repair_answer(
@@ -157,12 +160,15 @@ async def _collect_ark_repair(
             ),
         },
     ]
-    response = await client.chat.completions.create(
-        model=settings.ark_model,
-        messages=messages,
-        temperature=0.1,
-    )
-    return response.choices[0].message.content or ""
+    try:
+        response = await client.chat.completions.create(
+            model=settings.ark_model,
+            messages=messages,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content or ""
+    finally:
+        await client.close()
 
 
 def _mock_answer(user_message: str, cards: list[ProductCard]) -> str:

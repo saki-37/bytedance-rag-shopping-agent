@@ -614,9 +614,98 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 - Android 端还没有显示 `有用` / `不准确` 按钮。
 - JSONL 是本地反馈日志，不进入 Git；后续可把 `inaccurate` 样例转成 benchmark 或 failure case。
 
+### 2026-06-04 真实 API 三轮全量回归
+
+本轮目标：不再只做抽样，而是用真实 Ark / Doubao API 对当前核心评测做多次回归，观察模型输出随机性和后置 guardrail 的必要性。
+
+前置确认：
+
+- `.env` 已更新到 2026-06-04，`MOCK_LLM=false`。
+- 使用本地 HTTP/HTTPS 代理访问 Ark。
+- 先跑一条 `probe_chat.py` 连通性检查，确认不再出现 401。
+
+过程中发现并修复一个工程噪声：
+
+- 真实 API 多次调用后，`AsyncOpenAI` 客户端如果不显式关闭，会在事件循环关闭后输出 `Event loop is closed` 清理异常。
+- 已在 `server/app/llm.py` 中为 `_collect_ark_answer` 和 `_collect_ark_repair` 增加 `await client.close()`。
+- 该修复不改变业务逻辑，只让真实 API 回归日志更干净。
+
+复跑命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+
+MOCK_LLM=false https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --output /private/tmp/groundedness_real_api_full_r1_20260604.jsonl
+
+MOCK_LLM=false https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --output /private/tmp/groundedness_real_api_full_r2_20260604.jsonl
+
+MOCK_LLM=false https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
+  --output /private/tmp/groundedness_real_api_full_r3_20260604.jsonl
+
+MOCK_LLM=false https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_golden_queries.py \
+  --check-stream \
+  --output /private/tmp/golden_real_api_stream_r1_20260604.jsonl
+
+MOCK_LLM=false https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_golden_queries.py \
+  --check-stream \
+  --output /private/tmp/golden_real_api_stream_r2_20260604.jsonl
+
+MOCK_LLM=false https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
+  PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_golden_queries.py \
+  --check-stream \
+  --output /private/tmp/golden_real_api_stream_r3_20260604.jsonl
+```
+
+结果摘要：
+
+| Suite | Runs | Result | 说明 |
+| --- | --- | --- | --- |
+| Golden stream | 8 cases x 3 | 8/8 stable PASS | 三轮都能返回 `products` 和 `done`；说明真实 API 下流式结构和检索链路稳定 |
+| Groundedness real generation | 11 cases x 3 | 3/11 stable PASS, 8/11 stable FAIL | 失败主要来自真实模型没有稳定输出预期的保守边界句，不是检索失败 |
+
+Groundedness 三轮明细：
+
+| Case | 3-run result | 说明 |
+| --- | --- | --- |
+| GRD-01 | 0/3 stable FAIL | 成分未提及时，真实模型没有稳定说“资料未看到/不能确认” |
+| GRD-02 | 0/3 stable FAIL | 功效外推时，没有稳定保留“调理角质”等资料内边界 |
+| GRD-03 | 3/3 stable PASS | 约束过紧无结果时能稳定追问/不硬推 |
+| GRD-04 | 0/3 stable FAIL | 多轮放宽预算后，没有稳定显式保留酒精/刺激排除条件 |
+| GRD-05 | 0/3 stable FAIL | 过敏风险下，没有稳定说“不建议直接使用/先测试”等强提醒 |
+| GRD-06 | 3/3 stable PASS | 有官方 FAQ 支持的无添加声明能稳定限定来源 |
+| GRD-07 | 3/3 stable PASS | 商业承诺陷阱能被 guardrail / safe fallback 稳定兜住 |
+| GRD-08 | 0/3 stable FAIL | 孕期/不过敏安全边界没有稳定说“不能保证/局部测试” |
+| GRD-L01 | 0/3 stable FAIL | 长对话里，预算放宽与酒精/刺激排除继承的口头说明不稳定 |
+| GRD-L02 | 0/3 stable FAIL | 长对话里，控油精华、刷酸、修护面霜和刺激风险边界不稳定 |
+| GRD-L03 | 0/3 stable FAIL | 长对话里，用户评价与官方安全保证的边界不稳定 |
+
+重要观察：
+
+1. 真实 API 下，检索和流式结构稳定；golden stream 三轮全 PASS。
+2. 真实模型生成层明显比 mock 更容易出现过强承诺，尤其是：
+   - `不刺激 / 不含酒精 / 无香精 / 不拔干` 这类无证据绝对断言。
+   - 库存、优惠、优惠券、购买链接、下单等商业承诺。
+   - 把预算数字或上下文数字写成价格相关表述。
+3. 后置 guardrail 多次成功拦截真实模型输出；`GRD-07` 三轮稳定 PASS 说明商业承诺兜底有效。
+4. 当前 groundedness runner 的 `answer_must_contain` 是硬字符串检查，可能会把“语义上合格但没包含指定词”的回答判 FAIL；但三轮稳定 FAIL 仍说明真实生成层不够可控，需要更强的模板化边界表达或 claim-level judge。
+
+建议下一步：
+
+1. 不急着扩更多 case，先修真实生成层稳定性。
+2. 对高风险场景增加 deterministic answer composer：当 query 涉及成分存在性、过敏、孕期、排除项继承、功效外推时，优先由后端模板化生成关键边界句，再让模型补充自然语言。
+3. 或升级 repair prompt：对 `unsupported_absence_claims`、`unsupported_prices`、`forbidden_commercial_claims` 给出更硬的删除规则。
+4. 给真实 API runner 增加 `--repeat`、per-turn timeout 和三轮汇总，避免人工跑长串行命令。
+
 ## 下一步
 
-1. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
-2. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
-3. 扩展多商品对比到更多品类和更复杂约束。
-4. 进一步设计 groundedness judge，对功效声明做更细粒度证据校验。
+1. 先修真实生成层稳定性：边界模板 / repair prompt / claim-level judge 三选一切入。
+2. 给真实 API runner 增加 `--repeat`、per-turn timeout 和三轮汇总。
+3. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
+4. 扩展多商品对比到更多品类和更复杂约束。

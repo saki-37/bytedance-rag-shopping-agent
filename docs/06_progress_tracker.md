@@ -12,7 +12,7 @@
 
 2026-05-26 已补上 V1 检索层：`QueryIntent`、预算/排除条件硬约束、信息不足主动追问、`RetrievalTrace` 可解释输出，以及本地 debug 接口。同日已完成 Chroma 索引构建、8 条 golden query 检索层 benchmark 和生成层 guardrail。2026-05-28 完成真实 Doubao 三轮 probe、Android 端真实请求复验、商品详情弹窗复验，并新增演示快捷问题 chip 解决 adb/现场中文输入不稳定的问题；同日补上多轮消息列表自动滚动并完成连续两轮复验；本地录屏 `demo/录屏v1.mov` 已完成；`docs/10_architecture.md` 已补上系统架构说明；根目录 `README.md` 和 `docs/14_submission_package.md` 已整理成提交入口。2026-05-28 继续将 enriched 美妆数据从 6 条扩展到完整 25 条，重建 Chroma 索引并复跑 golden queries、conversation cases、subcategory queries 和 generation guardrails；Android 端已抽样复验眼霜、蜜粉、卸妆三个新增子类。
 
-补充更新：多商品对比第一版已完成，新增 comparison benchmark 并通过两款防晒、两件 T 恤、跑步鞋/徒步鞋三类对比测试。RetrievalTrace 可解释性增强第一版也已完成，debug 接口和评测 JSONL 现在可直接看到 `metadata_filter`、`filter_summary`、`ranking_signals`。Graph-aware relation score 第一版已进入主链路，trace 可展示 category、sub_category、budget、facet、preference 等关系命中。2026-06-03 又补上 groundedness / 反编造 benchmark：`data/eval/groundedness_cases.json` 共 11 条，其中 3 条为 5-8 轮长对话；在对齐 Android 商品卡 history、修正 p007/p012 价格证据和补轻量意图切换后，retrieval-only 达到 11/11 PASS。2026-06-04 已补上 evidence-aware fallback：商品卡会带入营销文案、官方 FAQ 和用户评价，兜底回答能引用关键证据和“资料未说明/不能保证”边界，groundedness full mock / retrieval-only 均达到 11/11 PASS。依赖版本与复现说明也已集中到 `docs/20_reproducibility_and_dependencies.md`。同日新增轻量反馈闭环后端第一版：`POST /api/feedback` 可把 `有用` / `不准确`、最近上下文、回答、商品卡片和 retrieval trace 写入本地 JSONL。当前主要缺口更新为：Android 端反馈按钮、claim-level judge 和真实 Doubao 长对话 failure cases 还可继续增强。
+补充更新：多商品对比第一版已完成，新增 comparison benchmark 并通过两款防晒、两件 T 恤、跑步鞋/徒步鞋三类对比测试。RetrievalTrace 可解释性增强第一版也已完成，debug 接口和评测 JSONL 现在可直接看到 `metadata_filter`、`filter_summary`、`ranking_signals`。Graph-aware relation score 第一版已进入主链路，trace 可展示 category、sub_category、budget、facet、preference 等关系命中。2026-06-03 又补上 groundedness / 反编造 benchmark：`data/eval/groundedness_cases.json` 共 11 条，其中 3 条为 5-8 轮长对话；在对齐 Android 商品卡 history、修正 p007/p012 价格证据和补轻量意图切换后，retrieval-only 达到 11/11 PASS。2026-06-04 已补上 evidence-aware fallback：商品卡会带入营销文案、官方 FAQ 和用户评价，兜底回答能引用关键证据和“资料未说明/不能保证”边界，groundedness full mock / retrieval-only 均达到 11/11 PASS。依赖版本与复现说明也已集中到 `docs/20_reproducibility_and_dependencies.md`。同日新增轻量反馈闭环后端第一版：`POST /api/feedback` 可把 `有用` / `不准确`、最近上下文、回答、商品卡片和 retrieval trace 写入本地 JSONL。更新 key 后已完成真实 API 三轮全量复验：golden stream 8/8 stable PASS，groundedness real generation 3/11 stable PASS。当前主要缺口更新为：真实生成层边界表达、claim-level judge 和 Android 端反馈按钮。
 
 ## 对照课题必做最小闭环
 
@@ -147,7 +147,7 @@
 
 ## 当前最应该做的下一步
 
-文档状态收口、evidence-aware fallback 和轻量反馈闭环后端第一版已经完成。下一步在 **真实 API 抽样复验**、**Android 反馈按钮** 和 **最终复现检查** 之间选择。
+文档状态收口、evidence-aware fallback、轻量反馈闭环后端第一版和真实 API 三轮复验已经完成。下一步优先在 **真实生成层稳定性**、**Android 反馈按钮** 和 **最终复现检查** 之间选择，其中生成层稳定性优先级最高。
 
 原因：
 
@@ -156,10 +156,10 @@
 - Android 端新增子类抽样已经跑过眼霜、蜜粉、卸妆，展示稳定。
 - 多商品对比第一版已经完成并通过 benchmark。
 - RetrievalTrace 已经能显式展示 metadata filter、过滤摘要、ranking signals 和 graph relation hits。
-- 下一条代码主线可以二选一：把 Android 端 `有用` / `不准确` 按钮接到反馈 API，或者用真实 Doubao 抽样沉淀新的 failure cases。
+- 下一条代码主线可以二选一：先修真实 Doubao 在安全边界和多轮约束里的资料外表达，或者把 Android 端 `有用` / `不准确` 按钮接到反馈 API。
 
 完成标准：
 
 - 如果走反馈闭环增强：Android 端提供反馈入口，并把当前有界证据快照提交给 `/api/feedback`。
-- 如果走真实 API 抽样：重点检查长对话、安全边界和商业陷阱下是否稳定触发 repair / fallback。
+- 如果走真实生成层稳定性：重点处理长对话、安全边界和商业陷阱下的 repair / fallback / 边界模板。
 - 两条路线都要保持 benchmark 可回归。

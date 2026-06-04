@@ -18,7 +18,7 @@
 | --- | --- | --- | --- |
 | 基础功能完整性 | 稳定可拿 | Android -> FastAPI -> RAG -> Doubao/Mock -> SSE -> 商品卡片；图片和详情弹窗已跑通 | 录屏可更干净；最终演示前再人工复验一次 |
 | 工程质量 | 基本可拿 | monorepo、README、API 契约、架构文档、评测报告、安全配置、密钥扫描、依赖版本与复现说明 | 最终提交前按复现检查表再跑一轮 |
-| 效果与可靠性 | 第一版可拿，证据更完整 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only 11/11；guardrail；RetrievalTrace；graph relation score；evidence-aware fallback | 真实 Doubao failure cases 和 claim-level judge 还可以继续沉淀 |
+| 效果与可靠性 | 第一版可讲，但真实生成层需要继续加固 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮 8/8 stable PASS；guardrail；RetrievalTrace；graph relation score；evidence-aware fallback | 真实 API groundedness 三轮仅 3/11 stable PASS，下一步优先修真实生成层边界表达、repair prompt 或 claim-level judge |
 | 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema、服饰样例、轻量反馈闭环后端第一版 | 多模态/购物车不建议作为主线 |
 
 ## 能确认已经完成的点
@@ -46,7 +46,7 @@
 | Step 4 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 已新增 `POST /api/feedback` 和 smoke test，可记录 feedback JSONL |
 | Step 5 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | 文档状态已收口；最终提交前再做复现检查、Demo 检查和 secret scan |
 
-当前状态：**evidence-aware fallback 和轻量反馈闭环均已完成第一版**。下一条代码主线可以在真实 API 抽样复验、最终 Demo 安全检查和 claim-level judge 之间选择；如果只求稳，先做最终复现检查也可以。
+当前状态：**evidence-aware fallback 和轻量反馈闭环均已完成第一版，真实 API 三轮复验也已完成**。结果说明检索、SSE 和商品卡结构稳定，但真实 Doubao 在严格 groundedness case 中仍会不稳定地产生资料外边界表达。下一条代码主线应优先修真实生成层稳定性，再做最终 Demo 安全检查。
 
 ### P0：提交材料收口
 
@@ -92,7 +92,7 @@ scripts/run_groundedness_cases.py
 - 初跑结果：mock 全链路 2/11 PASS，retrieval-only 7/11 PASS；真实 Ark / Doubao 抽样 2/2 PASS。
 - 2026-06-03 复跑：runner 已对齐 Android 商品卡 history，补了预算 `放到300`、补充语延续、`香精` 排除和商品/品牌别名引用；retrieval-only 提升到 9/11 PASS。
 - 已修正 `p_beauty_007` / `p_beauty_012` 价格证据和预算期望，并补上“控油精华 -> 修护面霜”的轻量意图切换规则；retrieval-only 进一步达到 11/11 PASS。
-- 当前位置：检索层和 mock 生成层都已能稳定证明“不乱召回、不乱放宽约束、兜底回答引用证据边界”；下一步如果继续补可靠性，应优先做真实 Doubao failure case 沉淀、claim-level judge 或相似替代推荐，而不是继续扩 case 数量。
+- 当前位置：检索层和 mock 生成层都已能稳定证明“不乱召回、不乱放宽约束、兜底回答引用证据边界”；真实 API 三轮全量回归显示 golden stream 8/8 stable PASS，但 groundedness real generation 只有 3/11 stable PASS。下一步如果继续补可靠性，应优先修真实生成层稳定性，例如边界模板、repair prompt 或 claim-level judge，而不是继续扩 case 数量。
 
 ### P2：轻量反馈闭环
 

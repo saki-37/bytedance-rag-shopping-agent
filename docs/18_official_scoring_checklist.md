@@ -20,7 +20,7 @@
 | --- | --- | --- |
 | 基础功能完整性 35% | ✅ 基本稳 | Android 原生端到后端 RAG、模型流式、商品卡片和详情已经跑通 |
 | 工程质量 25% | ✅ 基本稳 | 目录、接口、文档、安全、评测、依赖版本表和复现说明都有；文档状态已收口，最终提交前再跑一轮复现检查 |
-| 效果与可靠性 20% | ◯ 第一版可讲，证据更完整 | 已有检索 benchmark、conversation、guardrail、trace、evidence-aware fallback，以及 groundedness full mock / retrieval-only 11/11 |
+| 效果与可靠性 20% | ◯ 第一版可讲，但真实生成层需加固 | 已有检索 benchmark、conversation、guardrail、trace、evidence-aware fallback、groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮 8/8 stable PASS，但 groundedness real generation 三轮仅 3/11 stable PASS |
 | 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、多品类样例和轻量反馈闭环后端第一版已有 |
 
 ## 必做最小闭环
@@ -48,13 +48,13 @@
 
 | 官方要求 | 状态 | 当前已做 | 缺口/下一步 |
 | --- | --- | --- | --- |
-| 理解模糊需求，例如“推荐护肤品” | ✅ | 信息不足时主动追问，不乱推商品 | 已有 conversation case，可继续真实 API 抽样 |
+| 理解模糊需求，例如“推荐护肤品” | ✅ | 信息不足时主动追问，不乱推商品；真实 API golden stream 三轮稳定 | 最终 Demo 前再做人工复验 |
 | 从库内商品中检索 | ✅ | raw 100 条；enriched 25 条美妆 + 5 条服饰；Chroma + metadata filter | 非美妆只做 5 条样例，需在答辩中说明主线收窄 |
-| 给出合理推荐理由 | ◯ | 商品卡 reason 和回答基于召回商品资料；fallback 会引用商品营销文案、官方 FAQ 和用户评价边界 | 真实 Doubao 长对话可继续抽样 |
+| 给出合理推荐理由 | ◯ | 商品卡 reason 和回答基于召回商品资料；fallback 会引用商品营销文案、官方 FAQ 和用户评价边界；真实 API 流式结构稳定 | 真实 Doubao 在长对话和安全边界 case 中还需要更稳定的边界表达 |
 | 不编造不存在的商品 | ✅ | 生成 prompt 限制只能提候选商品；商品卡来自数据源 | 可补“不存在商品”陷阱 case |
 | 不编造价格 | ✅ | 商品卡价格来自数据源；guardrail 拦截未授权价格 | 已有规则 guardrail，可补 benchmark 证明 |
 | 不编造优惠/库存/下单承诺 | ✅ | `FORBIDDEN_COMMERCIAL_CLAIMS` 拦截库存、优惠、满减、折扣、购买链接、下单等 | 可补官方演示说明 |
-| 不编造功能/功效 | ◯ | 已有 groundedness cases，full mock / retrieval-only 11/11；prompt 要求基于资料；guardrail 拦截部分无证据绝对断言；fallback 会表达“资料未看到/不能保证”边界 | 完整 claim-level judge 尚未实现 |
+| 不编造功能/功效 | ◯ | 已有 groundedness cases，full mock / retrieval-only 11/11；prompt 要求基于资料；guardrail 拦截部分无证据绝对断言；fallback 会表达“资料未看到/不能保证”边界 | 真实 API groundedness 三轮仅 3/11 stable PASS，完整 claim-level judge 尚未实现 |
 
 ### 数据
 
@@ -70,7 +70,7 @@
 | --- | --- | --- | --- |
 | 不能用纯 Web / H5 方案替代原生 App | ✅ | Android Kotlin 原生 App | 无明显缺口 |
 | Demo 不能需要大量手动配置 | ✅ | README、`.env.example`、Mock fallback、Demo 脚本和 `docs/20_reproducibility_and_dependencies.md` 已有 | 最终提交前再按检查表跑一轮 |
-| 不能出现明显幻觉 | ◯ | 商品卡来自数据源；guardrail 拦截价格/库存/优惠/下单/部分无证据断言；evidence-aware fallback 已让 groundedness full mock / retrieval-only 达到 11/11 | 真实 Doubao 长对话和 claim-level judge 仍可补 |
+| 不能出现明显幻觉 | ◯ | 商品卡来自数据源；guardrail 拦截价格/库存/优惠/下单/部分无证据断言；evidence-aware fallback 已让 groundedness full mock / retrieval-only 达到 11/11；真实 API 三轮复验中商业承诺陷阱稳定 PASS | 真实 Doubao 对成分缺失、刺激/香精/酒精等安全边界和长对话继承仍不稳定，需要继续加固 |
 | 答辩时必须能解释架构、链路和关键代码细节 | ◯ | 架构文档、RAG 策略、trace、评测报告已有 | 需要准备 3-5 句口头解释和关键代码入口 |
 
 ## 评分权重逐项对照
@@ -101,7 +101,7 @@
 | 官方关注点 | 状态 | 当前证据 | 缺口 |
 | --- | --- | --- | --- |
 | 检索准确 | ◯ | golden 8、subcategory 6、apparel 5、comparison 3、groundedness retrieval-only 11 全部 PASS | benchmark 规模仍小，但主线证据已较完整 |
-| 少幻觉 | ◯ | guardrail + failure case + evidence-aware fallback + groundedness full mock / retrieval-only 11/11 | 生成层 claim-level judge 尚未实现 |
+| 少幻觉 | ◯ | guardrail + failure case + evidence-aware fallback + groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮稳定 | 真实 API groundedness 仅 3/11 stable PASS，生成层 claim-level judge 尚未实现 |
 | 多轮可用 | ◯ | conversation 6 条 PASS，上下文继承、预算放宽/收紧和商品卡指代有覆盖 | 可补更多真实多轮问法 |
 | 复杂约束可用 | ◯ | 预算、排除项、子类、信息不足、对比均有第一版 | 约束过紧无结果和过敏风险需要陷阱 case |
 | UI 无明显 Bug | ◯ | loading 收尾、自动滚动、卡片详情已修 | 最终录屏前需要人工复验 |
@@ -153,13 +153,13 @@ data/eval/groundedness_cases.json
 scripts/run_groundedness_cases.py
 ```
 
-当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版并在 2026-06-03 对齐 Android 商品卡 history；2026-06-04 加入 evidence-aware fallback 后，mock 全链路和 retrieval-only 均达到 11/11 PASS，真实 Ark / Doubao 抽样仍保留 2/2 PASS 的既有记录。
+当前进展：`data/eval/groundedness_cases.json` 已落地，包含 11 条人工标注 case，其中 3 条是 5-8 轮长对话。格式刻意保留了 `capabilities`、`why_hard`、`source_evidence`、`expect` 和 `reference_answer`，方便提交材料里解释“我们如何证明不编造”。`scripts/run_groundedness_cases.py` 已完成初版并在 2026-06-03 对齐 Android 商品卡 history；2026-06-04 加入 evidence-aware fallback 后，mock 全链路和 retrieval-only 均达到 11/11 PASS。同日真实 API 三轮全量复验显示：golden stream 8/8 stable PASS，groundedness real generation 3/11 stable PASS。结论是检索和流式结构稳定，但真实生成层仍需要边界模板、repair prompt 或 claim-level judge 加固。
 
 ## 现在最清楚的下一步
 
 如果继续做代码，优先级：
 
-1. 真实 API 抽样复验：重点看真实 Doubao 在长对话、商业陷阱和安全边界下是否触发 repair / fallback。
+1. 修真实生成层稳定性：重点处理真实 Doubao 在成分缺失、安全边界、多轮排除继承下的资料外表达。
 2. 最终 Demo 复验：真实 API、Mock fallback、Android 构建、secret scan 和录屏安全。
 3. 可选增强：把 Android 端 `有用` / `不准确` 按钮接到 `/api/feedback`，或继续做 claim-level judge。
 

@@ -21,11 +21,11 @@
 | V1 | Constraint-Aware Hybrid RAG | 基本完成 | 25 条美妆 enriched 数据、Chroma、QueryIntent、显式 RetrievalTrace、golden/subcategory/conversation/comparison benchmark、guardrail 已有 |
 | V1.5 | 提交材料和 Demo 稳定性 | 第一版完成 | README、架构、评测、Demo 脚本、提交材料、安全说明、依赖复现说明、1 分钟录屏均已有 |
 | V2 | 多品类 / Graph-aware Retrieval | V2-A、V2-B、V2-C 第一版完成 | raw 总库 100 条；25 条美妆 + 5 条服饰进入 enriched；统一向量索引 + 轻量 graph relation score 已进主链路 |
-| V3 | Verifier / Feedback Loop | 可靠性和后端反馈第一版完成 | 生成后 guardrail、evidence-aware fallback、groundedness full mock / retrieval-only 回归已有；`POST /api/feedback` 可记录失败 query 快照；Android 反馈按钮和 claim-level judge 未完成 |
+| V3 | Verifier / Feedback Loop | 可靠性和后端反馈第一版完成，真实生成层待加固 | 生成后 guardrail、evidence-aware fallback、groundedness full mock / retrieval-only 回归已有；真实 API golden stream 三轮稳定，但 groundedness real generation 仍不稳；`POST /api/feedback` 可记录失败 query 快照；Android 反馈按钮和 claim-level judge 未完成 |
 
 一句话说：**我们已经有保底可提交版本，接下来要做的是提高层次，而不是继续证明“能不能跑”。**
 
-最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`；**Graph-aware relation score** 第一版已进入主链路，trace 可展示 `graph_category`、`graph_sub_category`、`graph_effect`、`graph_price_within_budget` 等关系命中；**Groundedness / 反编造 benchmark** 已补 11 条人工 case，retrieval-only 在修正数据证据和意图切换后达到 11/11 PASS；**Evidence-aware fallback** 已完成第一版，fallback 现在会读取商品营销文案、官方 FAQ 和用户评价，并在 mock 全链路 groundedness 中达到 11/11 PASS；**依赖版本与复现说明** 已集中到 `docs/20_reproducibility_and_dependencies.md`；**轻量反馈闭环后端第一版** 已完成，`POST /api/feedback` 可写入包含最近上下文、回答、商品卡片和 trace 的 JSONL。下一步在真实 API 抽样复验、最终 Demo 安全检查和 Android 反馈按钮之间选择。
+最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`；**Graph-aware relation score** 第一版已进入主链路，trace 可展示 `graph_category`、`graph_sub_category`、`graph_effect`、`graph_price_within_budget` 等关系命中；**Groundedness / 反编造 benchmark** 已补 11 条人工 case，retrieval-only 在修正数据证据和意图切换后达到 11/11 PASS；**Evidence-aware fallback** 已完成第一版，fallback 现在会读取商品营销文案、官方 FAQ 和用户评价，并在 mock 全链路 groundedness 中达到 11/11 PASS；**真实 API 三轮复验** 已完成，golden stream 8/8 stable PASS，但 groundedness real generation 只有 3/11 stable PASS；**依赖版本与复现说明** 已集中到 `docs/20_reproducibility_and_dependencies.md`；**轻量反馈闭环后端第一版** 已完成，`POST /api/feedback` 可写入包含最近上下文、回答、商品卡片和 trace 的 JSONL。下一步优先修真实生成层稳定性，再做最终 Demo 安全检查或 Android 反馈按钮。
 
 ## 评分维度对照
 
@@ -33,8 +33,8 @@
 | --- | --- | --- | --- | --- |
 | 基础功能完整性 | 35% | 客户端对话 -> 后端 RAG -> 模型生成 -> 流式返回 -> 商品卡片 | V0 已完成，并有 Android 端复验证据 | 保持稳定，必要时重录更干净 Demo |
 | 工程质量 | 25% | 代码结构、接口设计、错误处理、文档、安全配置 | monorepo、API 契约、README、架构、评测、安全、提交材料、依赖复现说明已有 | 最终提交前按检查表复验 |
-| 效果与可靠性 | 20% | 检索准确、无幻觉、复杂场景处理 | V1 基本完成；预算、排除、追问、对比、显式 trace、guardrail、evidence-aware fallback、groundedness full mock / retrieval-only 已有 | 补真实 Doubao failure cases 或 claim-level judge |
-| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace；多商品对比、graph-aware 和后端反馈闭环第一版已有 | 可接 Android 反馈按钮或做真实 API 抽样 |
+| 效果与可靠性 | 20% | 检索准确、无幻觉、复杂场景处理 | V1 基本完成；预算、排除、追问、对比、显式 trace、guardrail、evidence-aware fallback、groundedness full mock / retrieval-only 已有；真实 API golden stream 三轮稳定 | 修真实生成层边界表达，或补 claim-level judge |
+| 加分项深度 | 20% | 多模态、性能优化、交互创新，选 1-2 个做深 | 当前主打 RAG 可靠性和可解释 trace；多商品对比、graph-aware 和后端反馈闭环第一版已有 | 可接 Android 反馈按钮，但优先级低于真实生成层稳定性 |
 
 ## V0：可跑闭环
 
@@ -274,13 +274,13 @@ V3 建议拆成两层：
 2. `scripts/run_golden_queries.py`、`scripts/run_subcategory_queries.py`、`scripts/run_comparison_queries.py`、`scripts/run_conversation_cases.py` 的 JSONL 输出已包含上述字段。
 3. comparison、golden、subcategory、apparel、conversation 和 generation guardrail 回归均 PASS。
 
-### 当前建议优先级：真实 API 复验 / Android 反馈按钮 -> 最终复验
+### 当前建议优先级：真实生成层稳定性 -> 最终复验 / Android 反馈按钮
 
-状态：**生成层 evidence-aware fallback 已完成第一版；反馈闭环后端/debug 第一版已实现**。
+状态：**生成层 evidence-aware fallback 已完成第一版；反馈闭环后端/debug 第一版已实现；真实 API 三轮复验已完成**。
 
 建议顺序：
 
-1. 可做真实 API 抽样复验：重点看 guardrail repair 和 fallback 是否在真实 Doubao 输出下稳定。
+1. 修真实生成层稳定性：重点看成分缺失、安全边界、多轮排除继承和商业承诺兜底。
 2. 可把 Android 端 `有用/不准确` 按钮接到 `/api/feedback`，把失败 query 变成后续 benchmark 或数据增强输入。
 3. 最终提交前做复验：真实 API、Mock fallback、Android 构建、secret scan 和 Demo 安全检查。
 

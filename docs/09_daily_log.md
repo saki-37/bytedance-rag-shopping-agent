@@ -77,3 +77,7 @@
 - 新增 `server/app/feedback.py`，把反馈写入本地 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`，该目录不进入 Git。
 - 反馈记录采用有界证据快照：当前 query、最近 8 条 history、最终回答、商品卡片、clarification、retrieval message 和 `RetrievalTrace`。
 - 新增 `scripts/check_feedback_loop.py`，用 debug retrieve 构造带 trace 的反馈记录并完成 smoke test。
+- 更新 `.env` 后完成真实 API 三轮全量复验：golden stream 8 cases x 3 稳定 PASS，说明真实 API 下检索、SSE 和商品卡结构稳定。
+- 同轮 groundedness real generation 为 3/11 stable PASS、8/11 stable FAIL，主要风险集中在成分缺失、安全边界、多轮排除继承和真实模型资料外表达。
+- 修复真实 API 批量复验后的 `AsyncOpenAI` 客户端清理噪声：`_collect_ark_answer` 和 `_collect_ark_repair` 结束时显式 `await client.close()`。
+- 更新 `docs/11_evaluation_report.md`、`docs/17_scoring_todo_board.md` 和 `docs/18_official_scoring_checklist.md`，把下一步主线收敛为“先修真实生成层稳定性”，而不是继续扩 benchmark 数量。
