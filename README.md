@@ -11,11 +11,11 @@
 - SSE 流式协议：`status`、`products`、`token`、`done`、`error`。
 - 商品 RAG：结构化硬过滤 + 必要功效/子类过滤 + keyword/facet 匹配 + Chroma `products` 统一 collection 向量召回 + metadata filter + 可解释 `RetrievalTrace`。
 - V2 多品类起步：新增 5 条服饰运动 enriched 样例，覆盖变体、规格、证据来源和第二品类 query benchmark。
-- Doubao / Ark OpenAI-compatible API 接入；本地无 Key 时可用 mock / safe fallback 跑通闭环。
+- Doubao / Ark OpenAI-compatible API 接入；默认评测口径使用真实 API，只有显式开启 `MOCK_LLM=true` 或缺少 Key/模型名时才走 mock / safe fallback。
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
 - 轻量反馈闭环：后端可记录 `有用` / `不准确` 反馈，以及最近上下文、回答、商品卡片和检索 trace 的有界快照。
 - 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
-- Golden queries、conversation cases、真实 Doubao probe 和 Android 模拟器复验证据已整理在文档中。
+- Golden queries、conversation cases、真实 API 三轮回归和 Android 模拟器复验证据已整理在文档中。
 
 ## Demo 与提交入口
 
@@ -63,7 +63,7 @@ ARK_MODEL=YOUR_MODEL_ENDPOINT
 MOCK_LLM=false
 ```
 
-如果只是验证端到端链路，可以保持：
+如果只是离线验证端到端链路，可以显式改成：
 
 ```env
 MOCK_LLM=true
@@ -116,6 +116,13 @@ http://10.0.2.2:8000
 ```
 
 ## Evaluation
+
+评测口径约定：
+
+- 默认开发/回归口径：`.env` 配置真实 `ARK_API_KEY`、`ARK_MODEL`，并保持 `MOCK_LLM=false`。
+- `run_golden_queries.py` 不加 `--check-stream` 时只验证检索层，不调用模型。
+- `run_groundedness_cases.py` 默认会走项目正常 settings；只有显式传 `--mock-llm` 才是本地 mock generation。
+- `--retrieval-only` 只证明检索和约束解析，不证明生成质量。
 
 检索层 golden queries：
 

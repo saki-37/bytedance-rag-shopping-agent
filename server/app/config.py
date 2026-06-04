@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     )
 
     app_env: str = "local"
-    mock_llm: bool = True
+    mock_llm: bool = False
     ark_api_key: str | None = None
     ark_base_url: str = "https://ark.cn-beijing.volces.com/api/v3/"
     ark_model: str | None = None

@@ -33,9 +33,10 @@
 1. 数据检查与 25 条美妆增强数据。
 2. FastAPI SSE 聊天接口。
 3. Android Kotlin 原生聊天页、演示快捷问题、商品卡片与详情弹窗。
-4. Golden queries、真实 Doubao probe 和 Android 端闭环复验。
+4. Golden queries、真实 API 三轮回归和 Android 端闭环复验。
 5. README 提交入口、架构说明、评测记录、Demo 脚本和提交材料清单。
 6. V2 多品类 schema 第一版设计与外部电商字段参考调研。
 7. 服饰运动 5 条 enriched 样例和第二品类 query benchmark。
 8. 依赖版本与复现说明集中成表，补齐工程质量里的复现友好度。
 9. Evidence-aware fallback 和轻量反馈闭环后端第一版。
+10. 测试默认口径已调整为真实 API generation；mock / retrieval-only 只作为显式离线或结构检查。

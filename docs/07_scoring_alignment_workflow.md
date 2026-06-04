@@ -99,14 +99,14 @@ V0 风险：
 尚未完成：
 
 1. 生成层还没有完整 claim-level groundedness judge。
-2. Evidence-aware fallback 已有第一版，但真实 Doubao 长对话抽样还可以继续沉淀。
-3. 真实 Doubao 下的所有子类 query 尚未系统复验。
+2. Evidence-aware fallback 已有第一版，但真实 API 三轮 groundedness 暴露出长对话、安全边界和资料外表达仍需加固。
+3. 真实 API 下的子类 query 尚未逐一做三轮生成复验；目前主要证据仍来自检索层和 mock 展示层。
 4. 纯向量、约束混合、graph-aware 三种检索版本的指标对比还没形成。
 
 V1 下一步如果继续补强：
 
 1. 扩展对比型 benchmark 到更多品类和更复杂约束。
-2. 给真实 Doubao 输出继续沉淀 failure cases。
+2. 分析真实 API 三轮回归中的 failure cases，先定位是 prompt、repair、fallback 还是 benchmark 判定问题。
 3. 把 guardrail 从“明显违规”推进到“声明是否有证据支持”。
 
 ## V1.5：提交材料与演示稳定性

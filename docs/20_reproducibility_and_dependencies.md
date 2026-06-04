@@ -6,14 +6,26 @@
 
 ## 复现结论
 
-当前仓库可以用两种方式复现：
+当前仓库可以用两种方式复现。**开发和评测默认口径是 Ark / Doubao 真实模型**；Mock / safe fallback 只用于无 Key 环境、离线结构检查或明确的降级演示。
 
 | 复现模式 | 需要真实 API Key | 目的 | 推荐场景 |
 | --- | --- | --- | --- |
-| Mock / safe fallback | 否 | 验证 Android、FastAPI、SSE、RAG 检索、商品卡片和评测脚本闭环 | 评委快速拉起、无 Key 环境、本地自测 |
-| Ark / Doubao 真实模型 | 是 | 验证真实模型流式生成和 evidence-bound 导购回复 | Demo 前复验、答辩展示、模型效果抽样 |
+| Ark / Doubao 真实模型 | 是 | 验证真实模型流式生成和 evidence-bound 导购回复 | 默认开发回归、Demo 前复验、答辩展示、模型效果分析 |
+| Mock / safe fallback | 否 | 验证 Android、FastAPI、SSE、RAG 检索、商品卡片和评测脚本闭环 | 无 Key 环境、离线自测、网络故障时的结构检查 |
 
-默认 `.env.example` 使用 `MOCK_LLM=true`，因此没有真实 Key 时也不会阻塞端到端运行。真实 Key 只放本地 `.env`，不得提交。
+默认 `.env.example` 使用 `MOCK_LLM=false`。如果没有真实 Key 或模型名，后端会自动使用 safe fallback，保证端到端链路不阻塞；如果要强制离线 mock，请在本地 `.env` 显式改成 `MOCK_LLM=true`。真实 Key 只放本地 `.env`，不得提交。
+
+## 测试口径约定
+
+后续记录评测结果时，必须写清楚属于哪一种：
+
+| 类型 | 是否调用真实模型 | 证明什么 | 典型命令 |
+| --- | --- | --- | --- |
+| Retrieval-only | 否 | query parse、hard filter、metadata filter、rerank、商品卡片是否正确 | `run_golden_queries.py --require-vector` 或 `run_groundedness_cases.py --retrieval-only` |
+| Mock / offline generation | 否 | SSE 形态、safe fallback、guardrail、Android 展示是否稳定 | `run_groundedness_cases.py --mock-llm` |
+| Real API generation | 是 | 真实 Doubao 输出、repair / fallback、反幻觉稳定性 | `MOCK_LLM=false ... run_groundedness_cases.py` 或 `run_golden_queries.py --check-stream` |
+
+默认评测不再假设 mock。除非命令里显式出现 `--mock-llm`、`MOCK_LLM=true` 或 `--retrieval-only`，否则应按真实 API 口径理解；如果 `.env` 缺 Key 导致 safe fallback，报告里必须单独说明这不是一次有效的真实 API 生成评测。
 
 ## 本机验证环境
 
@@ -74,11 +86,16 @@ pip install -r server/requirements.txt
 cp .env.example .env
 ```
 
-如果只验证闭环，保持 `.env` 中：
+默认真实 API 口径下，本地 `.env` 应保持：
 
 ```env
-MOCK_LLM=true
+ARK_API_KEY=YOUR_LOCAL_KEY
+ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/
+ARK_MODEL=YOUR_MODEL_ENDPOINT
+MOCK_LLM=false
 ```
+
+如果只做离线结构检查，再显式改成 `MOCK_LLM=true`。
 
 检查数据、生成增强数据并构建索引：
 
@@ -159,7 +176,7 @@ server/.venv/bin/python scripts/probe_chat.py \
 
 ## 评测复现
 
-建议在每次改检索、prompt、guardrail 或多轮状态后至少跑下面几组：
+建议在每次改检索、prompt、guardrail 或多轮状态后至少跑下面几组。注意：下面前几组主要验证检索和规则层，默认不代表真实生成质量。
 
 ```bash
 server/.venv/bin/python scripts/run_golden_queries.py --require-vector
@@ -172,7 +189,16 @@ server/.venv/bin/python scripts/run_comparison_queries.py --require-vector
 server/.venv/bin/python scripts/check_generation_guardrails.py
 ```
 
-反编造 / groundedness 评测：
+反编造 / groundedness 评测分两种：
+
+真实 API 口径，也就是后续默认用于判断生成质量的命令：
+
+```bash
+MOCK_LLM=false PYTHONDONTWRITEBYTECODE=1 \
+  server/.venv/bin/python scripts/run_groundedness_cases.py
+```
+
+离线 / 结构口径，必须显式标注为 mock 或 retrieval-only：
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
@@ -183,7 +209,7 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
   --retrieval-only
 ```
 
-当前最新一轮 groundedness full mock generation 和 retrieval-only 结果均为 11/11 PASS；完整记录见 `docs/11_evaluation_report.md`。
+当前最新一轮 groundedness full mock generation 和 retrieval-only 结果均为 11/11 PASS；真实 API 三轮全量复验为 golden stream 8/8 stable PASS、groundedness real generation 3/11 stable PASS。完整记录见 `docs/11_evaluation_report.md`。
 
 轻量反馈闭环 smoke test：
 
@@ -199,7 +225,7 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 | --- | --- | --- |
 | Android 能启动但没有回复 | 后端未启动，或模拟器不能访问宿主机 | 确认 Uvicorn 在 `0.0.0.0:8000`，Android 使用 `10.0.2.2:8000` |
 | Gradle 依赖下载慢或失败 | Maven / Google 仓库网络不稳定 | 使用代理参数，或在 Android Studio 中重新 Sync |
-| 真实 Doubao 请求超时 | 网络代理或 Key/模型名配置异常 | 先切回 `MOCK_LLM=true` 验证链路，再检查 `.env` 和代理 |
+| 真实 Doubao 请求超时 | 网络代理或 Key/模型名配置异常 | 先用 retrieval-only 或 `MOCK_LLM=true` 验证链路，再检查 `.env` 和代理；不要把 fallback 结果记成真实 API 结果 |
 | Chroma 检索无结果 | 索引未构建或 enriched 数据未生成 | 重新运行 `python scripts/build_index.py` |
 | 反馈脚本写入失败 | `data/tmp/feedback/` 无写入权限或当前沙盒不允许写仓库临时目录 | 在真实本地终端运行，或确认仓库目录可写 |
 | 提交前 secret scan 失败 | `.env`、文档或录屏说明中出现疑似 Key | 删除真实 Key，重新运行 `python3 scripts/scan_secrets.py --all` |

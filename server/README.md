@@ -12,4 +12,4 @@ cp ../.env.example ../.env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-With `MOCK_LLM=true`, the server returns a local streaming response without calling Ark.
+Default local settings should use `MOCK_LLM=false` with a real Ark key and model endpoint. With `MOCK_LLM=true`, the server returns a local streaming response without calling Ark; use that only for offline structure checks or no-key environments.

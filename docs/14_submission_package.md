@@ -114,13 +114,19 @@ server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 server/.venv/bin/python scripts/run_conversation_cases.py
 server/.venv/bin/python scripts/run_comparison_queries.py --require-vector
-PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm
-PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm --retrieval-only
+MOCK_LLM=false PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py
 server/.venv/bin/python scripts/check_generation_guardrails.py
 server/.venv/bin/python scripts/check_feedback_loop.py
 ```
 
-真实 Doubao probe：
+离线结构检查可以额外跑：
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm
+PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm --retrieval-only
+```
+
+真实 API 快速检查：
 
 ```bash
 https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
@@ -164,5 +170,5 @@ git diff --check
 ## 下一阶段建议
 
 1. 后端/debug 反馈接口已完成；可继续增加 Android 用户反馈按钮，沉淀失败 query 和推荐修正记录。
-2. 用真实 Doubao 对长对话、商业陷阱和安全边界做小批量复验，继续沉淀 failure cases。
+2. 真实 API 三轮全量复验已完成；下一步优先分析 groundedness failure cases，并决定用边界模板、repair prompt 还是 claim-level judge 修复。
 3. 最终提交前按 `docs/20_reproducibility_and_dependencies.md` 跑一轮复现检查，并确认 Demo 录屏没有敏感信息。

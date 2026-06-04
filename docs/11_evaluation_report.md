@@ -1,18 +1,33 @@
 # 评测记录
 
 日期：2026-05-26
-更新：2026-06-03
+更新：2026-06-04
 
 用途：沉淀当前可复跑的评测证据，后续每次改检索、prompt 或生成约束后更新。
 
 ## 当前结论
 
-当前版本完成四层评测，并已在 25 条美妆增强数据和 5 条服饰运动样例上复跑：
+当前版本完成四层评测，并已在 25 条美妆增强数据和 5 条服饰运动样例上复跑。需要特别区分：部分早期通过项是 retrieval-only 或 mock generation，它们证明检索、规则和展示稳定；真实 API generation 需要单独看 2026-06-04 三轮全量回归。
 
 1. 检索层：8 条 golden queries、6 条美妆子类 queries 和 5 条服饰运动 V2-B queries 全部通过，Chroma 当前使用统一 `products` collection，索引 30 条 enriched 商品，并通过 metadata filter 限定类目、子类和预算。
 2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠、下单承诺和无证据的绝对断言。
-3. SSE 层：真实 Ark / Doubao 暂时不可用时，8 条 golden queries 仍能返回完整 `products/token/done` 事件。
-4. Android 层：真实 Doubao 主线回复、商品卡片、图片、详情弹窗、信息不足追问已完成模拟器复验；新增子类抽样在 `MOCK_LLM=true` 下完成，重点验证检索、卡片和布局。
+3. SSE 层：真实 API golden stream 三轮 8/8 stable PASS，说明 `products/token/done` 事件形态和检索链路稳定。
+4. Groundedness 层：mock full generation / retrieval-only 均达到 11/11 PASS，但真实 API groundedness real generation 三轮仅 3/11 stable PASS，说明当前主要缺口在真实模型的边界表达和资料外声明控制。
+5. Android 层：真实 Doubao 主线回复、商品卡片、图片、详情弹窗、信息不足追问已完成模拟器复验；新增子类抽样在 `MOCK_LLM=true` 下完成，重点验证检索、卡片和布局。
+
+## 测试口径说明
+
+后续评测默认以真实 API generation 为生成质量口径：本地 `.env` 应配置真实 `ARK_API_KEY`、`ARK_MODEL`，并保持 `MOCK_LLM=false`。
+
+为了避免结果混淆，本文档里的评测分为三类：
+
+| 类型 | 是否调用真实模型 | 证明范围 |
+| --- | --- | --- |
+| Retrieval-only | 否 | 只证明 query parse、检索、过滤、排序和商品卡片是否正确 |
+| Mock / offline generation | 否 | 证明 SSE、safe fallback、guardrail 和 UI 展示是否稳定 |
+| Real API generation | 是 | 证明真实 Doubao 输出、repair / fallback 和反幻觉稳定性 |
+
+如果命令或结果里出现 `--mock-llm`、`MOCK_LLM=true` 或 `--retrieval-only`，不能把它解释成真实 API 生成效果。若 `.env` 缺 Key 导致 safe fallback，也必须单独记录为 fallback，不计入真实 API generation。
 
 ## 检索层 Benchmark
 
@@ -695,6 +710,18 @@ Groundedness 三轮明细：
    - 把预算数字或上下文数字写成价格相关表述。
 3. 后置 guardrail 多次成功拦截真实模型输出；`GRD-07` 三轮稳定 PASS 说明商业承诺兜底有效。
 4. 当前 groundedness runner 的 `answer_must_contain` 是硬字符串检查，可能会把“语义上合格但没包含指定词”的回答判 FAIL；但三轮稳定 FAIL 仍说明真实生成层不够可控，需要更强的模板化边界表达或 claim-level judge。
+
+Failure case 初步归因：
+
+| 类型 | 代表 case | 现象 | 初步判断 |
+| --- | --- | --- | --- |
+| 判定器硬字符串误判 | `GRD-01`、`GRD-02`、`GRD-08`、`GRD-L02` 部分轮次 | 回答说了“没有提及/无法保证/角质调理/烟酰胺浓度高达10%”，但没有命中 `answer_must_contain` 里的精确词 | 不应简单算作模型失败，需要把 `answer_must_contain` 升级为同义短语集合或 claim-level judge |
+| 硬边界没有稳定显式说出 | `GRD-04`、`GRD-L01` | 检索层继承了预算和排除条件，但回答没有稳定说“只放宽预算，酒精/刺激排除仍保留” | 检索状态正确，生成表达不稳定；适合加 deterministic boundary prefix |
+| 真实资料外承诺 | `GRD-L01`、`GRD-L03` | 长对话里仍出现“明确不含酒精/香精”“正常使用不会堵塞”等强说法 | 这是需要修的真实 groundedness 风险，当前 regex guardrail 覆盖不足 |
+| 风险建议不够靠前 | `GRD-05`、`GRD-L02` | 用户提到发酵不耐受、屏障不稳或叠加使用时，回答有提示，但先进入商品对比或推荐，缺少“先不建议直接用”的强边界 | 需要把过敏/孕期/屏障受损/排除条件这类高风险 query 提升为前置安全策略 |
+| 检索与生成证明范围混淆 | 多数 FAIL | 商品召回通常合理，`products/done` 结构稳定，但回答文本没有稳定满足 groundedness 断言 | 说明主要问题不在 retrieval，而在真实模型输出控制和评测判定方式 |
+
+因此，`3/11 stable PASS` 不能粗暴理解成“系统整体只有 3 条能跑”。更准确的解释是：**检索和流式链路已经稳定，真实生成层在高风险声明上的可控性不足，而当前 benchmark 也需要从硬字符串升级成更贴近 claim 的判定。**
 
 建议下一步：
 
