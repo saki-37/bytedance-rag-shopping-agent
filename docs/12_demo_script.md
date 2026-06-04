@@ -4,6 +4,8 @@
 
 用途：录制第一版 1 分钟闭环 Demo，证明当前版本已经能跑通 Android 原生端、FastAPI、RAG 检索、Doubao 生成、商品卡片和详情弹窗。
 
+答辩口头讲解可直接参考 `docs/22_defense_cheatsheet.md`。本页只负责 Demo 展示顺序。
+
 ## 录屏前检查
 
 1. 后端运行在 `0.0.0.0:8000`，Android 模拟器通过 `http://10.0.2.2:8000` 访问。

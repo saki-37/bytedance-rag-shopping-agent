@@ -48,7 +48,7 @@
 | P0-4 | 真实 API 回归 + AI 复核 | 证明修复后不是只在单个真实 case 或 mock 里好看 | 已完成第一轮：`GRD-05/08/L01` 真实 API + AI review；`GRD-L01` 暴露的 150 元预算边界 bug 已修复并复验 PASS | `scripts/run_*`、`scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
 | P0-5 | AI review / 评测口径对齐 | 约束继承应进入内部 trace，不要求机械显示给用户 | 已完成：AI review prompt 明确内部 trace 不必用户可见；`GRD-L01` trace-aware review 复跑 PASS, score=5, risk=low | `scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
 | P1-1 | Android 反馈按钮 | 把后端反馈闭环接到真实 demo 体验里 | 回答下方可点 `有用/不准确`，并写入 feedback JSONL | `client/android/...`、`server/app/feedback.py` |
-| P1-2 | Demo / 答辩材料收口 | 降低评委理解成本，确保能讲清架构链路和关键代码 | 录屏、架构解释、复现检查、secret scan 完成 | `docs/12_demo_script.md`、`docs/14_submission_package.md`、`docs/20_reproducibility_and_dependencies.md` |
+| P1-2 | Demo / 答辩材料收口 | 降低评委理解成本，确保能讲清架构链路和关键代码 | 第一版已完成：`docs/22_defense_cheatsheet.md` 收口项目介绍、架构链路、可靠性证据、关键代码入口和边界说明 | `docs/12_demo_script.md`、`docs/14_submission_package.md`、`docs/20_reproducibility_and_dependencies.md`、`docs/22_defense_cheatsheet.md` |
 | P2 | 暂缓的大功能 | 防止主线扩张 | 多模态、购物车、下单、全量非美妆标注都不作为当前主线 | 暂不改 |
 
 执行原则：
@@ -59,7 +59,7 @@
 4. 如果真实 API 输出和关键词判定冲突，优先看 AI review / 人工语义核验，不直接按硬字符串定生死。
 5. 用户可见回答只展示必要结论；约束继承、来源边界和安全判断进入 trace，供 debug、评测和答辩使用。
 
-当前下一步：**P1-2 Demo / 答辩材料收口**。P0-5 已经修正评测口径，不再把内部 trace 没显示给用户误判为体验或生成问题；接下来更值得做的是把“真实 API 可靠性证据 + trace 解释 + guardrail 兜底链路”整理成答辩时能讲清楚的材料。
+当前下一步：**最终复验与提交前检查**。P1-2 第一版已经完成；接下来不要再扩功能，优先按 `docs/20_reproducibility_and_dependencies.md` 和 `docs/14_submission_package.md` 跑一次真实 API、Android、secret scan 和录屏安全检查。
 
 ### P0：提交材料收口
 

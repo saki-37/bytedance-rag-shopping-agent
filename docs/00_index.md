@@ -26,6 +26,7 @@
 - [Agentic RAG / LLM Planner 调研补充](19_agentic_rag_planner_research.md)
 - [依赖版本与复现说明](20_reproducibility_and_dependencies.md)
 - [Groundedness Case 全量分析](21_groundedness_case_analysis.md)
+- [答辩口袋稿](22_defense_cheatsheet.md)
 
 ## 当前里程碑
 
@@ -41,4 +42,5 @@
 8. 依赖版本与复现说明集中成表，补齐工程质量里的复现友好度。
 9. Evidence-aware fallback 和轻量反馈闭环后端第一版。
 10. 测试默认口径已调整为真实 API generation；mock / retrieval-only 只作为显式离线或结构检查。
-11. Groundedness 11 条 case 已完成逐条归因分析，下一步优先修 judge 和高风险边界表达。
+11. Groundedness 11 条 case 已完成逐条归因分析，P0-3/P0-4/P0-5 已补真实 API 高风险回归、预算边界修复和 trace-aware AI review。
+12. 答辩口袋稿已收口项目介绍、架构链路、可靠性证据、关键代码入口和当前边界。

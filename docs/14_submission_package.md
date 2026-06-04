@@ -14,8 +14,10 @@
 4. 架构说明：`docs/10_architecture.md`
 5. 评测记录：`docs/11_evaluation_report.md`
 6. 依赖版本与复现说明：`docs/20_reproducibility_and_dependencies.md`
+7. 答辩口袋稿：`docs/22_defense_cheatsheet.md`
 
 其中 README 是第一入口；本页是提交前自检清单；架构说明和评测记录用于支撑答辩或技术追问。
+如果需要快速准备口头讲解，优先看答辩口袋稿。
 
 ## 一句话项目介绍
 
@@ -169,6 +171,6 @@ git diff --check
 
 ## 下一阶段建议
 
-1. 当前下一步优先做 P1-2：Demo / 答辩材料收口，把真实 API 可靠性证据、trace 解释、guardrail 兜底链路整理成 3-5 句能讲清楚的话。
+1. 当前下一步优先做最终复验与提交前检查：真实 API、Android 构建/演示、secret scan、录屏安全。
 2. 后端/debug 反馈接口已完成；可选增强是增加 Android 用户反馈按钮，沉淀失败 query 和推荐修正记录。
 3. 最终提交前按 `docs/20_reproducibility_and_dependencies.md` 跑一轮复现检查，并确认 Demo 录屏没有敏感信息。
