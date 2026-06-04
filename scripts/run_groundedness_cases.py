@@ -145,7 +145,7 @@ def run_case(case: dict[str, Any], client: Any, skip_answer_checks: bool) -> dic
             if event["event"] == "products"
             for product in event["data"].get("products", [])
         ]
-        failures = evaluate_turn(
+        failures, judge_checks = evaluate_turn(
             expectation=turn.get("expect", {}),
             debug=debug,
             answer=answer,
@@ -159,6 +159,7 @@ def run_case(case: dict[str, Any], client: Any, skip_answer_checks: bool) -> dic
             answer=answer,
             stream_products=stream_products,
             failures=failures,
+            judge_checks=judge_checks,
         )
         turn_records.append(turn_record)
         product_ids = [product["product_id"] for product in debug["products"]]
@@ -189,7 +190,7 @@ def evaluate_turn(
     answer: str,
     stream_products: list[str],
     skip_answer_checks: bool,
-) -> list[str]:
+) -> tuple[list[str], dict[str, Any]]:
     products = debug["products"]
     product_ids = [product["product_id"] for product in products]
     all_product_ids = list(dict.fromkeys([*product_ids, *stream_products]))
@@ -197,6 +198,12 @@ def evaluate_turn(
     retrieval_message = debug.get("retrieval_message") or ""
     intent = debug["trace"]["parsed_intent"]
     failures: list[str] = []
+    judge_checks: dict[str, Any] = {
+        "answer_claims": [],
+        "forbidden_answer_claims": [],
+        "source_checks": [],
+        "legacy_answer_checks": [],
+    }
 
     if "must_clarify" in expectation:
         must_clarify = bool(expectation["must_clarify"])
@@ -256,15 +263,104 @@ def evaluate_turn(
             failures.append(f"retrieval_message_missing_text={text}")
 
     if not skip_answer_checks:
+        answer_claims = expectation.get("answer_claims", [])
+        forbidden_answer_claims = expectation.get("forbidden_answer_claims", [])
+        source_checks = expectation.get("source_checks", [])
+
+        for claim in answer_claims:
+            check = evaluate_answer_claim(answer, claim)
+            judge_checks["answer_claims"].append(check)
+            if check["required"] and not check["passed"]:
+                failures.append(f"answer_claim_missing id={check['id']} any_of={check['any_of']}")
+
+        for claim in forbidden_answer_claims:
+            check = evaluate_forbidden_answer_claim(answer, claim)
+            judge_checks["forbidden_answer_claims"].append(check)
+            if check["matched"]:
+                failures.append(f"answer_forbidden_claim id={check['id']} matched={check['matched']}")
+
+        for source_check in source_checks:
+            check = evaluate_source_check(answer, source_check)
+            judge_checks["source_checks"].append(check)
+            if check["claim_matched"] and not check["source_matched"] and check["on_missing_source"] == "failure":
+                failures.append(f"source_unqualified_claim id={check['id']} matched={check['claim_matched']}")
+
         for text in expectation.get("answer_must_contain", []):
             if text not in answer:
                 failures.append(f"answer_missing_text={text}")
+                judge_checks["legacy_answer_checks"].append(
+                    {"type": "must_contain", "text": text, "passed": False}
+                )
+            else:
+                judge_checks["legacy_answer_checks"].append(
+                    {"type": "must_contain", "text": text, "passed": True}
+                )
 
         for text in expectation.get("answer_must_not_contain", []):
             if text in answer:
                 failures.append(f"answer_forbidden_text={text}")
+                judge_checks["legacy_answer_checks"].append(
+                    {"type": "must_not_contain", "text": text, "passed": False}
+                )
+            else:
+                judge_checks["legacy_answer_checks"].append(
+                    {"type": "must_not_contain", "text": text, "passed": True}
+                )
 
-    return failures
+    return failures, judge_checks
+
+
+def evaluate_answer_claim(answer: str, claim: dict[str, Any]) -> dict[str, Any]:
+    any_of = [str(term) for term in claim.get("any_of", [])]
+    all_of = [str(term) for term in claim.get("all_of", [])]
+    matched_any = matched_terms(answer, any_of)
+    missing_all = [term for term in all_of if term not in answer]
+    passed = (not any_of or bool(matched_any)) and not missing_all
+    return {
+        "id": claim.get("id", "answer_claim"),
+        "description": claim.get("description", ""),
+        "required": bool(claim.get("required", True)),
+        "any_of": any_of,
+        "all_of": all_of,
+        "matched_any": matched_any,
+        "missing_all": missing_all,
+        "passed": passed,
+    }
+
+
+def evaluate_forbidden_answer_claim(answer: str, claim: dict[str, Any]) -> dict[str, Any]:
+    any_of = [str(term) for term in claim.get("any_of", [])]
+    matched = matched_terms(answer, any_of)
+    return {
+        "id": claim.get("id", "forbidden_answer_claim"),
+        "description": claim.get("description", ""),
+        "any_of": any_of,
+        "matched": matched,
+        "passed": not matched,
+    }
+
+
+def evaluate_source_check(answer: str, source_check: dict[str, Any]) -> dict[str, Any]:
+    claim_any_of = [str(term) for term in source_check.get("claim_any_of", [])]
+    source_any_of = [str(term) for term in source_check.get("source_any_of", [])]
+    claim_matched = matched_terms(answer, claim_any_of)
+    source_matched = matched_terms(answer, source_any_of)
+    needs_review = bool(claim_matched and not source_matched)
+    return {
+        "id": source_check.get("id", "source_check"),
+        "description": source_check.get("description", ""),
+        "claim_any_of": claim_any_of,
+        "source_any_of": source_any_of,
+        "claim_matched": claim_matched,
+        "source_matched": source_matched,
+        "needs_review": needs_review,
+        "on_missing_source": source_check.get("on_missing_source", "review"),
+        "passed": not needs_review,
+    }
+
+
+def matched_terms(text: str, terms: list[str]) -> list[str]:
+    return [term for term in terms if term and term in text]
 
 
 def build_turn_record(
@@ -274,6 +370,7 @@ def build_turn_record(
     answer: str,
     stream_products: list[str],
     failures: list[str],
+    judge_checks: dict[str, Any],
 ) -> dict[str, Any]:
     trace = debug["trace"]
     return {
@@ -291,6 +388,7 @@ def build_turn_record(
         "final_ranking": trace["final_ranking"],
         "ranking_signals": trace.get("ranking_signals", {}),
         "guardrail_checks": trace["guardrail_checks"],
+        "judge_checks": judge_checks,
         "answer": answer,
     }
 

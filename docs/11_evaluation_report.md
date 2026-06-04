@@ -744,3 +744,22 @@ Failure case 初步归因：
 5. 给真实 API runner 增加 `--repeat`、per-turn timeout、三轮汇总和语义复核字段。
 6. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
 7. 扩展多商品对比到更多品类和更复杂约束。
+
+## P0-1 Judge 升级第一批
+
+本轮完成 groundedness judge 的第一批改造：
+
+- `scripts/run_groundedness_cases.py` 新增 `answer_claims`、`forbidden_answer_claims` 和 `source_checks`。
+- 每个 turn 输出 `judge_checks`，记录同义 claim 是否命中、禁止 claim 是否触发、强效果描述是否需要 source check。
+- `GRD-01`、`GRD-02`、`GRD-04`、`GRD-L01` 已加入第一批 claim 配置。
+- `GRD-04` / `GRD-L01` 中“只放宽预算、酒精/刺激仍保留”的用户可见表达改为非硬性检查：当前只记录可见表达情况，不再把它作为 deterministic failure，因为该信息后续应进入内部 trace。
+
+验证结果：
+
+| 检查 | 结果 |
+| --- | --- |
+| 4 个代表 case mock groundedness | PASS |
+| 全量 groundedness mock | 11/11 PASS |
+| 全量 groundedness mock + mock AI review | 11/11 PASS |
+
+这一步解决的是“确定性 judge 太脆”的第一层问题；真实 API 生成层是否仍有资料外承诺，需要在 P0-4 真实 API 回归中继续验证。

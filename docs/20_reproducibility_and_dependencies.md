@@ -211,6 +211,15 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 
 当前最新一轮 groundedness full mock generation 和 retrieval-only 结果均为 11/11 PASS；真实 API 三轮全量复验为 golden stream 8/8 stable PASS、groundedness real generation 3/11 stable PASS。完整记录见 `docs/11_evaluation_report.md`。
 
+Groundedness runner 现在会输出 `judge_checks`：
+
+- `answer_claims`：同义 claim / 近义表达是否命中。
+- `forbidden_answer_claims`：禁止 claim 是否出现在回答中。
+- `source_checks`：强效果描述是否需要回连来源。
+- `legacy_answer_checks`：旧的硬字符串检查结果，保留作为对照。
+
+第一批已配置 `GRD-01`、`GRD-02`、`GRD-04`、`GRD-L01`，用于减少“语义上合格但关键词没命中”的 false fail。
+
 Benchmark 结束后的 AI 语义复核：
 
 ```bash

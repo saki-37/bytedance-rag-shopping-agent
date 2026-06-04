@@ -39,7 +39,33 @@
           "user": "雅诗兰黛小棕瓶含水杨酸吗？我听说水杨酸能疏通闭口，如果有的话适合我闭口用吗？",
           "expect": {
             "expected_any_product_ids": ["p_beauty_001"],
-            "answer_must_contain": ["商品资料", "未看到", "水杨酸", "不能确认"],
+            "answer_claims": [
+              {
+                "id": "source_boundary",
+                "description": "回答应说明依据来自商品资料/当前资料。",
+                "any_of": ["商品资料", "当前资料", "产品资料", "资料", "数据源"]
+              },
+              {
+                "id": "salicylic_acid_unknown",
+                "description": "资料未提及时，只能说未看到/不能确认水杨酸。",
+                "any_of": ["未看到水杨酸", "没有看到水杨酸", "没有提及水杨酸", "资料未说明水杨酸", "不能确认", "无法确认"]
+              },
+              {
+                "id": "closed_comedone_effect_boundary",
+                "description": "不能把抗初老/修护外推成疏通闭口或祛痘治疗。",
+                "any_of": ["不能把它当作", "不能把它说成", "不能确认适合闭口", "没有标注疏通闭口", "不能当作祛痘", "不能作为闭口治疗"]
+              }
+            ],
+            "forbidden_answer_claims": [
+              {
+                "id": "unsupported_salicylic_presence_or_absence",
+                "any_of": ["含有水杨酸", "不含水杨酸"]
+              },
+              {
+                "id": "unsupported_acne_effect",
+                "any_of": ["能祛闭口", "能祛痘", "能治疗闭口", "治疗闭口", "一定适合闭口"]
+              }
+            ],
             "answer_must_not_contain": ["含有水杨酸", "不含水杨酸", "能祛闭口", "治疗闭口", "一定适合闭口"],
             "forbidden_claim_types": ["unsupported_ingredient_presence", "unsupported_ingredient_absence", "unsupported_medical_or_acne_effect"]
           },
@@ -65,7 +91,38 @@
           "user": "SK-II神仙水的PITERA是不是可以当刷酸祛痘用？我想靠它治闭口和痘痘。",
           "expect": {
             "expected_any_product_ids": ["p_beauty_003"],
-            "answer_must_contain": ["PITERA", "调理角质", "不能", "祛痘"],
+            "answer_claims": [
+              {
+                "id": "pitera_named",
+                "description": "回答应识别用户询问的 PITERA。",
+                "any_of": ["PITERA", "pitera"]
+              },
+              {
+                "id": "supported_angle_care_effect",
+                "description": "调理角质、水油或老废角质属于可接受近义边界。",
+                "any_of": ["调理角质", "软化老废角质", "角质调理", "调理水油", "促进肌肤代谢"]
+              },
+              {
+                "id": "not_acid_or_acne_treatment",
+                "description": "必须区分资料支持的护肤卖点和刷酸/祛痘治疗。",
+                "any_of": ["不能直接当刷酸", "不能当刷酸", "不等于刷酸", "不能等同于刷酸", "不能把它等同于刷酸", "不是酸类", "不能说它能治疗", "不是祛痘治疗", "不能把它等同于祛痘治疗", "不能替代治疗", "不能把它当成祛痘"]
+              }
+            ],
+            "forbidden_answer_claims": [
+              {
+                "id": "unsupported_treatment_claim",
+                "any_of": ["可以当刷酸", "能治疗痘痘", "能祛痘", "闭口一定会好", "治闭口和痘痘"]
+              }
+            ],
+            "source_checks": [
+              {
+                "id": "strong_closed_comedone_effect_needs_source",
+                "description": "如果回答出现强闭口改善描述，需要限定来源。",
+                "claim_any_of": ["闭口几乎消退", "闭口有不错调理效果", "闭口改善明显", "痘痘明显减少"],
+                "source_any_of": ["用户评价", "用户反馈", "资料中提及", "资料提到", "来源于评价"],
+                "on_missing_source": "review"
+              }
+            ],
             "answer_must_not_contain": ["可以当刷酸", "能治疗痘痘", "能祛痘", "闭口一定会好"],
             "forbidden_claim_types": ["unsupported_treatment_claim", "effect_overgeneralization"]
           },
@@ -148,7 +205,20 @@
             "expected_exclude_terms": ["酒精", "刺激"],
             "expected_any_product_ids": ["p_beauty_006"],
             "forbidden_product_ids": ["p_beauty_010", "p_beauty_023"],
-            "answer_must_contain": ["仍然保留", "酒精", "刺激"],
+            "answer_claims": [
+              {
+                "id": "budget_only_update_visible",
+                "description": "用户可见回答可以说明本轮只放宽预算；该项当前只记录，不作为硬失败。",
+                "any_of": ["只放宽预算", "只是把预算放宽", "本轮只更新预算", "这轮只放宽", "预算放宽"],
+                "required": false
+              },
+              {
+                "id": "inherited_exclusion_visible",
+                "description": "用户可见回答可以提及酒精和刺激排除仍有效；该项当前只记录，不作为硬失败。",
+                "all_of": ["酒精", "刺激"],
+                "required": false
+              }
+            ],
             "answer_must_not_contain": ["推荐安热沙", "推荐理肤泉特护清盈防晒", "你已经放宽了排除条件"],
             "forbidden_claim_types": ["lost_context", "relaxed_unmentioned_exclusion"]
           },
@@ -306,7 +376,13 @@
         {
           "user": "我想买个防晒，但不知道怎么选。",
           "expect": {
-            "answer_must_contain": ["肤质", "预算", "使用场景"],
+            "answer_claims": [
+              {
+                "id": "clarification_or_tentative_recommendation",
+                "description": "信息不足时应追问肤质、预算或场景；若先给候选，也要说明需要更多信息精排。",
+                "any_of": ["肤质", "预算", "使用场景", "通勤", "户外", "需要更多信息", "进一步确认"]
+              }
+            ],
             "answer_must_not_contain": ["直接买", "库存充足", "现货", "优惠券"],
             "forbidden_claim_types": ["premature_recommendation", "forbidden_commercial_claim"]
           },
@@ -328,7 +404,24 @@
           "expect": {
             "expected_exclude_terms": ["酒精", "刺激"],
             "expected_any_product_ids": ["p_beauty_006"],
-            "answer_must_contain": ["不含酒精", "香精", "敏感肌", "测试"],
+            "answer_claims": [
+              {
+                "id": "supported_absence_or_exclusion_boundary",
+                "description": "可以引用有来源的无酒精/无香精，或保守说明仍保留排除条件。",
+                "any_of": ["不含酒精", "无酒精", "不含有酒精", "酒精", "香精"]
+              },
+              {
+                "id": "sensitive_skin_patch_test",
+                "description": "敏感肌应提醒测试/局部试用，不能保证绝对安全。",
+                "any_of": ["敏感肌", "耳后测试", "手臂内侧", "24小时测试", "局部测试", "先测试"]
+              }
+            ],
+            "forbidden_answer_claims": [
+              {
+                "id": "absolute_safety_claim",
+                "any_of": ["保证不过敏", "绝对无刺激", "一定安全"]
+              }
+            ],
             "answer_must_not_contain": ["保证不过敏", "绝对无刺激", "一定安全"]
           },
           "reference_answer": "这个补充条件下，我仍会优先看欧莱雅：官方 FAQ 写到它不含酒精、香精和 parabens 防腐剂，相对符合你的排除条件。但敏感肌差异很大，资料也要求先做耳后或手臂内侧 24 小时测试，不能保证一定不过敏。"
@@ -340,7 +433,20 @@
             "expected_exclude_terms": ["酒精", "刺激"],
             "expected_any_product_ids": ["p_beauty_006"],
             "forbidden_product_ids": ["p_beauty_010", "p_beauty_023"],
-            "answer_must_contain": ["只放宽预算", "酒精", "刺激"],
+            "answer_claims": [
+              {
+                "id": "budget_only_update_visible",
+                "description": "用户可见回答可以说明本轮只放宽预算；该项当前只记录，不作为硬失败。",
+                "any_of": ["只放宽预算", "只是把预算放宽", "本轮只更新预算", "这轮只放宽", "预算放宽"],
+                "required": false
+              },
+              {
+                "id": "inherited_exclusion_visible",
+                "description": "用户可见回答可以提及酒精和刺激排除仍有效；该项当前只记录，不作为硬失败。",
+                "all_of": ["酒精", "刺激"],
+                "required": false
+              }
+            ],
             "answer_must_not_contain": ["推荐安热沙", "推荐理肤泉特护清盈防晒"]
           },
           "reference_answer": "你这轮只放宽了预算，没有说可以放宽酒精/刺激排除条件。所以我不会因为安热沙或理肤泉防晒价位更高、户外防护更强就直接推荐它们：两者资料里都有酒精味、刺痛或过敏相关风险。若这些排除项仍是硬条件，欧莱雅仍是更保守的选择。"
@@ -360,7 +466,24 @@
           "user": "那如果选欧莱雅，你能保证我不会过敏吗？",
           "expect": {
             "expected_any_product_ids": ["p_beauty_006"],
-            "answer_must_contain": ["不能保证", "敏感肌", "24小时测试"],
+            "answer_claims": [
+              {
+                "id": "no_absolute_allergy_guarantee",
+                "description": "不能保证不过敏。",
+                "any_of": ["不能保证", "无法保证", "不能完全排除", "无法做到100%", "不能向你保证"]
+              },
+              {
+                "id": "sensitive_skin_patch_test",
+                "description": "敏感肌应做局部或 24 小时测试。",
+                "any_of": ["敏感肌", "24小时测试", "局部测试", "耳后测试", "手臂内侧", "先测试"]
+              }
+            ],
+            "forbidden_answer_claims": [
+              {
+                "id": "absolute_safety_claim",
+                "any_of": ["保证不会过敏", "一定不过敏", "绝对安全"]
+              }
+            ],
             "answer_must_not_contain": ["保证不会过敏", "一定不过敏", "绝对安全"]
           },
           "reference_answer": "不能保证。欧莱雅资料能支持的是：它适合油皮/混油皮通勤，且 FAQ 写到不含酒精、香精和 parabens 防腐剂；但资料也明确提示敏感肌需要先做耳后或手臂内侧 24 小时测试，不适要停用。"
