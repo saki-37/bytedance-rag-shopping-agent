@@ -1,6 +1,6 @@
 # 采分点确认与待办看板
 
-更新：2026-06-03
+更新：2026-06-04
 
 用途：把“现在能拿哪些分、哪些还只是第一版、哪些先记下来不扩张”放在一页。每次想继续做功能前，先看这页，避免把局部想法误当成主线。
 
@@ -43,9 +43,9 @@
 | Step 1 | Groundedness / 反编造 Benchmark | 把“不能编造”从原则变成可回归证据 | 已新增 groundedness cases 和脚本；retrieval-only 11/11 PASS |
 | Step 2 | 依赖版本 / 复现说明表 | 补工程质量里的复现友好度 | 已新增 `docs/20_reproducibility_and_dependencies.md`，集中说明 Android/Python/Chroma/模型配置与复现检查 |
 | Step 3 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 后端或 debug 入口能记录 feedback JSONL |
-| Step 4 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | README、提交包、Demo、secret scan 最终确认 |
+| Step 4 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | 文档状态已收口；最终提交前再做复现检查、Demo 检查和 secret scan |
 
-当前正在执行：**Step 4 的文档状态收口**。这是在开新功能前把所有文档同步到当前真实状态，避免旧待办继续误导优先级。
+当前状态：**文档状态收口已完成，正在选择下一条代码主线**。候选是 `evidence-aware fallback` 和 `轻量反馈闭环`；如果只求稳，先做最终复现检查也可以。
 
 ### P0：提交材料收口
 
@@ -54,8 +54,8 @@
 待办：
 
 1. 已补一页依赖和版本说明：Android Gradle Plugin、Kotlin、Compose、Python、FastAPI、Chroma、sentence-transformers、主要脚本运行方式。
-2. 最终检查 README、提交材料清单、Demo 脚本是否能独立说明项目。
-3. Demo 前复验：真实 API 可用；Mock fallback 可用；录屏没有 API Key 或敏感终端信息。
+2. README、提交材料清单、Demo 脚本、依赖复现说明和采分表已经同步到当前状态。
+3. Demo 前仍需复验：真实 API 可用；Mock fallback 可用；录屏没有 API Key 或敏感终端信息。
 
 ### P1：Groundedness / 反编造 Benchmark
 
@@ -106,7 +106,7 @@ scripts/run_groundedness_cases.py
 优先级判断：
 
 - 它是贴近官方“质量评测与反馈闭环”的加分项。
-- 但在开做前，应先完成文档状态收口，并确认是否要优先补生成层 evidence-aware fallback。
+- 但它不是唯一下一步；如果想优先补可靠性，可以先做生成层 evidence-aware fallback。
 
 ### P3：暂不作为主线
 

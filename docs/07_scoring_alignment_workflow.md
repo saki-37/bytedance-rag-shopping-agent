@@ -1,7 +1,7 @@
 # 评分点对照与阶段路线
 
 日期：2026-05-26  
-更新：2026-06-03
+更新：2026-06-04
 
 用途：把课题评分点、当前实现状态、V0/V1/V2/V3 路线和下一步优先级放在同一页。每次开始推进前先看本页，避免被局部 UI、单个 bug 或某个新想法带跑。
 
@@ -25,7 +25,7 @@
 
 一句话说：**我们已经有保底可提交版本，接下来要做的是提高层次，而不是继续证明“能不能跑”。**
 
-最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`；**Graph-aware relation score** 第一版已进入主链路，trace 可展示 `graph_category`、`graph_sub_category`、`graph_effect`、`graph_price_within_budget` 等关系命中；**Groundedness / 反编造 benchmark** 已补 11 条人工 case，retrieval-only 在修正数据证据和意图切换后达到 11/11 PASS；**依赖版本与复现说明** 已集中到 `docs/20_reproducibility_and_dependencies.md`。下一步建议先完成文档状态收口，再在 evidence-aware fallback 和轻量反馈闭环之间二选一。
+最新进展：统一 `products` collection + metadata filter 已完成并提交；**多商品对比** 第一版已完成，当前支持两款防晒、两件 T 恤、跑步鞋/徒步鞋这类“怎么选/哪个更适合/该买哪个” query，并已沉淀 `comparison_queries` benchmark；**RetrievalTrace 可解释性增强** 第一版也已完成，debug 和评测 JSONL 都能看到 `metadata_filter`、`filter_summary`、`ranking_signals`；**Graph-aware relation score** 第一版已进入主链路，trace 可展示 `graph_category`、`graph_sub_category`、`graph_effect`、`graph_price_within_budget` 等关系命中；**Groundedness / 反编造 benchmark** 已补 11 条人工 case，retrieval-only 在修正数据证据和意图切换后达到 11/11 PASS；**依赖版本与复现说明** 已集中到 `docs/20_reproducibility_and_dependencies.md`；**文档状态收口** 已在 2026-06-03 完成并推送。下一步在 evidence-aware fallback 和轻量反馈闭环之间二选一。
 
 ## 评分维度对照
 
@@ -272,15 +272,15 @@ V3 建议拆成两层：
 2. `scripts/run_golden_queries.py`、`scripts/run_subcategory_queries.py`、`scripts/run_comparison_queries.py`、`scripts/run_conversation_cases.py` 的 JSONL 输出已包含上述字段。
 3. comparison、golden、subcategory、apparel、conversation 和 generation guardrail 回归均 PASS。
 
-### 当前建议优先级：文档收口 -> 生成层可靠性 -> 反馈闭环
+### 当前建议优先级：生成层可靠性 -> 反馈闭环 -> 最终复验
 
-状态：**文档收口正在进行；后两项尚未实现**。
+状态：**文档状态收口已完成；后两项尚未实现**。
 
 建议顺序：
 
-1. 先完成文档状态收口：让 `README`、提交材料、采分表和路线图都指向同一个当前状态。
-2. 再做 evidence-aware fallback：让 mock / API 失败时的兜底回答也能更明确引用数据证据和“资料未说明”边界。
-3. 最后做轻量反馈闭环：记录用户 `有用/不准确`，把失败 query 变成后续 benchmark 或数据增强输入。
+1. 先做 evidence-aware fallback：让 mock / API 失败时的兜底回答也能更明确引用数据证据和“资料未说明”边界。
+2. 再做轻量反馈闭环：记录用户 `有用/不准确`，把失败 query 变成后续 benchmark 或数据增强输入。
+3. 最终提交前做复验：真实 API、Mock fallback、Android 构建、secret scan 和 Demo 安全检查。
 
 ### 待做：反馈闭环
 
