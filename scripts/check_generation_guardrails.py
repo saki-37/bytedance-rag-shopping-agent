@@ -67,6 +67,16 @@ def main() -> None:
     )
     assert qualified_result_absence.passed, qualified_result_absence
 
+    over_budget_reference = retrieve("我想把预算降到150元，那欧莱雅能保证不过敏吗？", products, index_dir=settings.index_dir)
+    over_budget_fallback = guard_answer(
+        "",
+        user_message="我想把预算降到150元，那欧莱雅能保证不过敏吗？",
+        cards=over_budget_reference.cards,
+    )
+    assert over_budget_fallback.fallback_used, over_budget_fallback
+    assert "价格高于150元以内" in over_budget_fallback.answer, over_budget_fallback.answer
+    assert "价格在150元以内范围内" not in over_budget_fallback.answer, over_budget_fallback.answer
+
     empty = guard_answer("", user_message="我想买护肤品", cards=[])
     assert not empty.passed, empty
     assert empty.fallback_used, empty

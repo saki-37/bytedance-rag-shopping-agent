@@ -151,7 +151,19 @@ def _build_evidence_notes(cards: list[ProductCard], user_message: str) -> list[s
     notes: list[str] = []
     budget = _latest_budget_label(user_message)
     if budget and cards:
-        notes.append(f"预算边界：当前候选商品资料价格在{budget}范围内，预算之外的价格不作为推荐依据。")
+        budget_value = _latest_budget_value(user_message)
+        if budget_value is not None:
+            over_budget_cards = [card for card in cards if card.price > budget_value]
+        else:
+            over_budget_cards = []
+        if over_budget_cards:
+            over_budget_names = "、".join(_card_name(card) for card in over_budget_cards[:2])
+            notes.append(
+                f"预算边界：{over_budget_names}的数据源价格高于{budget}，"
+                "不能说它仍在预算内；如果继续看它，需要先确认是否放宽预算。"
+            )
+        else:
+            notes.append(f"预算边界：当前候选商品资料价格在{budget}范围内，预算之外的价格不作为推荐依据。")
     elif "预算" in user_message and cards:
         notes.append("预算边界：当前先看预算友好的候选，具体上限还可以继续确认。")
 
@@ -241,12 +253,26 @@ def _supported_points(card: ProductCard) -> str:
 
 
 def _latest_budget_label(text: str) -> str | None:
-    matches = list(re.finditer(r"(\d+(?:\.\d+)?)\s*元?\s*(?:以[内下]|以内|以下|之内|内)", text))
-    if not matches:
+    value = _latest_budget_value(text)
+    if value is None:
         return None
-    value = float(matches[-1].group(1))
     normalized = f"{value:g}"
     return f"{normalized}元以内"
+
+
+def _latest_budget_value(text: str) -> float | None:
+    matches = list(re.finditer(r"(\d+(?:\.\d+)?)\s*元?\s*(?:以[内下]|以内|以下|之内|内)", text))
+    direct_budget_matches = list(
+        re.finditer(
+            r"预算[^。；，,.]{0,12}(?:降到|压到|改到|放宽到|控制在|不超过|最多|上限|到|为)\s*(\d+(?:\.\d+)?)\s*元?",
+            text,
+        )
+    )
+    matches.extend(direct_budget_matches)
+    if not matches:
+        return None
+    matches.sort(key=lambda match: match.start())
+    return float(matches[-1].group(1))
 
 
 def _contains_any(text: str, terms: list[str]) -> bool:
