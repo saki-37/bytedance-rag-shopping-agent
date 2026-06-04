@@ -585,9 +585,38 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 3. Android 端真实 Doubao 已完成第一轮复验；自动滚动已完成一轮模拟器复验，后续录屏前仍需做一次人工检查。
 4. Chroma 当前已索引 30 条 enriched 商品，其中美妆 25 条、服饰 5 条；数码和食品仍未进入 enriched。
 
+### 2026-06-04 轻量反馈闭环 smoke test
+
+本轮目标：把“质量评测与反馈闭环”先做成可记录、可复盘的最小工程证据。反馈记录不是只保存当前一轮对话，而是保存一份有界证据快照，方便后续判断问题发生在多轮上下文、检索、商品证据、生成回答还是用户偏好表达。
+
+实现变化：
+
+1. 新增 `POST /api/feedback`，支持 `helpful` / `inaccurate`。
+2. 新增 `server/app/feedback.py`，把反馈写入 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`。
+3. 每条记录包含：当前 query、最近 8 条 history、最终回答、商品卡片、clarification、retrieval message 和 `RetrievalTrace`。
+4. 新增 `scripts/check_feedback_loop.py`，通过 `/api/debug/retrieve` 构造一条带商品卡片和 trace 的反馈记录，再调用 `/api/feedback` 验证写入。
+
+复跑命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python scripts/check_feedback_loop.py
+```
+
+结果：
+
+| Check | Result | 备注 |
+| --- | --- | --- |
+| feedback loop smoke test | PASS | 返回 `Feedback loop OK record_id=...` |
+
+当前边界：
+
+- Android 端还没有显示 `有用` / `不准确` 按钮。
+- JSONL 是本地反馈日志，不进入 Git；后续可把 `inaccurate` 样例转成 benchmark 或 failure case。
+
 ## 下一步
 
-1. 设计用户反馈闭环的最小记录结构。
-2. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
+1. 把被 guardrail 拦截的真实输出继续沉淀为 failure cases。
+2. 可选：把 Android 端 `有用` / `不准确` 按钮接入 `/api/feedback`。
 3. 扩展多商品对比到更多品类和更复杂约束。
 4. 进一步设计 groundedness judge，对功效声明做更细粒度证据校验。

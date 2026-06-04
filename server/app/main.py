@@ -10,8 +10,9 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.conversation_state import build_retrieval_message
 from app.data_loader import load_enriched_products, load_raw_products
+from app.feedback import save_feedback
 from app.llm import stream_answer
-from app.models import ChatRequest, HealthResponse
+from app.models import ChatRequest, FeedbackRequest, FeedbackResponse, HealthResponse
 from app.retrieval import retrieve
 
 settings = get_settings()
@@ -79,6 +80,11 @@ def debug_retrieve(request: ChatRequest) -> dict:
         "clarification_question": result.clarification_question,
         "trace": result.trace.model_dump(),
     }
+
+
+@app.post("/api/feedback", response_model=FeedbackResponse)
+def submit_feedback(request: FeedbackRequest) -> FeedbackResponse:
+    return save_feedback(settings, request)
 
 
 def _event(event: str, payload: dict) -> str:

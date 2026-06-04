@@ -7,12 +7,13 @@
 ## 当前完成能力
 
 - Android Kotlin + Jetpack Compose 原生聊天界面。
-- FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve` 和图片静态服务。
+- FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve`、`POST /api/feedback` 和图片静态服务。
 - SSE 流式协议：`status`、`products`、`token`、`done`、`error`。
 - 商品 RAG：结构化硬过滤 + 必要功效/子类过滤 + keyword/facet 匹配 + Chroma `products` 统一 collection 向量召回 + metadata filter + 可解释 `RetrievalTrace`。
 - V2 多品类起步：新增 5 条服饰运动 enriched 样例，覆盖变体、规格、证据来源和第二品类 query benchmark。
 - Doubao / Ark OpenAI-compatible API 接入；本地无 Key 时可用 mock / safe fallback 跑通闭环。
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
+- 轻量反馈闭环：后端可记录 `有用` / `不准确` 反馈，以及最近上下文、回答、商品卡片和检索 trace 的有界快照。
 - 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
 - Golden queries、conversation cases、真实 Doubao probe 和 Android 模拟器复验证据已整理在文档中。
 
@@ -156,6 +157,12 @@ server/.venv/bin/python scripts/run_comparison_queries.py --require-vector
 server/.venv/bin/python scripts/check_generation_guardrails.py
 ```
 
+轻量反馈闭环：
+
+```bash
+server/.venv/bin/python scripts/check_feedback_loop.py
+```
+
 真实 Doubao 快速 probe：
 
 ```bash
@@ -196,7 +203,8 @@ python3 scripts/scan_secrets.py --all
 - Graph-aware relation score 已有第一版：运行时派生 category、sub_category、budget、facet、preference 关系，并以小权重参与 rerank。
 - 图片输入、语音、购物车、下单不在当前版本。
 - Evidence-aware fallback 已有第一版：兜底回答会引用商品资料、官方 FAQ、用户评价和“资料未说明/不能保证”边界。
-- 用户反馈闭环和更细 claim-level groundedness judge 是下一阶段增强项。
+- 轻量用户反馈闭环已有后端第一版：反馈 JSONL 写入 `data/tmp/feedback/`，该目录被 `.gitignore` 忽略。
+- 更细的 claim-level groundedness judge 是下一阶段增强项。
 - Guardrail / fallback 是规则版，不是完整 groundedness judge。
 
 ## Recommended Reading Order

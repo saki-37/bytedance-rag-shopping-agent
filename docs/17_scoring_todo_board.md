@@ -19,7 +19,7 @@
 | 基础功能完整性 | 稳定可拿 | Android -> FastAPI -> RAG -> Doubao/Mock -> SSE -> 商品卡片；图片和详情弹窗已跑通 | 录屏可更干净；最终演示前再人工复验一次 |
 | 工程质量 | 基本可拿 | monorepo、README、API 契约、架构文档、评测报告、安全配置、密钥扫描、依赖版本与复现说明 | 最终提交前按复现检查表再跑一轮 |
 | 效果与可靠性 | 第一版可拿，证据更完整 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only 11/11；guardrail；RetrievalTrace；graph relation score；evidence-aware fallback | 真实 Doubao failure cases 和 claim-level judge 还可以继续沉淀 |
-| 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema 和服饰样例 | 反馈闭环还没做；多模态/购物车不建议作为主线 |
+| 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema、服饰样例、轻量反馈闭环后端第一版 | 多模态/购物车不建议作为主线 |
 
 ## 能确认已经完成的点
 
@@ -43,10 +43,10 @@
 | Step 1 | Groundedness / 反编造 Benchmark | 把“不能编造”从原则变成可回归证据 | 已新增 groundedness cases 和脚本；retrieval-only 11/11 PASS |
 | Step 2 | 依赖版本 / 复现说明表 | 补工程质量里的复现友好度 | 已新增 `docs/20_reproducibility_and_dependencies.md`，集中说明 Android/Python/Chroma/模型配置与复现检查 |
 | Step 3 | Evidence-aware fallback | 让安全兜底回答也能引用商品证据和资料边界 | 已完成第一版；groundedness full mock 11/11 PASS |
-| Step 4 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 后端或 debug 入口能记录 feedback JSONL |
+| Step 4 | 轻量反馈闭环 | 对应质量评测与反馈闭环加分点 | 已新增 `POST /api/feedback` 和 smoke test，可记录 feedback JSONL |
 | Step 5 | Demo 与提交材料收口 | 降低评委理解成本和现场风险 | 文档状态已收口；最终提交前再做复现检查、Demo 检查和 secret scan |
 
-当前状态：**evidence-aware fallback 已完成第一版**。下一条代码主线可以在 `轻量反馈闭环`、真实 API 抽样复验、最终 Demo 安全检查之间选择；如果只求稳，先做最终复现检查也可以。
+当前状态：**evidence-aware fallback 和轻量反馈闭环均已完成第一版**。下一条代码主线可以在真实 API 抽样复验、最终 Demo 安全检查和 claim-level judge 之间选择；如果只求稳，先做最终复现检查也可以。
 
 ### P0：提交材料收口
 
@@ -104,10 +104,17 @@ scripts/run_groundedness_cases.py
 2. 后端把 `query`、`intent`、`products`、`trace`、`feedback` 写入本地 JSONL。
 3. 文档展示一条“失败 query -> 归因 -> 下一轮修正”的例子。
 
+当前进展：
+
+- 已新增 `POST /api/feedback`，支持记录 `helpful` / `inaccurate`。
+- 每条反馈写入 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`，目录被 `.gitignore` 忽略。
+- 记录内容不是只保存当前一句，而是保存有界证据快照：当前 query、最近 8 条 history、最终回答、商品卡片、clarification、retrieval message 和 `RetrievalTrace`。
+- 已新增 `scripts/check_feedback_loop.py`，用 `/api/debug/retrieve` 构造一条带 trace 的反馈记录，验证端到端写入。
+
 优先级判断：
 
 - 它是贴近官方“质量评测与反馈闭环”的加分项。
-- 但它不是唯一下一步；生成层 evidence-aware fallback 已完成第一版，如果继续补可靠性，可以转向真实 Doubao 抽样或 claim-level judge。
+- Android 端按钮还没有接入；目前是后端/debug 第一版，足够支撑“反馈闭环可记录、可复盘”的工程证据。
 
 ### P3：暂不作为主线
 

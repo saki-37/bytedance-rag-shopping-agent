@@ -21,7 +21,7 @@
 | 基础功能完整性 35% | ✅ 基本稳 | Android 原生端到后端 RAG、模型流式、商品卡片和详情已经跑通 |
 | 工程质量 25% | ✅ 基本稳 | 目录、接口、文档、安全、评测、依赖版本表和复现说明都有；文档状态已收口，最终提交前再跑一轮复现检查 |
 | 效果与可靠性 20% | ◯ 第一版可讲，证据更完整 | 已有检索 benchmark、conversation、guardrail、trace、evidence-aware fallback，以及 groundedness full mock / retrieval-only 11/11 |
-| 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、多品类样例已有；反馈闭环未做 |
+| 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、多品类样例和轻量反馈闭环后端第一版已有 |
 
 ## 必做最小闭环
 
@@ -114,7 +114,7 @@
 | 多商品对比 | ✅ | comparison benchmark 3 条 PASS | 可作为辅助决策亮点 |
 | 多品类扩展 | ◯ | 服饰 5 条样例 + schema 设计 | 说明“可扩展”，不要承诺全品类完成 |
 | Graph-aware retrieval | ◯ | 轻量 relation score 已进主链路 | 说明是轻量图关系，不是完整 GraphRAG |
-| 反馈闭环 | ✕ | 尚未实现用户反馈记录 | 如果继续做，这是最贴官方加分的一项 |
+| 反馈闭环 | ◯ | `POST /api/feedback` 可记录 `有用` / `不准确`、最近上下文、回答、商品卡片和 retrieval trace 到本地 JSONL | Android 端反馈按钮还未接入；目前是后端/debug 第一版 |
 | 拍照找货 / 多模态 | ⏸ | 尚未做 | 除非时间非常充裕，否则不抢主线 |
 | 购物车 / 下单 | ⏸ | 尚未做 | 与核心 RAG 可靠性关系较弱，暂不做 |
 
@@ -159,8 +159,8 @@ scripts/run_groundedness_cases.py
 
 如果继续做代码，优先级：
 
-1. 轻量反馈闭环：记录 `有用/不准确` 和失败 query，形成可复盘 JSONL。
-2. 真实 API 抽样复验：重点看真实 Doubao 在长对话、商业陷阱和安全边界下是否触发 repair / fallback。
-3. 最终 Demo 复验：真实 API、Mock fallback、Android 构建、secret scan 和录屏安全。
+1. 真实 API 抽样复验：重点看真实 Doubao 在长对话、商业陷阱和安全边界下是否触发 repair / fallback。
+2. 最终 Demo 复验：真实 API、Mock fallback、Android 构建、secret scan 和录屏安全。
+3. 可选增强：把 Android 端 `有用` / `不准确` 按钮接到 `/api/feedback`，或继续做 claim-level judge。
 
 如果只做方向确认，停止在这里即可，不继续开新功能。

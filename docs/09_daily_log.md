@@ -68,3 +68,12 @@
 - 修正 groundedness case：`GRD-08` 改为 300 元内修护面霜，并允许 `p_beauty_007` / `p_beauty_012`；`GRD-L02` 将修护面霜轮次显式改为预算放宽到 300，参考价格改为 raw 数据中的 260/268。
 - 修复“控油精华 -> 修护面霜”的意图切换：当前轮出现新子类并带“更偏/有没有/改看”等切换语义时，`sub_category` 和 `effect` 用当前轮覆盖旧状态，预算/肤质/排除条件继续继承。
 - Groundedness retrieval-only 修正后达到 11/11 PASS；同步最终回归：conversation 6/6、golden 8/8、beauty subcategory 6/6、apparel 5/5、comparison 3/3、generation guardrail PASS。
+
+## 2026-06-04
+
+- 完成 evidence-aware fallback 第一版：安全兜底回答会引用商品营销文案、官方 FAQ、用户评价和“资料未说明/不能保证”边界。
+- Groundedness full mock generation 和 retrieval-only 均达到 11/11 PASS。
+- 新增 `POST /api/feedback` 轻量反馈接口，支持记录 `helpful` / `inaccurate`。
+- 新增 `server/app/feedback.py`，把反馈写入本地 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`，该目录不进入 Git。
+- 反馈记录采用有界证据快照：当前 query、最近 8 条 history、最终回答、商品卡片、clarification、retrieval message 和 `RetrievalTrace`。
+- 新增 `scripts/check_feedback_loop.py`，用 debug retrieve 构造带 trace 的反馈记录并完成 smoke test。

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -90,3 +92,23 @@ class HealthResponse(BaseModel):
     status: str
     catalog_size: int
     mock_llm: bool
+
+
+class FeedbackRequest(BaseModel):
+    feedback: Literal["helpful", "inaccurate"]
+    message: str = Field(min_length=1)
+    conversation_id: str | None = None
+    turn_id: str | None = None
+    note: str | None = None
+    answer: str | None = None
+    history: list[ChatMessage] = Field(default_factory=list)
+    products: list[ProductCard] = Field(default_factory=list)
+    retrieval_message: str | None = None
+    clarification_question: str | None = None
+    trace: RetrievalTrace | None = None
+
+
+class FeedbackResponse(BaseModel):
+    ok: bool
+    record_id: str
+    feedback: Literal["helpful", "inaccurate"]

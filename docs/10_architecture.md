@@ -2,7 +2,7 @@
 
 日期：2026-05-28
 
-更新：2026-06-03 补充 rule-only conversation state merge。
+更新：2026-06-04 补充 rule-only conversation state merge、evidence-aware fallback 和轻量反馈闭环。
 
 用途：说明当前 RAG 美妆导购 Agent 的端到端工程架构，方便评审、复盘和后续开发对齐。
 
@@ -29,6 +29,7 @@ flowchart TD
     G -->|"安全回答或二次改写/兜底"| API
     API -->|"SSE: status / products / token / done / error"| A
     A --> C["聊天消息<br/>商品卡片<br/>图片<br/>详情弹窗"]
+    A -->|"POST /api/feedback<br/>feedback + bounded snapshot"| F["Feedback JSONL<br/>data/tmp/feedback"]
 ```
 
 ## 模块职责
@@ -71,6 +72,7 @@ flowchart TD
    - `GET /health`
    - `POST /api/chat/stream`
    - `POST /api/debug/retrieve`
+   - `POST /api/feedback`
    - `GET /assets/{image_path}`
 4. 在检索前做 rule-only conversation state merge，例如预算更新、预算取消、排除条件继承和短追问补全。
 5. 调用检索层得到候选商品、证据文本和 trace。
@@ -82,6 +84,7 @@ flowchart TD
 
 - `main.py`：API 路由、SSE 事件、上下文合并、静态图片服务。
 - `conversation_state.py`：检索前的多轮状态合并，负责继承/覆盖/放宽预算、类目、肤质、功效、场景、排除条件和偏好。
+- `feedback.py`：轻量反馈闭环，把有用/不准确反馈和有界证据快照写入本地 JSONL。
 - `config.py`：读取 `.env` 和本地路径配置。
 - `data_loader.py`：加载 raw / enriched 商品数据。
 - `models.py`：Pydantic 数据结构。
@@ -99,6 +102,7 @@ flowchart TD
 | 官方原始数据 | `data/raw/ecommerce_agent_dataset/` | 提交 | 商品 JSON、图片、RAG 文本素材 |
 | 增强商品数据 | `data/enriched/*_products.jsonl` | 提交 | 肤质、功效、材质、尺码、使用场景、注意事项、推荐理由、证据来源等结构化字段 |
 | 本地索引产物 | `data/indexes/` | 不提交 | Chroma 持久化向量库 |
+| 本地反馈记录 | `data/tmp/feedback/` | 不提交 | 用户反馈和最近上下文/回答/商品/trace 的有界快照 |
 
 设计原则：
 
@@ -202,6 +206,13 @@ SSE 事件：
 - 返回候选商品、澄清问题和 `RetrievalTrace`。
 - 用于 benchmark、失败 case 排查和答辩解释。
 
+反馈接口：`POST /api/feedback`
+
+- 不调用大模型，只记录反馈。
+- 当前支持 `helpful` 和 `inaccurate`。
+- 记录的是有界证据快照：当前 query、最近 8 条 history、最终回答、商品卡片、clarification、retrieval message 和 `RetrievalTrace`。
+- 写入 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`，该目录不进入 Git。
+
 ## 当前验证状态
 
 已经完成：
@@ -227,7 +238,7 @@ SSE 事件：
 2. enriched 数据已覆盖完整 25 条美妆商品和 5 条服饰运动样例，但当前 Android 演示主线仍以美妆垂类为主。
 3. Guardrail 和 evidence-aware fallback 是规则版，不是完整 groundedness judge。
 4. Chroma 当前作为轻量向量召回通道，已使用统一 `products` collection 和 metadata filter；还没有做 embedding 模型对比 benchmark。
-5. Graph-aware retrieval 和多商品对比已进入主链路；反馈闭环还没有进入主链路。
+5. Graph-aware retrieval 和多商品对比已进入主链路；轻量反馈闭环已有后端/debug 第一版。
 
 ## 后续演进
 
@@ -235,7 +246,7 @@ SSE 事件：
 
 1. 用 25 条美妆数据抽样复验 Android 端展示和推荐稳定性。
 2. 把更多真实模型 failure cases 沉淀到 guardrail / benchmark。
-3. 补一个轻量反馈闭环，增强“质量评测与迭代”证据。
+3. 如继续增强反馈闭环，可把 Android 端按钮接到 `/api/feedback`。
 4. 继续同步 README、评测记录和提交材料。
 
 ### V2 增强
@@ -249,6 +260,6 @@ SSE 事件：
    - 解释商品和用户需求之间的属性匹配关系。
    - 为多商品对比提供结构化依据。
 3. 反馈闭环：
-   - 记录用户是否觉得推荐有用。
-   - 保存失败 query。
+   - 后端已可记录用户是否觉得推荐有用。
+   - 后端已可保存失败 query 的有界证据快照。
    - 反哺数据增强、prompt 和 guardrail。

@@ -38,3 +38,4 @@
 6. V2 多品类 schema 第一版设计与外部电商字段参考调研。
 7. 服饰运动 5 条 enriched 样例和第二品类 query benchmark。
 8. 依赖版本与复现说明集中成表，补齐工程质量里的复现友好度。
+9. Evidence-aware fallback 和轻量反馈闭环后端第一版。

@@ -59,6 +59,7 @@
 | `data/raw/` | 是 | 官方原始商品数据 |
 | `data/enriched/` | 是 | 项目增强后的结构化商品数据 |
 | `data/indexes/` | 否 | Chroma 本地索引，可由脚本重建 |
+| `data/tmp/feedback/` | 否 | 本地反馈 JSONL，记录有界证据快照，不进入 Git |
 | `server/.venv/` | 否 | 本地 Python 虚拟环境 |
 | `demo/*.mov`、`demo/*.mp4` | 否 | 录屏作为平台附件上传，不进入代码仓库 |
 
@@ -184,6 +185,14 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 
 当前最新一轮 groundedness full mock generation 和 retrieval-only 结果均为 11/11 PASS；完整记录见 `docs/11_evaluation_report.md`。
 
+轻量反馈闭环 smoke test：
+
+```bash
+server/.venv/bin/python scripts/check_feedback_loop.py
+```
+
+该脚本会通过 `/api/debug/retrieve` 构造一条带商品卡片和 `RetrievalTrace` 的反馈记录，再调用 `/api/feedback` 写入本地 JSONL。记录路径位于 `data/tmp/feedback/`，不会进入 Git。
+
 ## 常见失败与处理
 
 | 现象 | 可能原因 | 处理 |
@@ -192,6 +201,7 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 | Gradle 依赖下载慢或失败 | Maven / Google 仓库网络不稳定 | 使用代理参数，或在 Android Studio 中重新 Sync |
 | 真实 Doubao 请求超时 | 网络代理或 Key/模型名配置异常 | 先切回 `MOCK_LLM=true` 验证链路，再检查 `.env` 和代理 |
 | Chroma 检索无结果 | 索引未构建或 enriched 数据未生成 | 重新运行 `python scripts/build_index.py` |
+| 反馈脚本写入失败 | `data/tmp/feedback/` 无写入权限或当前沙盒不允许写仓库临时目录 | 在真实本地终端运行，或确认仓库目录可写 |
 | 提交前 secret scan 失败 | `.env`、文档或录屏说明中出现疑似 Key | 删除真实 Key，重新运行 `python3 scripts/scan_secrets.py --all` |
 
 ## 提交前复现检查表

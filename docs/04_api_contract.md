@@ -154,3 +154,56 @@ GET /assets/1_%E7%BE%8E%E5%A6%86%E6%8A%A4%E8%82%A4/images/p_beauty_006_live.jpg
 - 仅用于本地 debug / benchmark。
 - 不返回真实 API Key 或模型配置。
 - `trace` 是 V1 检索可解释性的核心证据，后续评测表应引用它。
+
+## POST `/api/feedback`
+
+用于记录轻量反馈闭环。它不是重新调用模型的接口，而是把用户对某次回答的 `有用` / `不准确` 判断，连同当时的有限证据链路写入本地 JSONL，方便后续归因、补 benchmark 或调整数据与 prompt。
+
+请求：
+
+```json
+{
+  "conversation_id": "local-demo",
+  "turn_id": "turn-001",
+  "feedback": "inaccurate",
+  "message": "我是油皮，想要200元以内通勤防晒",
+  "retrieval_message": "我是油皮，想要200元以内通勤防晒",
+  "answer": "本轮最终展示给用户的回答文本",
+  "note": "用户觉得推荐理由不够可信",
+  "history": [
+    {"role": "user", "content": "我想找防晒"},
+    {
+      "role": "assistant",
+      "content": "你更在意通勤还是户外？",
+      "product_ids": ["p_beauty_006"]
+    }
+  ],
+  "products": [],
+  "clarification_question": null,
+  "trace": null
+}
+```
+
+响应：
+
+```json
+{
+  "ok": true,
+  "record_id": "uuid",
+  "feedback": "inaccurate"
+}
+```
+
+记录策略：
+
+- 记录的是有界证据快照，不是无限保存完整聊天。
+- `history` 最多保留最近 8 条消息，用于判断多轮上下文是否丢失。
+- `products`、`trace`、`retrieval_message` 和 `answer` 用于区分是检索问题、生成问题、商品证据问题，还是用户偏好表达问题。
+- 记录文件写入 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`，该目录被 `.gitignore` 忽略，不进入 Git。
+- 反馈值当前只支持 `helpful` 和 `inaccurate`，先保持足够轻，不扩张成复杂问卷。
+
+本地 smoke test：
+
+```bash
+server/.venv/bin/python scripts/check_feedback_loop.py
+```
