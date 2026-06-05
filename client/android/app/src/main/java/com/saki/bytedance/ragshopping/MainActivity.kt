@@ -31,6 +31,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -48,12 +50,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
+import kotlinx.coroutines.delay
 
 private const val AssetBaseUrl = "http://10.0.2.2:8000/assets"
 
@@ -69,6 +77,31 @@ private val MutedText = Color(0xFF5F6A4E)
 private val WarmSurface = Color(0xFFFFF1D5)
 private val ErrorSurface = Color(0xFFFFEAE0)
 private val ErrorText = Color(0xFF9E3412)
+private val TablerSendIcon: ImageVector = ImageVector.Builder(
+    name = "TablerSend",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(10f, 14f)
+        lineTo(21f, 3f)
+        moveTo(21f, 3f)
+        lineTo(14.5f, 21f)
+        arcToRelative(0.55f, 0.55f, 0f, false, true, -1f, 0f)
+        lineTo(10f, 14f)
+        lineTo(3f, 10.5f)
+        arcToRelative(0.55f, 0.55f, 0f, false, true, 0f, -1f)
+        lineTo(21f, 3f)
+    }
+}.build()
 
 private val DemoPrompts = listOf(
     "油皮通勤防晒" to "我是油皮，想要200元以内通勤防晒",
@@ -123,9 +156,14 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                     val hasPriorUserMessage = state.messages
                         .take(index)
                         .any { it.role == Role.User && it.content.isNotBlank() }
+                    val isThinking = state.isLoading &&
+                        index == state.messages.lastIndex &&
+                        message.role == Role.Assistant &&
+                        message.content.isBlank()
                     MessageBubble(
                         message = message,
                         showFeedback = !state.isLoading && hasPriorUserMessage,
+                        isThinking = isThinking,
                         assetBaseUrl = assetBaseUrl,
                         onProductClick = { selectedProduct = it },
                         onFeedback = viewModel::submitFeedback,
@@ -177,6 +215,7 @@ private fun Header() {
 private fun MessageBubble(
     message: ChatMessage,
     showFeedback: Boolean,
+    isThinking: Boolean,
     assetBaseUrl: String,
     onProductClick: (ProductCard) -> Unit,
     onFeedback: (String, FeedbackType) -> Unit,
@@ -204,7 +243,9 @@ private fun MessageBubble(
             modifier = Modifier.fillMaxWidth(if (message.role == Role.User) 0.86f else 1f),
         ) {
             Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (message.content.isNotBlank()) {
+                if (isThinking) {
+                    ThinkingIndicator()
+                } else if (message.content.isNotBlank()) {
                     Text(
                         text = message.content,
                         color = textColor,
@@ -219,6 +260,34 @@ private fun MessageBubble(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ThinkingIndicator() {
+    var dotCount by remember { mutableStateOf(1) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(420)
+            dotCount = dotCount % 3 + 1
+        }
+    }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(18.dp),
+            color = AccentGreenDark,
+            strokeWidth = 2.dp,
+        )
+        Text(
+            text = "正在思考中" + ".".repeat(dotCount),
+            color = MutedText,
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 
@@ -665,6 +734,7 @@ private fun InputBar(
                 Button(
                     onClick = onSend,
                     enabled = !isLoading && value.isNotBlank(),
+                    contentPadding = PaddingValues(horizontal = 0.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Ink,
                         contentColor = SurfaceWhite,
@@ -672,7 +742,19 @@ private fun InputBar(
                         disabledContentColor = MutedText,
                     ),
                 ) {
-                    Text(if (isLoading) "中" else "发", fontWeight = FontWeight.Bold)
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = MutedText,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Icon(
+                            imageVector = TablerSendIcon,
+                            contentDescription = "发送",
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
                 }
             }
         }
