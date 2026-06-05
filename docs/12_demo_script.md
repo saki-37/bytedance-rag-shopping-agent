@@ -8,13 +8,14 @@
 
 ## 录屏前检查
 
-1. 后端运行在 `0.0.0.0:8000`，Android 模拟器通过 `http://10.0.2.2:8000` 访问。
+1. 后端运行在 `0.0.0.0:8000`，Android 模拟器通过 `adb reverse tcp:8000 tcp:8000` 后访问 `http://127.0.0.1:8000`。
 2. 本地 `.env` 已配置真实 `ARK_API_KEY`、`ARK_MODEL`，且 `MOCK_LLM=false`。
 3. 如果真实 API 需要代理，终端使用：
 
 ```bash
 export https_proxy=http://127.0.0.1:7897
 export http_proxy=http://127.0.0.1:7897
+export all_proxy=socks5://127.0.0.1:7897
 ```
 
 4. Android App 使用最新 Debug 版，首页能看到 9 个快捷问题：

@@ -96,8 +96,11 @@ Android 端：
 
 ```bash
 cd bytedance-rag-shopping-agent
+adb reverse tcp:8000 tcp:8000
 ./gradlew :client:android:app:assembleDebug
 ```
+
+说明：Debug APK 只包含 Android 客户端，不包含 FastAPI 后端。评审本地运行时，需要先启动后端，再通过 Android Studio / APK 运行客户端。当前 App 优先使用 `127.0.0.1:8000` + `adb reverse`，如果未设置 reverse，会回退尝试模拟器宿主机地址 `10.0.2.2:8000`。真机运行时也建议使用 USB 调试下的 `adb reverse`，或改成手机可访问的后端地址后重新构建。
 
 真实模型需要在本地 `.env` 中填入：
 

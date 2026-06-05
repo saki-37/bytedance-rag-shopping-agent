@@ -74,7 +74,7 @@ def guard_answer(answer: str, user_message: str, cards: list[ProductCard]) -> Ge
             issues=issues,
             fallback_used=True,
         )
-    return GenerationGuardrailResult(answer=stripped, passed=True)
+    return GenerationGuardrailResult(answer=_append_follow_up_if_needed(stripped, user_message), passed=True)
 
 
 def build_safe_answer(cards: list[ProductCard], user_message: str | None = None) -> str:
@@ -120,6 +120,8 @@ def build_safe_answer(cards: list[ProductCard], user_message: str | None = None)
         lines.append(line)
     lines.extend(evidence_notes)
     lines.append("上面只使用已召回商品资料，暂时不补资料外的商业承诺或额外功效。")
+    if _should_ask_follow_up(user_message):
+        lines.append(_FOLLOW_UP_QUESTION)
     return "\n".join(lines)
 
 
@@ -232,6 +234,32 @@ def _build_evidence_notes(cards: list[ProductCard], user_message: str) -> list[s
         notes.append("澄清边界：更稳的推荐还需要确认肤质、预算和使用场景。")
 
     return _dedupe_notes(notes)
+
+
+def _should_ask_follow_up(user_message: str) -> bool:
+    if _latest_budget_value(user_message) is not None:
+        return False
+    if _contains_any(user_message, ["油皮", "干皮", "混油", "混干", "敏感肌", "敏感", "痘肌"]):
+        return False
+    if _contains_any(user_message, ["通勤", "户外", "海边", "爬山", "运动", "妆前", "补涂"]):
+        return False
+    return _contains_any(user_message, ["看看", "推荐", "买", "选", "防晒", "护肤品"])
+
+
+_FOLLOW_UP_QUESTION = "如果你愿意，我可以继续按肤质、预算、通勤/户外场景帮你再收窄；你想先看哪一项？"
+
+
+def _append_follow_up_if_needed(answer: str, user_message: str) -> str:
+    if not _should_ask_follow_up(user_message):
+        return answer
+    if _has_follow_up_question(answer):
+        return answer
+    return f"{answer.rstrip()}\n{_FOLLOW_UP_QUESTION}"
+
+
+def _has_follow_up_question(answer: str) -> bool:
+    tail = answer[-120:]
+    return "？" in tail and _contains_any(tail, ["你想", "你更", "可以告诉我", "继续按", "先看哪"])
 
 
 def _card_name(card: ProductCard) -> str:

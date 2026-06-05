@@ -40,10 +40,22 @@ SSE 流式聊天接口。
 事件类型：
 
 - `status`：阶段状态，`retrieving` 或 `generating`。
-- `products`：本轮召回并展示的商品卡片。
 - `token`：模型输出文本片段。
+- `products`：本轮召回并展示的商品卡片。
 - `done`：流结束。
 - `error`：可恢复错误。
+
+推荐型回答的事件顺序为：
+
+```text
+status(retrieving) -> status(generating) -> token... -> products -> done
+```
+
+这样 Android 端会先看到文字逐步生成，文本结束后再出现商品卡片，避免卡片早于解释文本出现。信息不足需要追问时，后端只返回追问文本，不发送 `products`：
+
+```text
+status(retrieving) -> status(generating) -> token... -> done
+```
 
 `products` 事件示例：
 

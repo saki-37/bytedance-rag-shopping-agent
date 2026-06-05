@@ -41,6 +41,7 @@
 | Android | Kotlin / Compose compiler plugin | 2.0.21 | 根目录 `build.gradle.kts` |
 | Android | compileSdk / targetSdk / minSdk | 35 / 35 / 26 | `client/android/app/build.gradle.kts` |
 | Android | App version | `0.1.0` | `client/android/app/build.gradle.kts` |
+| Android 网络 | 本地后端访问 | 优先 `127.0.0.1:8000` + `adb reverse`，自动回退 `10.0.2.2:8000` | `BackendConfig.kt` |
 | Backend | Web framework | FastAPI 0.115.6 | `server/requirements.txt` |
 | Backend | ASGI server | Uvicorn 0.34.0 | `server/requirements.txt` |
 | RAG | Vector DB | ChromaDB 0.6.3 | `server/requirements.txt` |
@@ -119,7 +120,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 curl http://127.0.0.1:8000/health
 ```
 
-预期：返回服务健康状态；Android 模拟器通过 `http://10.0.2.2:8000` 访问同一个后端。
+预期：返回服务健康状态。
 
 ## 真实 Ark / Doubao 复现
 
@@ -137,6 +138,7 @@ MOCK_LLM=false
 ```bash
 export https_proxy=http://127.0.0.1:7897
 export http_proxy=http://127.0.0.1:7897
+export all_proxy=socks5://127.0.0.1:7897
 ```
 
 快速 probe，不需要启动 Android：
@@ -159,12 +161,41 @@ server/.venv/bin/python scripts/probe_chat.py \
 
 或使用 Android Studio 打开仓库根目录，选择 `client/android/app` 运行。
 
-网络说明：
+### Android 本地联网说明
+
+APK 只包含 Android 客户端，不包含 FastAPI 后端。评审或本地复现时，应先启动后端，再运行 Android App。
+
+当前 Debug App 的后端候选地址为：
+
+1. `http://127.0.0.1:8000`
+2. `http://10.0.2.2:8000`
+
+App 会优先使用 `127.0.0.1:8000`；如果连接失败，会继续尝试 `10.0.2.2:8000`。商品图片 `/assets/...` 会跟随实际连上的后端地址，避免“文本成功但图片仍指向旧地址”的问题。
+
+推荐复现路径：
+
+```bash
+adb devices
+adb reverse tcp:8000 tcp:8000
+```
+
+如果设备列表里有多个设备：
+
+```bash
+adb -s emulator-5554 reverse tcp:8000 tcp:8000
+```
+
+网络场景说明：
 
 | 场景 | 后端地址 |
 | --- | --- |
-| Android 模拟器访问本机后端 | `http://10.0.2.2:8000` |
+| Android 模拟器 + adb reverse | App 访问 `http://127.0.0.1:8000`，由 adb 转发到宿主机后端 |
+| Android 模拟器 + 无 adb reverse | App 回退尝试 `http://10.0.2.2:8000`；如果模拟器网络路由异常，仍建议使用 adb reverse |
+| Android 真机 + USB 调试 | 可用 `adb reverse tcp:8000 tcp:8000`，让真机访问电脑本地后端 |
+| Android 真机 + 无 USB 调试 | 需要把后端放到手机可访问的局域网或公网地址；当前 Debug APK 不内置后端 |
 | 宿主机浏览器 / curl 访问后端 | `http://127.0.0.1:8000` |
+
+Android Manifest 已配置 `INTERNET` 权限和 `usesCleartextTraffic=true`，用于允许 Debug App 访问本地 HTTP 后端。
 
 如果 Gradle 依赖下载需要代理：
 
@@ -249,7 +280,10 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 
 | 现象 | 可能原因 | 处理 |
 | --- | --- | --- |
-| Android 能启动但没有回复 | 后端未启动，或模拟器不能访问宿主机 | 确认 Uvicorn 在 `0.0.0.0:8000`，Android 使用 `10.0.2.2:8000` |
+| Android 能启动但没有回复 | 后端未启动，或模拟器不能访问宿主机 | 确认 Uvicorn 在 `0.0.0.0:8000`，并运行 `adb reverse tcp:8000 tcp:8000`；当前 App 也会回退尝试 `10.0.2.2:8000` |
+| Android 显示 `Failed to connect` / `ENETUNREACH` | 模拟器到宿主机的 `10.0.2.2` 路由不可达 | 使用 `adb reverse tcp:8000 tcp:8000`，然后重启 App；这是本地环境桥接问题，不是 RAG 逻辑失败 |
+| Android 显示 `unexpected end of stream` | 本地 HTTP 连接被后端/模拟器提前关闭，或旧连接复用异常 | 当前客户端已关闭连接池复用并设置 `Connection: close`；若复现，先重启后端并重新运行 `adb reverse` |
+| Android Studio 提示 `Couldn't terminate previous instance of app` | Studio/adb 没能停止旧进程 | 手动执行 `adb shell am force-stop com.saki.bytedance.ragshopping`；仍失败时重启 adb 或模拟器 |
 | Gradle 依赖下载慢或失败 | Maven / Google 仓库网络不稳定 | 使用代理参数，或在 Android Studio 中重新 Sync |
 | 真实 Doubao 请求超时 | 网络代理或 Key/模型名配置异常 | 先用 retrieval-only 或 `MOCK_LLM=true` 验证链路，再检查 `.env` 和代理；不要把 fallback 结果记成真实 API 结果 |
 | Chroma 检索无结果 | 索引未构建或 enriched 数据未生成 | 重新运行 `python scripts/build_index.py` |

@@ -3,5 +3,6 @@ uvicorn[standard]==0.34.0
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
 openai==1.59.7
+httpx[socks]==0.28.1
 chromadb==0.6.3
 sentence-transformers==3.3.1

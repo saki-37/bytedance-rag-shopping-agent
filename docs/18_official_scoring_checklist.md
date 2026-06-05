@@ -42,7 +42,7 @@
 | Python / Go / Node.js 任选 | ✅ | Python FastAPI | 无明显缺口 |
 | 集成向量数据库 | ✅ | Chroma `products` collection，30 条 enriched 商品入库 | 索引产物本地保留，提交说明里要讲清楚如何构建 |
 | 实现 RAG 基本链路 | ✅ | query parse -> hard filter -> keyword/facet/vector/graph rerank -> prompt -> generation guardrail | 可以继续补 groundedness benchmark |
-| 提供流式 API，SSE 或 WebSocket 均可 | ✅ | `POST /api/chat/stream`，事件包括 status/products/token/done/error | 无明显缺口 |
+| 提供流式 API，SSE 或 WebSocket 均可 | ✅ | `POST /api/chat/stream`，事件包括 status/token/products/done/error；推荐场景先流式文本，再商品卡片 | 无明显缺口 |
 
 ### 模型能力
 

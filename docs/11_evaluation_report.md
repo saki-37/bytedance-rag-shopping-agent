@@ -11,7 +11,7 @@
 
 1. 检索层：8 条 golden queries、6 条美妆子类 queries 和 5 条服饰运动 V2-B queries 全部通过，Chroma 当前使用统一 `products` collection，索引 30 条 enriched 商品，并通过 metadata filter 限定类目、子类和预算。
 2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠、下单承诺和无证据的绝对断言。
-3. SSE 层：真实 API golden stream 三轮 8/8 stable PASS，说明 `products/token/done` 事件形态和检索链路稳定。
+3. SSE 层：真实 API golden stream 三轮 8/8 stable PASS；当前事件顺序调整为 `token/products/done`，先流式展示回答文本，再展示商品卡片。
 4. Groundedness 层：mock full generation / retrieval-only 均达到 11/11 PASS，但真实 API groundedness real generation 三轮仅 3/11 stable PASS，说明当前主要缺口在真实模型的边界表达和资料外声明控制。
 5. Android 层：真实 Doubao 主线回复、商品卡片、图片、详情弹窗、信息不足追问已完成模拟器复验；新增子类抽样在 `MOCK_LLM=true` 下完成，重点验证检索、卡片和布局。
 
@@ -181,7 +181,7 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 复验要点：
 
 - `.env` 已被本地读取，`MOCK_LLM=false`、API Key 和模型名均存在。
-- 真实 API 调用通过 HTTP/HTTPS 代理成功；不要在当前环境默认使用 `all_proxy=socks5://...`，否则 `httpx` 会要求额外 SOCKS 依赖。
+- 真实 API 调用通过代理成功；当前 `server/requirements.txt` 已包含 `httpx[socks]`，因此 `http_proxy` / `https_proxy` 和 `all_proxy=socks5://...` 都可使用。
 - 当前最有价值的 failure case 是 GQ-03：用户说“不要酒精/刺激”时，模型容易把“没有明确风险提示”说成“不会刺激/没有酒精味”。这类断言已进入生成层 guardrail。
 
 ### 2026-05-28 三轮 Probe
@@ -236,7 +236,7 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 | 场景 | 结论 | 证据 |
 | --- | --- | --- |
 | App 启动 | PASS | UI 树出现标题、输入框和 9 个快捷问题 |
-| 油皮通勤防晒 | PASS | Android 发出 `POST http://10.0.2.2:8000/api/chat/stream`；UI 展示真实回复、商品卡片、图片、价格和标签 |
+| 油皮通勤防晒 | PASS | Android 当时使用 `POST http://10.0.2.2:8000/api/chat/stream`；当前本地 Demo 默认改为 `adb reverse` + `http://127.0.0.1:8000`；UI 展示真实回复、商品卡片、图片、价格和标签 |
 | 商品详情 | PASS | 点击商品卡片后弹窗展示价格、类目、推荐理由、适合、使用场景、卖点和注意事项 |
 | 信息不足追问 | PASS | 空会话下返回“你更在意肤质、预算，还是防晒/修护/控油这类具体功效？”，没有乱推商品 |
 | 连续多轮展示 | PASS | 连续点击 `油皮通勤防晒` 和 `敏感肌修护` 后，列表自动滚到第二条回复和商品卡片；两次 POST 均无网络错误 |
@@ -825,7 +825,7 @@ Failure case 初步归因：
 
 - Mock 只作为本地结构、safe fallback 和离线回归的安全网，不作为效果主指标。
 - P0-3 的主验收以真实 Ark / Doubao API 为准。
-- 真实 API 回归需避免 `all_proxy=socks5://...`，否则当前 venv 缺少 `socksio` 会落到本地 fallback；本轮使用 `http_proxy/https_proxy` 完成真实调用。
+- 真实 API 回归当前可使用 `all_proxy=socks5://...`；`server/requirements.txt` 已补 `httpx[socks]`，避免缺少 `socksio` 时落到本地 fallback。
 
 真实 API 抽查结论：
 

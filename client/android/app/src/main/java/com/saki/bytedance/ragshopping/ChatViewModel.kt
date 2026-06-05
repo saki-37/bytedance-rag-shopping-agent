@@ -9,6 +9,8 @@ import kotlinx.coroutines.launch
 
 data class ChatUiState(
     val input: String = "",
+    val backendBaseUrl: String = BackendConfig.DefaultBaseUrl,
+    val pendingProducts: List<ProductCard> = emptyList(),
     val messages: List<ChatMessage> = listOf(
         ChatMessage(
             role = Role.Assistant,
@@ -114,6 +116,7 @@ class ChatViewModel(
                 input = "",
                 isLoading = true,
                 statusText = null,
+                pendingProducts = emptyList(),
                 messages = it.messages + ChatMessage(Role.User, message) + ChatMessage(Role.Assistant, ""),
             )
         }
@@ -121,11 +124,12 @@ class ChatViewModel(
         viewModelScope.launch {
             client.streamChat(message, history) { event ->
                 when (event) {
+                    is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
                     is StreamEvent.Status -> appendStatus(event.value)
-                    is StreamEvent.Products -> attachProducts(event.value)
+                    is StreamEvent.Products -> rememberProducts(event.value)
                     is StreamEvent.Token -> appendToken(event.value)
                     is StreamEvent.Error -> appendError(event.message)
-                    StreamEvent.Done -> _state.update { it.copy(isLoading = false, statusText = null) }
+                    StreamEvent.Done -> finishAssistantTurn()
                 }
             }
         }
@@ -140,9 +144,23 @@ class ChatViewModel(
         _state.update { it.copy(statusText = text) }
     }
 
-    private fun attachProducts(products: List<ProductCard>) {
+    private fun rememberProducts(products: List<ProductCard>) {
+        _state.update { it.copy(pendingProducts = products) }
+    }
+
+    private fun finishAssistantTurn() {
         _state.update { current ->
-            current.copy(messages = current.messages.mapLastAssistant { it.copy(products = products) })
+            val messages = if (current.pendingProducts.isEmpty()) {
+                current.messages
+            } else {
+                current.messages.mapLastAssistant { it.copy(products = current.pendingProducts) }
+            }
+            current.copy(
+                isLoading = false,
+                statusText = null,
+                pendingProducts = emptyList(),
+                messages = messages,
+            )
         }
     }
 
@@ -157,6 +175,7 @@ class ChatViewModel(
             it.copy(
                 isLoading = false,
                 statusText = null,
+                pendingProducts = emptyList(),
                 messages = it.messages + ChatMessage(Role.Error, "请求失败：$message"),
             )
         }

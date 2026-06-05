@@ -101,7 +101,7 @@ all_proxy=socks5://127.0.0.1:7897
 
 - OpenAI Python SDK 底层使用 `httpx`。
 - 如果环境里有 SOCKS 代理，`httpx` 需要额外安装 `socksio` 或 `httpx[socks]`。
-- 当前项目不依赖 SOCKS；用 `http_proxy` / `https_proxy` 已经能完成真实 Ark / Doubao 调用。
+- 当前 `server/requirements.txt` 已包含 `httpx[socks]`，因此可以使用 `all_proxy=socks5://127.0.0.1:7897`；也可以只用 `http_proxy` / `https_proxy` 完成真实 Ark / Doubao 调用。
 
 调试配置时只能打印布尔状态，不打印真实 Key：
 

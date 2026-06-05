@@ -24,7 +24,7 @@
 | 商品卡片 | 回复中包含商品卡片 | 已完成第一版 | 展示图片、品牌、商品名、价格、标签、推荐理由 |
 | 卡片详情 | 可点击商品卡片，跳转落地页或模拟详情页 | 已完成第一版 | 点击商品卡片打开详情弹窗，详情字段来自数据源 |
 | 后端服务 | Python / Go / Node / 任一后端 | 已完成第一版 | FastAPI 服务已跑通 |
-| 流式 API | SSE 或 WebSocket | 已完成 | `POST /api/chat/stream` 返回 `status/products/token/done/error` |
+| 流式 API | SSE 或 WebSocket | 已完成 | `POST /api/chat/stream` 返回 `status/token/products/done/error`；商品卡片在回答文本结束后展示 |
 | 向量数据库 | 集成向量数据库 | 已完成 V1 | Chroma 索引已可构建，运行时 trace 能看到 vector hits；索引产物仅本地保留 |
 | RAG 基本链路 | 检索商品并基于资料回答 | 已完成 V1 | 结构化硬过滤 + 关键词/facet/Chroma 召回 + 轻量 graph-aware rerank + 可解释 trace |
 | 模型调用 | 调用大模型生成导购回复 | 已完成第一版 | OpenAI-compatible Doubao 已通过代理复验；真实调用失败时会走安全兜底 |

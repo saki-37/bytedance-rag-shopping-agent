@@ -8,7 +8,7 @@
 
 - Android Kotlin + Jetpack Compose 原生聊天界面。
 - FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve`、`POST /api/feedback` 和图片静态服务。
-- SSE 流式协议：`status`、`products`、`token`、`done`、`error`。
+- SSE 流式协议：`status`、`token`、`products`、`done`、`error`；推荐场景下先流式展示文本，再展示商品卡片。
 - 商品 RAG：结构化硬过滤 + 必要功效/子类过滤 + keyword/facet 匹配 + Chroma `products` 统一 collection 向量召回 + metadata filter + 可解释 `RetrievalTrace`。
 - V2 多品类起步：新增 5 条服饰运动 enriched 样例，覆盖变体、规格、证据来源和第二品类 query benchmark。
 - Doubao / Ark OpenAI-compatible API 接入；默认评测口径使用真实 API，只有显式开启 `MOCK_LLM=true` 或缺少 Key/模型名时才走 mock / safe fallback。
@@ -93,6 +93,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```bash
 export https_proxy=http://127.0.0.1:7897
 export http_proxy=http://127.0.0.1:7897
+export all_proxy=socks5://127.0.0.1:7897
 ```
 
 ### 2. Android
@@ -102,11 +103,32 @@ cd bytedance-rag-shopping-agent
 ./gradlew :client:android:app:assembleDebug
 ```
 
-也可以用 Android Studio 打开仓库根目录，选择 `client/android/app` 对应的 app 运行。默认后端地址是 Android 模拟器访问宿主机的：
+也可以用 Android Studio 打开仓库根目录，选择 `client/android/app` 对应的 app 运行。
+
+注意：APK 只包含 Android 客户端，不包含 FastAPI 后端。评审或本地复现时需要先按上一步启动后端，再运行 App。
+
+当前 Debug App 会优先尝试：
 
 ```text
-http://10.0.2.2:8000
+http://127.0.0.1:8000
 ```
+
+运行前推荐给当前模拟器建立 adb reverse，把模拟器的 `127.0.0.1:8000` 转发到电脑上的后端：
+
+```bash
+adb reverse tcp:8000 tcp:8000
+```
+
+如果设备列表里有多个设备，先查 serial：
+
+```bash
+adb devices
+adb -s emulator-5554 reverse tcp:8000 tcp:8000
+```
+
+如果未设置 adb reverse，App 会继续尝试 Android 模拟器常用的宿主机地址 `http://10.0.2.2:8000`。商品图片地址会跟随实际连上的后端地址，因此回答和卡片图使用同一个本地服务。
+
+如果使用真机而不是模拟器，`127.0.0.1` 指向手机本机，不是电脑；需要通过 USB 调试执行 `adb reverse tcp:8000 tcp:8000`，或把后端部署到手机可访问的局域网/公网地址后再构建对应配置。
 
 如果 Gradle 下载依赖需要走本地代理：
 

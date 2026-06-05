@@ -3,12 +3,14 @@ package com.saki.bytedance.ragshopping
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.ConnectionPool
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 sealed interface StreamEvent {
@@ -17,17 +19,22 @@ sealed interface StreamEvent {
     data class Products(val value: List<ProductCard>) : StreamEvent
     data object Done : StreamEvent
     data class Error(val message: String) : StreamEvent
+    data class Connection(val baseUrl: String) : StreamEvent
 }
 
 class ShoppingAgentClient(
-    private val baseUrl: String = "http://10.0.2.2:8000",
+    private val baseUrls: List<String> = BackendConfig.CandidateBaseUrls,
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(15, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
+        .connectionPool(ConnectionPool(0, 1, TimeUnit.NANOSECONDS))
+        .retryOnConnectionFailure(true)
         .build(),
 ) {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    @Volatile
+    private var activeBaseUrl: String = baseUrls.firstOrNull() ?: BackendConfig.DefaultBaseUrl
 
     suspend fun streamChat(
         message: String,
@@ -35,58 +42,35 @@ class ShoppingAgentClient(
         onEvent: suspend (StreamEvent) -> Unit,
     ) {
         withContext(Dispatchers.IO) {
-            try {
-                val payload = JSONObject()
-                    .put("message", message)
-                    .put("conversation_id", "android-demo")
-                    .put("history", history.toPayloadHistory())
-                    .toString()
-                val request = Request.Builder()
-                    .url("$baseUrl/api/chat/stream")
-                    .post(payload.toRequestBody(jsonMediaType))
-                    .build()
-
-                Log.d(TAG, "POST $baseUrl/api/chat/stream")
-                okHttpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) {
-                        val messageText = "HTTP ${response.code}"
-                        Log.w(TAG, messageText)
-                        onEvent(StreamEvent.Error(messageText))
+            val payload = JSONObject()
+                .put("message", message)
+                .put("conversation_id", "android-demo")
+                .put("history", history.toPayloadHistory())
+                .toString()
+            var lastError: IOException? = null
+            for (baseUrl in orderedBaseUrls()) {
+                var emittedEvent = false
+                try {
+                    streamChatFromBaseUrl(baseUrl, payload) { event ->
+                        emittedEvent = true
+                        onEvent(event)
+                    }
+                    activeBaseUrl = baseUrl
+                    return@withContext
+                } catch (exception: IOException) {
+                    Log.w(TAG, "Chat stream failed for $baseUrl", exception)
+                    if (emittedEvent) {
+                        onEvent(StreamEvent.Error(userFacingNetworkError(exception)))
                         return@withContext
                     }
-                    val source = response.body?.source()
-                    if (source == null) {
-                        Log.w(TAG, "Empty response body")
-                        onEvent(StreamEvent.Error("Empty response body"))
-                        return@withContext
-                    }
-
-                    var completed = false
-                    var eventName = ""
-                    val dataLines = mutableListOf<String>()
-                    while (!completed && !source.exhausted()) {
-                        val line = source.readUtf8Line() ?: break
-                        when {
-                            line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
-                            line.startsWith("data:") -> dataLines += line.removePrefix("data:").trim()
-                            line.isBlank() && eventName.isNotBlank() -> {
-                                parseEvent(eventName, dataLines.joinToString("\n"))?.let { event ->
-                                    onEvent(event)
-                                    completed = event is StreamEvent.Done
-                                }
-                                eventName = ""
-                                dataLines.clear()
-                            }
-                        }
-                    }
-                    if (!completed) {
-                        onEvent(StreamEvent.Done)
-                    }
+                    lastError = exception
+                } catch (exception: Exception) {
+                    Log.e(TAG, "Chat stream failed", exception)
+                    onEvent(StreamEvent.Error(exception.localizedMessage ?: "Network request failed"))
+                    return@withContext
                 }
-            } catch (exception: Exception) {
-                Log.e(TAG, "Chat stream failed", exception)
-                onEvent(StreamEvent.Error(exception.localizedMessage ?: "Network request failed"))
             }
+            onEvent(StreamEvent.Error(userFacingNetworkError(lastError)))
         }
     }
 
@@ -110,20 +94,84 @@ class ShoppingAgentClient(
                 .put("products", products.toPayloadProducts())
                 .put("trace", JSONObject.NULL)
                 .toString()
-            val request = Request.Builder()
-                .url("$baseUrl/api/feedback")
-                .post(payload.toRequestBody(jsonMediaType))
-                .build()
+            var lastError: IOException? = null
+            for (baseUrl in orderedBaseUrls()) {
+                val request = Request.Builder()
+                    .url("$baseUrl/api/feedback")
+                    .header("Connection", "close")
+                    .post(payload.toRequestBody(jsonMediaType))
+                    .build()
 
-            Log.d(TAG, "POST $baseUrl/api/feedback")
-            okHttpClient.newCall(request).execute().use { response ->
-                val body = response.body?.string().orEmpty()
-                if (!response.isSuccessful) {
-                    val messageText = "HTTP ${response.code}"
-                    Log.w(TAG, "$messageText $body")
-                    throw IllegalStateException(messageText)
+                Log.d(TAG, "POST $baseUrl/api/feedback")
+                try {
+                    okHttpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            val messageText = "HTTP ${response.code}"
+                            Log.w(TAG, "$messageText $body")
+                            throw IllegalStateException(messageText)
+                        }
+                        activeBaseUrl = baseUrl
+                        return@withContext JSONObject(body).optString("record_id")
+                    }
+                } catch (exception: IOException) {
+                    Log.w(TAG, "Feedback request failed for $baseUrl", exception)
+                    lastError = exception
                 }
-                JSONObject(body).optString("record_id")
+            }
+            throw IllegalStateException(userFacingNetworkError(lastError))
+        }
+    }
+
+    private suspend fun streamChatFromBaseUrl(
+        baseUrl: String,
+        payload: String,
+        onEvent: suspend (StreamEvent) -> Unit,
+    ) {
+        val request = Request.Builder()
+            .url("$baseUrl/api/chat/stream")
+            .header("Accept", "text/event-stream")
+            .header("Connection", "close")
+            .post(payload.toRequestBody(jsonMediaType))
+            .build()
+
+        Log.d(TAG, "POST $baseUrl/api/chat/stream")
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                val messageText = "HTTP ${response.code}"
+                Log.w(TAG, messageText)
+                onEvent(StreamEvent.Error(messageText))
+                return
+            }
+            activeBaseUrl = baseUrl
+            onEvent(StreamEvent.Connection(baseUrl))
+            val source = response.body?.source()
+            if (source == null) {
+                Log.w(TAG, "Empty response body")
+                onEvent(StreamEvent.Error("Empty response body"))
+                return
+            }
+
+            var completed = false
+            var eventName = ""
+            val dataLines = mutableListOf<String>()
+            while (!completed) {
+                val line = source.readUtf8Line() ?: break
+                when {
+                    line.startsWith("event:") -> eventName = line.removePrefix("event:").trim()
+                    line.startsWith("data:") -> dataLines += line.removePrefix("data:").trim()
+                    line.isBlank() && eventName.isNotBlank() -> {
+                        parseEvent(eventName, dataLines.joinToString("\n"))?.let { event ->
+                            onEvent(event)
+                            completed = event is StreamEvent.Done
+                        }
+                        eventName = ""
+                        dataLines.clear()
+                    }
+                }
+            }
+            if (!completed) {
+                onEvent(StreamEvent.Done)
             }
         }
     }
@@ -224,5 +272,19 @@ class ShoppingAgentClient(
 
     private companion object {
         const val TAG = "ShoppingAgentClient"
+    }
+
+    private fun orderedBaseUrls(): List<String> {
+        return (listOf(activeBaseUrl) + baseUrls).distinct()
+    }
+
+    private fun userFacingNetworkError(exception: IOException?): String {
+        val rawMessage = exception?.localizedMessage ?: "Network request failed"
+        return (
+            "连接后端失败：请确认 FastAPI 正在 8000 端口运行。"
+                + "模拟器可先执行 adb reverse tcp:8000 tcp:8000；"
+                + "若不使用 adb reverse，请确认 10.0.2.2:8000 可访问。"
+                + "原始错误：$rawMessage"
+            )
     }
 }

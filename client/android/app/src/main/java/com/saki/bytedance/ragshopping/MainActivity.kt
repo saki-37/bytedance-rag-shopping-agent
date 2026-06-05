@@ -63,8 +63,6 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import kotlinx.coroutines.delay
 
-private const val AssetBaseUrl = "http://10.0.2.2:8000/assets"
-
 private val AppGreen = Color(0xFFB7D65A)
 private val AppGreenSoft = Color(0xFFEAF6D5)
 private val SurfaceCream = Color(0xFFFAFFE9)
@@ -132,7 +130,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     val listState = rememberLazyListState()
     var selectedProduct by remember { mutableStateOf<ProductCard?>(null) }
     val latestMessage = state.messages.lastOrNull()
-    val assetBaseUrl = AssetBaseUrl
+    val assetBaseUrl = "${state.backendBaseUrl.trimEnd('/')}/assets"
 
     LaunchedEffect(state.messages.size, latestMessage?.content?.length, latestMessage?.products?.size) {
         listState.scrollToItem(state.messages.size)

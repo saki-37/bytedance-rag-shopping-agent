@@ -27,7 +27,7 @@ flowchart TD
     API -->|"候选商品 + 证据上下文"| L["Doubao / Ark<br/>OpenAI-compatible API"]
     L --> G["Generation Guardrails<br/>价格/库存/优惠/无证据断言校验"]
     G -->|"安全回答或二次改写/兜底"| API
-    API -->|"SSE: status / products / token / done / error"| A
+    API -->|"SSE: status / token / products / done / error"| A
     A --> C["聊天消息<br/>商品卡片<br/>图片<br/>详情弹窗"]
     A -->|"POST /api/feedback<br/>feedback + bounded snapshot"| F["Feedback JSONL<br/>data/tmp/feedback"]
 ```
@@ -44,8 +44,8 @@ flowchart TD
 2. 通过 OkHttp 调用后端 `POST /api/chat/stream`。
 3. 消费 SSE 事件：
    - `status`：展示检索/生成状态。
-   - `products`：渲染商品卡片。
    - `token`：逐步追加助手回复。
+   - `products`：文本完成后渲染商品卡片。
    - `done`：结束 loading。
    - `error`：展示可理解错误。
 4. 加载商品图片：使用后端 `/assets/{image_path}`。
@@ -196,10 +196,12 @@ SSE 事件：
 | 事件 | 作用 |
 | --- | --- |
 | `status` | 告诉客户端正在检索或生成 |
-| `products` | 返回本轮商品卡片数组 |
 | `token` | 返回回答文本片段 |
+| `products` | 返回本轮商品卡片数组；推荐型回答中位于 token 之后 |
 | `done` | 本轮结束 |
 | `error` | 可恢复错误 |
+
+推荐型回答的顺序为 `status -> token -> products -> done`。信息不足需要追问时只返回 `status -> token -> done`，不提前展示商品卡片。
 
 图片接口：`GET /assets/{image_path}`
 

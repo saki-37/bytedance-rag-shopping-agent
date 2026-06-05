@@ -48,7 +48,6 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             retrieval_message = retrieval_build.message
             result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
             _attach_conversation_trace(result.trace, retrieval_build.trace)
-            yield _event("products", {"products": [card.model_dump() for card in result.cards]})
             yield _event("status", {"status": "generating"})
             if result.clarification_question:
                 async for token in _stream_text(result.clarification_question):
@@ -62,6 +61,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                     cards=result.cards,
                 ):
                     yield _event("token", {"token": token})
+                yield _event("products", {"products": [card.model_dump() for card in result.cards]})
             yield _event("done", {"ok": True})
         except Exception as exc:  # Keep SSE shape stable for the Android client.
             yield _event("error", {"message": str(exc)})
