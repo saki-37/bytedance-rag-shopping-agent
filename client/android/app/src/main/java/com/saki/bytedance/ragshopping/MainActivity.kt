@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -23,7 +24,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -33,6 +33,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,6 +56,19 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 
 private const val AssetBaseUrl = "http://10.0.2.2:8000/assets"
+
+private val AppGreen = Color(0xFFB7D65A)
+private val AppGreenSoft = Color(0xFFEAF6D5)
+private val SurfaceCream = Color(0xFFFAFFE9)
+private val SurfaceWhite = Color(0xFFFFFEF8)
+private val Ink = Color(0xFF10130E)
+private val AccentGreen = Color(0xFF94B92B)
+private val AccentGreenDark = Color(0xFF526D13)
+private val BorderGreen = Color(0xFFD4E99A)
+private val MutedText = Color(0xFF5F6A4E)
+private val WarmSurface = Color(0xFFFFF1D5)
+private val ErrorSurface = Color(0xFFFFEAE0)
+private val ErrorText = Color(0xFF9E3412)
 
 private val DemoPrompts = listOf(
     "油皮通勤防晒" to "我是油皮，想要200元以内通勤防晒",
@@ -85,12 +99,13 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     val listState = rememberLazyListState()
     var selectedProduct by remember { mutableStateOf<ProductCard?>(null) }
     val latestMessage = state.messages.lastOrNull()
+    val assetBaseUrl = AssetBaseUrl
 
     LaunchedEffect(state.messages.size, latestMessage?.content?.length, latestMessage?.products?.size) {
         listState.scrollToItem(state.messages.size)
     }
 
-    Surface(color = Color(0xFFF3FBF6), modifier = Modifier.fillMaxSize()) {
+    Surface(color = AppGreen, modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             Header()
             LazyColumn(
@@ -111,6 +126,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                     MessageBubble(
                         message = message,
                         showFeedback = !state.isLoading && hasPriorUserMessage,
+                        assetBaseUrl = assetBaseUrl,
                         onProductClick = { selectedProduct = it },
                         onFeedback = viewModel::submitFeedback,
                     )
@@ -129,7 +145,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
             )
         }
         selectedProduct?.let { product ->
-            ProductDetailDialog(product = product, onDismiss = { selectedProduct = null })
+            ProductDetailDialog(product = product, assetBaseUrl = assetBaseUrl, onDismiss = { selectedProduct = null })
         }
     }
 }
@@ -139,11 +155,21 @@ private fun Header() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
-            .padding(horizontal = 20.dp, vertical = 16.dp),
+            .background(AppGreen)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text("RAG 美妆导购", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-        Text("肤质、预算、场景和排除条件都可以直接说", color = Color(0xFF5D6B63))
+        Text(
+            text = "RAG 美妆导购",
+            color = Ink,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.headlineSmall,
+        )
+        Text(
+            text = "肤质、预算、场景和排除条件都可以直接说",
+            color = AccentGreenDark,
+            style = MaterialTheme.typography.bodyMedium,
+        )
     }
 }
 
@@ -151,29 +177,43 @@ private fun Header() {
 private fun MessageBubble(
     message: ChatMessage,
     showFeedback: Boolean,
+    assetBaseUrl: String,
     onProductClick: (ProductCard) -> Unit,
     onFeedback: (String, FeedbackType) -> Unit,
 ) {
     val alignment = if (message.role == Role.User) Alignment.End else Alignment.Start
     val background = when (message.role) {
-        Role.User -> Color(0xFF0BAE5C)
-        Role.Assistant -> Color.White
-        Role.Status -> Color(0xFFE4F6EA)
-        Role.Error -> Color(0xFFFFECE8)
+        Role.User -> Ink
+        Role.Assistant -> SurfaceCream
+        Role.Status -> AppGreenSoft
+        Role.Error -> ErrorSurface
     }
-    val textColor = if (message.role == Role.User) Color.White else Color(0xFF1F2937)
+    val textColor = when (message.role) {
+        Role.User -> SurfaceWhite
+        Role.Error -> ErrorText
+        else -> Ink
+    }
+    val border = if (message.role == Role.User) null else BorderStroke(1.dp, BorderGreen)
 
     Column(horizontalAlignment = alignment, modifier = Modifier.fillMaxWidth()) {
         Card(
             colors = CardDefaults.cardColors(containerColor = background),
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(22.dp),
+            border = border,
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             modifier = Modifier.fillMaxWidth(if (message.role == Role.User) 0.86f else 1f),
         ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (message.content.isNotBlank()) {
-                    Text(message.content, color = textColor)
+                    Text(
+                        text = message.content,
+                        color = textColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
                 }
-                message.products.forEach { ProductCardView(product = it, onClick = { onProductClick(it) }) }
+                message.products.forEach {
+                    ProductCardView(product = it, assetBaseUrl = assetBaseUrl, onClick = { onProductClick(it) })
+                }
                 if (message.role == Role.Assistant && message.content.isNotBlank() && showFeedback) {
                     FeedbackControls(message = message, onFeedback = onFeedback)
                 }
@@ -188,7 +228,7 @@ private fun FeedbackControls(message: ChatMessage, onFeedback: (String, Feedback
         message.feedback != null -> {
             Text(
                 text = "已记录：${message.feedback.label}",
-                color = Color(0xFF087A42),
+                color = AccentGreenDark,
                 style = MaterialTheme.typography.labelMedium,
             )
         }
@@ -196,7 +236,7 @@ private fun FeedbackControls(message: ChatMessage, onFeedback: (String, Feedback
         message.isFeedbackSending -> {
             Text(
                 text = "正在记录反馈...",
-                color = Color(0xFF53635A),
+                color = MutedText,
                 style = MaterialTheme.typography.labelMedium,
             )
         }
@@ -210,7 +250,7 @@ private fun FeedbackControls(message: ChatMessage, onFeedback: (String, Feedback
                 if (message.feedbackError != null) {
                     Text(
                         text = "记录失败：${message.feedbackError}",
-                        color = Color(0xFFB54708),
+                        color = ErrorText,
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
@@ -224,73 +264,109 @@ private fun FeedbackChip(label: String, onClick: () -> Unit) {
     Text(
         text = label,
         modifier = Modifier
-            .background(Color(0xFFE4F6EA), RoundedCornerShape(999.dp))
+            .background(AppGreenSoft, RoundedCornerShape(999.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 5.dp),
-        color = Color(0xFF087A42),
+        color = AccentGreenDark,
         style = MaterialTheme.typography.labelMedium,
     )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ProductCardView(product: ProductCard, onClick: () -> Unit) {
+private fun ProductCardView(product: ProductCard, assetBaseUrl: String, onClick: () -> Unit) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FFFA)),
-        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, BorderGreen),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
-                        .clip(CircleShape),
+                        .size(62.dp)
+                        .clip(RoundedCornerShape(18.dp)),
                 ) {
                     ProductImage(
                         product = product,
+                        assetBaseUrl = assetBaseUrl,
                         modifier = Modifier.fillMaxSize(),
                         fallbackText = product.brand.take(1),
                     )
                 }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(product.brand, color = Color(0xFF087A42), fontWeight = FontWeight.Bold)
-                    Text(product.title, maxLines = 2, style = MaterialTheme.typography.bodySmall)
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = product.brand,
+                        color = AccentGreenDark,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        text = product.title,
+                        color = Ink,
+                        maxLines = 2,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                 }
-                Text("¥${product.price.toInt()}", color = Color(0xFFE87800), fontWeight = FontWeight.Bold)
+                Text(
+                    text = "¥${product.price.toInt()}",
+                    modifier = Modifier
+                        .background(Ink, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    color = SurfaceWhite,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelMedium,
+                )
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 product.tags.forEach { tag ->
                     Text(
                         text = tag,
                         modifier = Modifier
-                            .background(Color(0xFFFFF1D8), RoundedCornerShape(999.dp))
+                            .background(WarmSurface, RoundedCornerShape(999.dp))
                             .padding(horizontal = 8.dp, vertical = 3.dp),
-                        color = Color(0xFF9A4B00),
+                        color = AccentGreenDark,
                         style = MaterialTheme.typography.labelSmall,
                     )
                 }
             }
-            Text(product.reason, color = Color(0xFF53635A), style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = product.reason,
+                color = MutedText,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
 
 @Composable
-private fun ProductDetailDialog(product: ProductCard, onDismiss: () -> Unit) {
+private fun ProductDetailDialog(product: ProductCard, assetBaseUrl: String, onDismiss: () -> Unit) {
+    val knowledge = remember(product.description) { product.knowledgeSections() }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("关闭", color = Color(0xFF087A42))
+                Text("关闭", color = AccentGreenDark, fontWeight = FontWeight.Bold)
             }
         },
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(product.brand, color = Color(0xFF087A42), fontWeight = FontWeight.Bold)
-                Text(product.title, style = MaterialTheme.typography.titleSmall)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = product.brand,
+                    color = AccentGreenDark,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                Text(
+                    text = product.title,
+                    color = Ink,
+                    style = MaterialTheme.typography.titleMedium,
+                )
             }
         },
         text = {
@@ -298,41 +374,87 @@ private fun ProductDetailDialog(product: ProductCard, onDismiss: () -> Unit) {
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                ProductImage(
-                    product = product,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    fallbackText = product.brand.take(1),
+                DetailHeroCard(product = product, assetBaseUrl = assetBaseUrl)
+                DetailSectionCard(
+                    title = "推荐理由",
+                    values = listOf(product.reason),
+                    containerColor = Ink,
+                    titleColor = AppGreen,
+                    bodyColor = SurfaceWhite,
+                    bullet = false,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("¥${product.price.toInt()}", color = Color(0xFFE87800), fontWeight = FontWeight.Bold)
-                    Text("${product.category} / ${product.subCategory}", color = Color(0xFF53635A))
-                }
-                DetailSection("推荐理由", listOf(product.reason))
-                DetailSection("适合", product.suitableFor.ifEmpty { product.targetUsers })
-                DetailSection("使用场景", product.useCases)
-                DetailSection("卖点", product.sellingPoints)
-                DetailSection("注意事项", product.cautions)
-                DetailSection("不适合", product.avoidFor)
-                if (product.description.isNotBlank()) {
-                    Text("资料依据", color = Color(0xFF087A42), fontWeight = FontWeight.Bold)
-                    Text(product.description, color = Color(0xFF53635A), style = MaterialTheme.typography.bodySmall)
-                }
+                DetailChipsCard("适合人群", product.suitableFor.ifEmpty { product.targetUsers })
+                DetailChipsCard("使用场景", product.useCases, containerColor = AppGreenSoft)
+                DetailChipsCard("核心卖点", product.sellingPoints)
+                DetailSectionCard("官方 FAQ", knowledge.officialFaq.take(2), numbered = true)
+                DetailSectionCard(
+                    title = "用户精选评论",
+                    values = knowledge.userReviews.take(2),
+                    containerColor = AppGreenSoft,
+                    titleColor = AccentGreenDark,
+                    bullet = false,
+                )
+                DetailSectionCard(
+                    title = "注意和避坑",
+                    values = product.cautions + product.avoidFor,
+                    containerColor = WarmSurface,
+                    titleColor = ErrorText,
+                )
+                DetailSectionCard(
+                    title = "资料依据",
+                    values = listOf(knowledge.overview),
+                    bullet = false,
+                )
             }
         },
-        containerColor = Color.White,
+        containerColor = SurfaceCream,
+        shape = RoundedCornerShape(28.dp),
     )
 }
 
 @Composable
-private fun ProductImage(product: ProductCard, modifier: Modifier, fallbackText: String) {
+private fun DetailHeroCard(product: ProductCard, assetBaseUrl: String) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+        shape = RoundedCornerShape(22.dp),
+        border = BorderStroke(1.dp, BorderGreen),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ProductImage(
+                product = product,
+                assetBaseUrl = assetBaseUrl,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(150.dp)
+                    .clip(RoundedCornerShape(18.dp)),
+                fallbackText = product.brand.take(1),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "¥${product.price.toInt()}",
+                    modifier = Modifier
+                        .background(Ink, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    color = SurfaceWhite,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                InfoChip(product.category)
+                InfoChip(product.subCategory, warm = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProductImage(product: ProductCard, assetBaseUrl: String, modifier: Modifier, fallbackText: String) {
     SubcomposeAsyncImage(
-        model = product.imageUrl(),
+        model = product.imageUrl(assetBaseUrl),
         contentDescription = product.title,
         contentScale = ContentScale.Crop,
-        modifier = modifier.background(Color(0xFFDFF5E8)),
+        modifier = modifier.background(AppGreenSoft),
         loading = { ProductImageFallback(fallbackText) },
         error = { ProductImageFallback(fallbackText) },
         success = { SubcomposeAsyncImageContent() },
@@ -345,28 +467,132 @@ private fun ProductImageFallback(text: String) {
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, fontWeight = FontWeight.Bold, color = Color(0xFF087A42))
+        Text(text, fontWeight = FontWeight.Bold, color = AccentGreenDark)
     }
 }
 
-private fun ProductCard.imageUrl(): String {
+private fun ProductCard.imageUrl(assetBaseUrl: String): String {
     val encodedPath = imagePath
         .split("/")
         .joinToString("/") { segment -> Uri.encode(segment) }
-    return "$AssetBaseUrl/$encodedPath"
+    return "${assetBaseUrl.trimEnd('/')}/$encodedPath"
 }
 
 @Composable
-private fun DetailSection(title: String, values: List<String>) {
+private fun DetailSectionCard(
+    title: String,
+    values: List<String>,
+    containerColor: Color = SurfaceWhite,
+    titleColor: Color = AccentGreenDark,
+    bodyColor: Color = MutedText,
+    bullet: Boolean = true,
+    numbered: Boolean = false,
+) {
     val visibleValues = values.filter { it.isNotBlank() }
     if (visibleValues.isEmpty()) return
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, color = Color(0xFF087A42), fontWeight = FontWeight.Bold)
-        visibleValues.forEach { value ->
-            Text("• $value", color = Color(0xFF53635A), style = MaterialTheme.typography.bodySmall)
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, BorderGreen),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                text = title,
+                color = titleColor,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            visibleValues.forEachIndexed { index, value ->
+                val prefix = when {
+                    numbered -> "${index + 1}. "
+                    bullet -> "• "
+                    else -> ""
+                }
+                Text(
+                    text = "$prefix$value",
+                    color = bodyColor,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun DetailChipsCard(
+    title: String,
+    values: List<String>,
+    containerColor: Color = SurfaceWhite,
+) {
+    val visibleValues = values.filter { it.isNotBlank() }
+    if (visibleValues.isEmpty()) return
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, BorderGreen),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = title,
+                color = AccentGreenDark,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                visibleValues.forEach { value ->
+                    InfoChip(value, warm = containerColor == AppGreenSoft)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoChip(label: String, warm: Boolean = false) {
+    Text(
+        text = label,
+        modifier = Modifier
+            .background(if (warm) WarmSurface else AppGreenSoft, RoundedCornerShape(999.dp))
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+        color = if (warm) AccentGreenDark else Ink,
+        style = MaterialTheme.typography.labelSmall,
+    )
+}
+
+private data class KnowledgeSections(
+    val overview: String,
+    val officialFaq: List<String>,
+    val userReviews: List<String>,
+)
+
+private fun ProductCard.knowledgeSections(): KnowledgeSections {
+    val overview = mutableListOf<String>()
+    val officialFaq = mutableListOf<String>()
+    val userReviews = mutableListOf<String>()
+
+    description.lines()
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .forEach { line ->
+            when {
+                line.startsWith("官方FAQ：") -> officialFaq += line.removePrefix("官方FAQ：").trim()
+                line.startsWith("用户评价：") -> userReviews += line.removePrefix("用户评价：").trim()
+                else -> overview += line
+            }
+        }
+
+    return KnowledgeSections(
+        overview = overview.joinToString("\n"),
+        officialFaq = officialFaq,
+        userReviews = userReviews,
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -379,55 +605,75 @@ private fun InputBar(
     onSend: () -> Unit,
     onQuickPrompt: (String) -> Unit,
 ) {
-    Column(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.White)
             .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceCream),
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, BorderGreen),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        if (statusText != null) {
-            Text(
-                text = statusText,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFE4F6EA), RoundedCornerShape(10.dp))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                color = Color(0xFF087A42),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DemoPrompts.forEach { (label, prompt) ->
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (statusText != null) {
                 Text(
-                    text = label,
+                    text = statusText,
                     modifier = Modifier
-                        .background(Color(0xFFE4F6EA), RoundedCornerShape(999.dp))
-                        .clickable(enabled = !isLoading) { onQuickPrompt(prompt) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    color = Color(0xFF087A42),
-                    style = MaterialTheme.typography.labelMedium,
+                        .fillMaxWidth()
+                        .background(AppGreenSoft, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    color = AccentGreenDark,
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            OutlinedTextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.weight(1f),
-                minLines = 1,
-                maxLines = 3,
-                placeholder = { Text("例如：我是油皮，想要200元以内通勤防晒") },
-            )
-            Button(
-                onClick = onSend,
-                enabled = !isLoading && value.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0BAE5C)),
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DemoPrompts.forEach { (label, prompt) ->
+                    Text(
+                        text = label,
+                        modifier = Modifier
+                            .background(AppGreenSoft, RoundedCornerShape(999.dp))
+                            .clickable(enabled = !isLoading) { onQuickPrompt(prompt) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        color = AccentGreenDark,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(if (isLoading) "中" else "发")
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier.weight(1f),
+                    minLines = 1,
+                    maxLines = 3,
+                    placeholder = { Text("例如：我是油皮，想要200元以内通勤防晒") },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentGreenDark,
+                        unfocusedBorderColor = BorderGreen,
+                        focusedContainerColor = SurfaceWhite,
+                        unfocusedContainerColor = SurfaceWhite,
+                        cursorColor = Ink,
+                    ),
+                    shape = RoundedCornerShape(18.dp),
+                )
+                Button(
+                    onClick = onSend,
+                    enabled = !isLoading && value.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Ink,
+                        contentColor = SurfaceWhite,
+                        disabledContainerColor = BorderGreen,
+                        disabledContentColor = MutedText,
+                    ),
+                ) {
+                    Text(if (isLoading) "中" else "发", fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
