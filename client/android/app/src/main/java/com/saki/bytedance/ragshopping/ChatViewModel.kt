@@ -145,12 +145,18 @@ class ChatViewModel(
     }
 
     private fun rememberProducts(products: List<ProductCard>) {
-        _state.update { it.copy(pendingProducts = products) }
+        _state.update { current ->
+            current.copy(
+                pendingProducts = products,
+                messages = current.messages.mapLastAssistant { it.copy(products = products) },
+            )
+        }
     }
 
     private fun finishAssistantTurn() {
         _state.update { current ->
-            val messages = if (current.pendingProducts.isEmpty()) {
+            val lastAssistant = current.messages.lastOrNull { it.role == Role.Assistant }
+            val messages = if (current.pendingProducts.isEmpty() || lastAssistant?.products?.isNotEmpty() == true) {
                 current.messages
             } else {
                 current.messages.mapLastAssistant { it.copy(products = current.pendingProducts) }

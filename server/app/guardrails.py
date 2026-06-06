@@ -99,6 +99,15 @@ def build_safe_answer(cards: list[ProductCard], user_message: str | None = None)
 
     if len(cards) == 1:
         card = cards[0]
+        if card.variants:
+            lines = [f"我先按同系列规格帮你比较：{_card_name(card)}。"]
+            for index, variant in enumerate(card.variants[:3], start=1):
+                lines.append(f"{index}. {variant.label}，数据源价格 ¥{variant.price:g}。{variant.reason}")
+            if card.cautions:
+                lines.append(f"需要注意：{'；'.join(card.cautions[:2])}。")
+            lines.extend(evidence_notes)
+            lines.append("这些规格属于同一商品资料，我不会把它们说成互不相关的商品，也不会补资料外的商业承诺。")
+            return "\n".join(lines)
         lines = [
             f"我先基于商品资料给出保守推荐：{_card_name(card)}，数据源价格 ¥{card.price:g}。",
             f"资料中可支持的匹配点：{_supported_points(card)}。",
@@ -111,10 +120,20 @@ def build_safe_answer(cards: list[ProductCard], user_message: str | None = None)
 
     lines = ["按你现在的条件，我先把能被商品资料支撑的选择收窄到这几款："]
     for index, card in enumerate(cards[:3], start=1):
-        line = (
-            f"{index}. {_card_name(card)}，数据源价格 ¥{card.price:g}。"
-            f"{_supported_points(card)}"
-        )
+        if card.variants:
+            variant_text = "；".join(
+                f"{variant.label} ¥{variant.price:g}"
+                for variant in card.variants[:3]
+            )
+            line = (
+                f"{index}. {_card_name(card)}，同系列可选规格：{variant_text}。"
+                f"{_supported_points(card)}"
+            )
+        else:
+            line = (
+                f"{index}. {_card_name(card)}，数据源价格 ¥{card.price:g}。"
+                f"{_supported_points(card)}"
+            )
         if card.cautions:
             line += f" 注意：{card.cautions[0]}。"
         lines.append(line)
@@ -130,11 +149,19 @@ def _build_comparison_answer(cards: list[ProductCard], user_message: str) -> str
     for index, card in enumerate(cards[:3], start=1):
         fit = "、".join(card.suitable_for[:2] or card.target_users[:2] or card.use_cases[:2])
         caution = "；".join(card.cautions[:1] or card.avoid_for[:1])
-        parts = [
-            f"{index}. {card.brand}｜¥{card.price:g}",
-            f"适合：{fit or '资料中主要匹配本次需求'}",
-            f"理由：{card.reason or '商品资料里有对应匹配点'}",
-        ]
+        if card.variants:
+            variant_text = "；".join(f"{variant.label} ¥{variant.price:g}" for variant in card.variants[:3])
+            parts = [
+                f"{index}. {card.brand}｜同系列规格：{variant_text}",
+                f"适合：{fit or '资料中主要匹配本次需求'}",
+                f"理由：{card.reason or '商品资料里有对应匹配点'}",
+            ]
+        else:
+            parts = [
+                f"{index}. {card.brand}｜¥{card.price:g}",
+                f"适合：{fit or '资料中主要匹配本次需求'}",
+                f"理由：{card.reason or '商品资料里有对应匹配点'}",
+            ]
         if caution:
             parts.append(f"注意：{caution}")
         lines.append("；".join(parts) + "。")
@@ -333,6 +360,7 @@ def _dedupe_notes(notes: list[str]) -> list[str]:
 
 def _unsupported_prices(answer: str, user_message: str, cards: list[ProductCard]) -> list[str]:
     allowed = {_normalize_price(card.price) for card in cards}
+    allowed.update(_normalize_price(variant.price) for card in cards for variant in card.variants)
     allowed.update(_extract_prices(user_message))
     return [price for price in _extract_prices(answer) if price not in allowed]
 
@@ -426,6 +454,7 @@ def _card_evidence_text(cards: list[ProductCard]) -> str:
                 card.brand,
                 card.reason,
                 card.description,
+                " ".join(f"{variant.label} {variant.price:g} {variant.reason}" for variant in card.variants),
                 " ".join(card.tags),
                 " ".join(card.target_users),
                 " ".join(card.use_cases),

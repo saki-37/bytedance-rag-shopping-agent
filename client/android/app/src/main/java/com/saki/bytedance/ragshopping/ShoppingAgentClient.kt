@@ -234,6 +234,24 @@ class ShoppingAgentClient(
             .put("suitable_for", JSONArray(suitableFor))
             .put("avoid_for", JSONArray(avoidFor))
             .put("description", description)
+            .put("variants", variants.toPayloadVariants())
+    }
+
+    private fun List<ProductVariantCard>.toPayloadVariants(): JSONArray {
+        val array = JSONArray()
+        forEach { variant ->
+            array.put(
+                JSONObject()
+                    .put("variant_id", variant.variantId)
+                    .put("parent_product_id", variant.parentProductId)
+                    .put("label", variant.label)
+                    .put("properties", JSONObject(variant.properties))
+                    .put("price", variant.price)
+                    .put("image_path", variant.imagePath)
+                    .put("reason", variant.reason)
+            )
+        }
+        return array
     }
 
     private fun parseProducts(array: JSONArray): List<ProductCard> {
@@ -259,6 +277,27 @@ class ShoppingAgentClient(
                         suitableFor = parseStringList(item.optJSONArray("suitable_for")),
                         avoidFor = parseStringList(item.optJSONArray("avoid_for")),
                         description = item.optString("description"),
+                        variants = parseVariants(item.optJSONArray("variants")),
+                    )
+                )
+            }
+        }
+    }
+
+    private fun parseVariants(array: JSONArray?): List<ProductVariantCard> {
+        if (array == null) return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                add(
+                    ProductVariantCard(
+                        variantId = item.optString("variant_id"),
+                        parentProductId = item.optString("parent_product_id"),
+                        label = item.optString("label"),
+                        properties = parseStringMap(item.optJSONObject("properties")),
+                        price = item.optDouble("price"),
+                        imagePath = item.optString("image_path"),
+                        reason = item.optString("reason"),
                     )
                 )
             }
@@ -268,6 +307,17 @@ class ShoppingAgentClient(
     private fun parseStringList(array: JSONArray?): List<String> {
         if (array == null) return emptyList()
         return List(array.length()) { index -> array.optString(index) }.filter { it.isNotBlank() }
+    }
+
+    private fun parseStringMap(json: JSONObject?): Map<String, String> {
+        if (json == null) return emptyMap()
+        val values = mutableMapOf<String, String>()
+        val keys = json.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            values[key] = json.optString(key)
+        }
+        return values.filterValues { it.isNotBlank() }
     }
 
     private companion object {

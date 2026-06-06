@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
@@ -158,10 +159,14 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                         index == state.messages.lastIndex &&
                         message.role == Role.Assistant &&
                         message.content.isBlank()
+                    val isAssistantStreaming = state.isLoading &&
+                        index == state.messages.lastIndex &&
+                        message.role == Role.Assistant
                     MessageBubble(
                         message = message,
                         showFeedback = !state.isLoading && hasPriorUserMessage,
                         isThinking = isThinking,
+                        isStreaming = isAssistantStreaming,
                         assetBaseUrl = assetBaseUrl,
                         onProductClick = { selectedProduct = it },
                         onFeedback = viewModel::submitFeedback,
@@ -214,6 +219,7 @@ private fun MessageBubble(
     message: ChatMessage,
     showFeedback: Boolean,
     isThinking: Boolean,
+    isStreaming: Boolean,
     assetBaseUrl: String,
     onProductClick: (ProductCard) -> Unit,
     onFeedback: (String, FeedbackType) -> Unit,
@@ -244,14 +250,21 @@ private fun MessageBubble(
                 if (isThinking) {
                     ThinkingIndicator()
                 } else if (message.content.isNotBlank()) {
-                    Text(
-                        text = message.content,
-                        color = textColor,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-                message.products.forEach {
-                    ProductCardView(product = it, assetBaseUrl = assetBaseUrl, onClick = { onProductClick(it) })
+                    if (message.role == Role.Assistant && message.products.isNotEmpty()) {
+                        AssistantMessageContent(
+                            content = message.content,
+                            products = message.products,
+                            isStreaming = isStreaming,
+                            assetBaseUrl = assetBaseUrl,
+                            onProductClick = onProductClick,
+                        )
+                    } else {
+                        Text(
+                            text = message.content,
+                            color = textColor,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 }
                 if (message.role == Role.Assistant && message.content.isNotBlank() && showFeedback) {
                     FeedbackControls(message = message, onFeedback = onFeedback)
@@ -259,6 +272,273 @@ private fun MessageBubble(
             }
         }
     }
+}
+
+@Composable
+private fun AssistantMessageContent(
+    content: String,
+    products: List<ProductCard>,
+    isStreaming: Boolean,
+    assetBaseUrl: String,
+    onProductClick: (ProductCard) -> Unit,
+) {
+    val blocks = remember(content, products, isStreaming) {
+        buildAssistantContentBlocks(content, products, isStreaming)
+    }
+
+    blocks.forEach { block ->
+        if (block.text.isNotBlank()) {
+            Text(
+                text = block.text,
+                color = Ink,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        block.products.forEach { product ->
+            ProductCardView(
+                product = product,
+                assetBaseUrl = assetBaseUrl,
+                onClick = { onProductClick(product) },
+            )
+        }
+    }
+}
+
+private data class AssistantContentBlock(
+    val text: String,
+    val products: List<ProductCard> = emptyList(),
+)
+
+private data class AssistantTextBlock(
+    val text: String,
+    val isComplete: Boolean,
+)
+
+private data class ProductTextAnchor(
+    val blockIndex: Int,
+    val offset: Int,
+)
+
+private data class ProductPlacement(
+    val product: ProductCard,
+    val anchor: ProductTextAnchor?,
+    val originalIndex: Int,
+)
+
+private val InlineRecommendationMarkerRegex =
+    Regex("""(?:^|[\s，,；;。:：])(?:[1-9][.、)]|第[一二三四五六七八九123456789](?:个|款|件)?[：:、.])""")
+private val RecommendationBlockStartRegex =
+    Regex("""^\s*(?:[1-9][.、)]|第[一二三四五六七八九123456789](?:个|款|件)?[：:、.]?)""")
+
+private fun buildAssistantContentBlocks(
+    content: String,
+    products: List<ProductCard>,
+    isStreaming: Boolean,
+): List<AssistantContentBlock> {
+    val textBlocks = splitAssistantText(content, isStreaming)
+    if (products.isEmpty()) {
+        return textBlocks.map { AssistantContentBlock(text = it.text) }
+    }
+
+    val occupiedWeakMatchBlocks = mutableSetOf<Int>()
+    val placements = products.mapIndexed { index, product ->
+        val anchor = findProductTextAnchor(
+            product = product,
+            textBlocks = textBlocks,
+            occupiedWeakMatchBlocks = occupiedWeakMatchBlocks,
+        )
+        anchor?.let { occupiedWeakMatchBlocks += it.blockIndex }
+        ProductPlacement(
+            product = product,
+            anchor = anchor,
+            originalIndex = index,
+        )
+    }
+    val productsByBlock = mutableMapOf<Int, MutableList<ProductCard>>()
+    val assignedProductIndexes = mutableSetOf<Int>()
+    placements
+        .filter { it.anchor != null }
+        .sortedWith(
+            compareBy<ProductPlacement>(
+                { it.anchor?.blockIndex ?: Int.MAX_VALUE },
+                { it.anchor?.offset ?: Int.MAX_VALUE },
+                { it.originalIndex },
+            )
+        )
+        .forEach { placement ->
+            val blockIndex = placement.anchor?.blockIndex ?: return@forEach
+            if (productsByBlock.appendProduct(blockIndex, placement.product)) {
+                assignedProductIndexes += placement.originalIndex
+            }
+        }
+
+    val recommendationBlockIndexes = completedRecommendationBlockIndexes(textBlocks)
+    placements
+        .filter { it.anchor == null }
+        .sortedBy { it.originalIndex }
+        .forEach { placement ->
+            val blockIndex = recommendationBlockIndexes.firstOrNull { productsByBlock[it].isNullOrEmpty() }
+            if (blockIndex != null && productsByBlock.appendProduct(blockIndex, placement.product)) {
+                assignedProductIndexes += placement.originalIndex
+            }
+        }
+
+    val fallbackProducts = if (isStreaming) {
+        emptyList()
+    } else {
+        placements
+            .filter { it.originalIndex !in assignedProductIndexes }
+            .sortedBy { it.originalIndex }
+            .map { it.product }
+    }
+
+    val blocks = textBlocks.mapIndexed { index, block ->
+        AssistantContentBlock(text = block.text, products = productsByBlock[index].orEmpty())
+    }.toMutableList()
+
+    if (fallbackProducts.isNotEmpty()) {
+        blocks += AssistantContentBlock(text = "", products = fallbackProducts)
+    }
+
+    return blocks
+}
+
+private fun completedRecommendationBlockIndexes(textBlocks: List<AssistantTextBlock>): List<Int> {
+    return textBlocks.mapIndexedNotNull { index, block ->
+        index.takeIf { block.isComplete && RecommendationBlockStartRegex.containsMatchIn(block.text) }
+    }
+}
+
+private fun MutableMap<Int, MutableList<ProductCard>>.appendProduct(
+    blockIndex: Int,
+    product: ProductCard,
+): Boolean {
+    val blockProducts = getOrPut(blockIndex) { mutableListOf() }
+    if (blockProducts.any { it.productId == product.productId }) return false
+    blockProducts += product
+    return true
+}
+
+private fun splitAssistantText(content: String, isStreaming: Boolean): List<AssistantTextBlock> {
+    val normalizedContent = content
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    val endsWithLineBreak = normalizedContent.endsWith("\n")
+    val rawLines = normalizedContent.split("\n")
+
+    return buildList {
+        rawLines.forEachIndexed { lineIndex, rawLine ->
+            val line = rawLine.trim()
+            if (line.isBlank()) return@forEachIndexed
+
+            val lineIsComplete = !isStreaming ||
+                lineIndex < rawLines.lastIndex ||
+                endsWithLineBreak
+            val segments = splitInlineRecommendationBlocks(line)
+            segments.forEachIndexed { segmentIndex, segment ->
+                add(
+                    AssistantTextBlock(
+                        text = segment,
+                        isComplete = lineIsComplete || segmentIndex < segments.lastIndex,
+                    )
+                )
+            }
+        }
+    }
+}
+
+private fun splitInlineRecommendationBlocks(line: String): List<String> {
+    val markerIndexes = InlineRecommendationMarkerRegex
+        .findAll(line)
+        .map { match -> if (match.range.first == 0) 0 else match.range.first + 1 }
+        .distinct()
+        .toList()
+
+    if (markerIndexes.size <= 1) {
+        return listOf(line)
+    }
+
+    return buildList {
+        var start = 0
+        markerIndexes.forEach { markerIndex ->
+            if (markerIndex > start) {
+                add(line.substring(start, markerIndex).trim())
+            }
+            start = markerIndex
+        }
+        if (start < line.length) {
+            add(line.substring(start).trim())
+        }
+    }.filter { it.isNotBlank() }
+}
+
+private fun findProductTextAnchor(
+    product: ProductCard,
+    textBlocks: List<AssistantTextBlock>,
+    occupiedWeakMatchBlocks: Set<Int>,
+): ProductTextAnchor? {
+    if (textBlocks.isEmpty()) return null
+
+    val strongTokens = product.strongMatchTokens()
+    findTokenAnchor(strongTokens, textBlocks, excludedBlockIndexes = emptySet())?.let { return it }
+
+    val weakTokens = product.weakMatchTokens()
+    return findTokenAnchor(weakTokens, textBlocks, excludedBlockIndexes = occupiedWeakMatchBlocks)
+}
+
+private fun findTokenAnchor(
+    tokens: List<String>,
+    textBlocks: List<AssistantTextBlock>,
+    excludedBlockIndexes: Set<Int>,
+): ProductTextAnchor? {
+    if (tokens.isEmpty()) return null
+
+    textBlocks.forEachIndexed { blockIndex, textBlock ->
+        if (!textBlock.isComplete) return@forEachIndexed
+        if (blockIndex in excludedBlockIndexes) return@forEachIndexed
+        val block = textBlock.text.normalizedForProductMatch()
+        val offset = tokens
+            .mapNotNull { token ->
+                block.indexOf(token).takeIf { it >= 0 }
+            }
+            .minOrNull()
+        if (offset != null) {
+            return ProductTextAnchor(blockIndex = blockIndex, offset = offset)
+        }
+    }
+    return null
+}
+
+private fun ProductCard.strongMatchTokens(): List<String> {
+    val normalizedTitle = title.normalizedForProductMatch()
+    val normalizedBrand = brand.normalizedForProductMatch()
+    val normalizedSubCategory = subCategory.normalizedForProductMatch()
+    val tokens = mutableListOf<String>()
+
+    if (normalizedTitle.length >= 6) {
+        tokens += normalizedTitle
+        tokens += normalizedTitle.take(12)
+    }
+    if (normalizedBrand.length >= 2 && normalizedSubCategory.length >= 2) {
+        tokens += normalizedBrand + normalizedSubCategory
+    }
+    tokens += variants.map { it.label.normalizedForProductMatch() }
+
+    return tokens
+        .map { it.trim() }
+        .filter { it.length >= 4 }
+        .distinct()
+}
+
+private fun ProductCard.weakMatchTokens(): List<String> {
+    return listOf(brand, title.take(8)) + variants.map { it.label.take(6) }
+        .map { it.normalizedForProductMatch() }
+        .filter { it.length >= 2 }
+        .distinct()
+}
+
+private fun String.normalizedForProductMatch(): String {
+    return lowercase().filter { it.isLetterOrDigit() }
 }
 
 @Composable
@@ -342,6 +622,169 @@ private fun FeedbackChip(label: String, onClick: () -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ProductCardView(product: ProductCard, assetBaseUrl: String, onClick: () -> Unit) {
+    if (product.variants.isNotEmpty()) {
+        VariantStackProductCardView(product = product, assetBaseUrl = assetBaseUrl, onClick = onClick)
+    } else {
+        StandardProductCardView(product = product, assetBaseUrl = assetBaseUrl, onClick = onClick)
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: String, onClick: () -> Unit) {
+    val variants = product.variants
+    var selectedVariantId by remember(product.productId, variants) { mutableStateOf(variants.first().variantId) }
+    val selectedVariant = variants.firstOrNull { it.variantId == selectedVariantId } ?: variants.first()
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Ink, RoundedCornerShape(24.dp))
+            .padding(4.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                variants.forEach { variant ->
+                    VariantCardTab(
+                        variant = variant,
+                        selected = variant.variantId == selectedVariant.variantId,
+                        modifier = Modifier.weight(1f),
+                        onClick = { selectedVariantId = variant.variantId },
+                    )
+                }
+            }
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+                shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomEnd = 20.dp, bottomStart = 20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onClick),
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(62.dp)
+                                .clip(RoundedCornerShape(18.dp)),
+                        ) {
+                            ProductImageFromPath(
+                                imagePath = selectedVariant.imagePath.ifBlank { product.imagePath },
+                                contentDescription = "${product.title} ${selectedVariant.label}",
+                                assetBaseUrl = assetBaseUrl,
+                                modifier = Modifier.fillMaxSize(),
+                                fallbackText = product.brand.take(1),
+                            )
+                        }
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(
+                                text = "${product.brand} · 同系列规格",
+                                color = AccentGreenDark,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            Text(
+                                text = selectedVariant.label.ifBlank { product.title },
+                                color = Ink,
+                                maxLines = 2,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(
+                                text = "¥${selectedVariant.price.toInt()}",
+                                modifier = Modifier
+                                    .background(Ink, RoundedCornerShape(999.dp))
+                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                                color = SurfaceWhite,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                            Text(
+                                text = "详情 >",
+                                color = AccentGreenDark,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        (listOf("同系列规格") + product.tags).take(6).forEach { tag ->
+                            Text(
+                                text = tag,
+                                modifier = Modifier
+                                    .background(WarmSurface, RoundedCornerShape(999.dp))
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                                color = AccentGreenDark,
+                                style = MaterialTheme.typography.labelSmall,
+                            )
+                        }
+                    }
+                    Text(
+                        text = selectedVariant.reason.ifBlank { product.reason },
+                        color = MutedText,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VariantCardTab(
+    variant: ProductVariantCard,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = if (selected) SurfaceWhite else AppGreenSoft),
+        shape = if (selected) {
+            RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp, bottomEnd = 0.dp, bottomStart = 0.dp)
+        } else {
+            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 0.dp, bottomStart = 0.dp)
+        },
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        modifier = modifier
+            .height(if (selected) 42.dp else 36.dp)
+            .clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalArrangement = Arrangement.Center,
+        ) {
+            Text(
+                text = variant.label.ifBlank { "默认规格" },
+                color = if (selected) Ink else AccentGreenDark,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+            )
+            if (selected) {
+                Text(
+                    text = "¥${variant.price.toInt()}",
+                    color = AccentGreenDark,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun StandardProductCardView(product: ProductCard, assetBaseUrl: String, onClick: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
         shape = RoundedCornerShape(20.dp),
@@ -413,6 +856,9 @@ private fun ProductCardView(product: ProductCard, assetBaseUrl: String, onClick:
 @Composable
 private fun ProductDetailDialog(product: ProductCard, assetBaseUrl: String, onDismiss: () -> Unit) {
     val knowledge = remember(product.description) { product.knowledgeSections() }
+    val variants = product.variants
+    var selectedVariantId by remember(product.productId, variants) { mutableStateOf(variants.firstOrNull()?.variantId.orEmpty()) }
+    val selectedVariant = variants.firstOrNull { it.variantId == selectedVariantId } ?: variants.firstOrNull()
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -430,7 +876,7 @@ private fun ProductDetailDialog(product: ProductCard, assetBaseUrl: String, onDi
                     style = MaterialTheme.typography.labelLarge,
                 )
                 Text(
-                    text = product.title,
+                    text = selectedVariant?.label?.takeIf { it.isNotBlank() } ?: product.title,
                     color = Ink,
                     style = MaterialTheme.typography.titleMedium,
                 )
@@ -441,15 +887,31 @@ private fun ProductDetailDialog(product: ProductCard, assetBaseUrl: String, onDi
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                DetailHeroCard(product = product, assetBaseUrl = assetBaseUrl)
+                DetailHeroCard(product = product, selectedVariant = selectedVariant, assetBaseUrl = assetBaseUrl)
+                if (variants.isNotEmpty()) {
+                    VariantSelectorCard(
+                        variants = variants,
+                        selectedVariant = selectedVariant,
+                        onSelect = { selectedVariantId = it.variantId },
+                    )
+                }
                 DetailSectionCard(
                     title = "推荐理由",
-                    values = listOf(product.reason),
+                    values = listOf(selectedVariant?.reason ?: product.reason),
                     containerColor = Ink,
                     titleColor = AppGreen,
                     bodyColor = SurfaceWhite,
                     bullet = false,
                 )
+                if (selectedVariant != null) {
+                    DetailSectionCard(
+                        title = "规格信息",
+                        values = selectedVariant.detailLines(),
+                        containerColor = SurfaceWhite,
+                        titleColor = AccentGreenDark,
+                        bullet = false,
+                    )
+                }
                 DetailChipsCard("适合人群", product.suitableFor.ifEmpty { product.targetUsers })
                 DetailChipsCard("使用场景", product.useCases, containerColor = AppGreenSoft)
                 DetailChipsCard("核心卖点", product.sellingPoints)
@@ -480,7 +942,7 @@ private fun ProductDetailDialog(product: ProductCard, assetBaseUrl: String, onDi
 }
 
 @Composable
-private fun DetailHeroCard(product: ProductCard, assetBaseUrl: String) {
+private fun DetailHeroCard(product: ProductCard, selectedVariant: ProductVariantCard?, assetBaseUrl: String) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
@@ -489,8 +951,9 @@ private fun DetailHeroCard(product: ProductCard, assetBaseUrl: String) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            ProductImage(
-                product = product,
+            ProductImageFromPath(
+                imagePath = selectedVariant?.imagePath?.ifBlank { product.imagePath } ?: product.imagePath,
+                contentDescription = selectedVariant?.label?.takeIf { it.isNotBlank() } ?: product.title,
                 assetBaseUrl = assetBaseUrl,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -500,7 +963,7 @@ private fun DetailHeroCard(product: ProductCard, assetBaseUrl: String) {
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "¥${product.price.toInt()}",
+                    text = "¥${(selectedVariant?.price ?: product.price).toInt()}",
                     modifier = Modifier
                         .background(Ink, RoundedCornerShape(999.dp))
                         .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -510,6 +973,49 @@ private fun DetailHeroCard(product: ProductCard, assetBaseUrl: String) {
                 )
                 InfoChip(product.category)
                 InfoChip(product.subCategory, warm = true)
+                selectedVariant?.label?.takeIf { it.isNotBlank() }?.let {
+                    InfoChip(it)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun VariantSelectorCard(
+    variants: List<ProductVariantCard>,
+    selectedVariant: ProductVariantCard?,
+    onSelect: (ProductVariantCard) -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = AppGreenSoft),
+        shape = RoundedCornerShape(20.dp),
+        border = BorderStroke(1.dp, BorderGreen),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(
+                text = "同系列规格",
+                color = AccentGreenDark,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelLarge,
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                variants.forEach { variant ->
+                    val selected = variant.variantId == selectedVariant?.variantId
+                    Text(
+                        text = variant.label.ifBlank { "默认规格" },
+                        modifier = Modifier
+                            .background(if (selected) Ink else SurfaceWhite, RoundedCornerShape(999.dp))
+                            .clickable { onSelect(variant) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        color = if (selected) SurfaceWhite else AccentGreenDark,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
             }
         }
     }
@@ -517,9 +1023,26 @@ private fun DetailHeroCard(product: ProductCard, assetBaseUrl: String) {
 
 @Composable
 private fun ProductImage(product: ProductCard, assetBaseUrl: String, modifier: Modifier, fallbackText: String) {
-    SubcomposeAsyncImage(
-        model = product.imageUrl(assetBaseUrl),
+    ProductImageFromPath(
+        imagePath = product.imagePath,
         contentDescription = product.title,
+        assetBaseUrl = assetBaseUrl,
+        modifier = modifier,
+        fallbackText = fallbackText,
+    )
+}
+
+@Composable
+private fun ProductImageFromPath(
+    imagePath: String,
+    contentDescription: String,
+    assetBaseUrl: String,
+    modifier: Modifier,
+    fallbackText: String,
+) {
+    SubcomposeAsyncImage(
+        model = imageUrl(assetBaseUrl, imagePath),
+        contentDescription = contentDescription,
         contentScale = ContentScale.Crop,
         modifier = modifier.background(AppGreenSoft),
         loading = { ProductImageFallback(fallbackText) },
@@ -539,6 +1062,15 @@ private fun ProductImageFallback(text: String) {
 }
 
 private fun ProductCard.imageUrl(assetBaseUrl: String): String {
+    return imageUrl(assetBaseUrl, imagePath)
+}
+
+private fun ProductVariantCard.detailLines(): List<String> {
+    val propertyLines = properties.map { (name, value) -> "$name：$value" }
+    return listOf("价格：¥${price.toInt()}") + propertyLines
+}
+
+private fun imageUrl(assetBaseUrl: String, imagePath: String): String {
     val encodedPath = imagePath
         .split("/")
         .joinToString("/") { segment -> Uri.encode(segment) }

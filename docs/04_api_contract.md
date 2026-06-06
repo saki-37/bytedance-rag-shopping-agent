@@ -48,10 +48,10 @@ SSE 流式聊天接口。
 推荐型回答的事件顺序为：
 
 ```text
-status(retrieving) -> status(generating) -> token... -> products -> done
+status(retrieving) -> status(generating) -> products -> token... -> done
 ```
 
-这样 Android 端会先看到文字逐步生成，文本结束后再出现商品卡片，避免卡片早于解释文本出现。信息不足需要追问时，后端只返回追问文本，不发送 `products`：
+这样 Android 端会先拿到结构化商品卡片，再随着 `token` 流式输出把卡片嵌入到对应说明段落后。信息不足需要追问时，后端只返回追问文本，不发送 `products`：
 
 ```text
 status(retrieving) -> status(generating) -> token... -> done
@@ -78,7 +78,27 @@ status(retrieving) -> status(generating) -> token... -> done
       "cautions": ["敏感肌先做耳后测试"],
       "suitable_for": ["油皮", "混油皮"],
       "avoid_for": ["长时间大量出汗场景"],
-      "description": "商品资料中的营销描述片段。"
+      "description": "商品资料中的营销描述片段。",
+      "variants": [
+        {
+          "variant_id": "s_p_beauty_006_1",
+          "parent_product_id": "p_beauty_006",
+          "label": "30ml 水感轻肌款",
+          "properties": {"规格": "30ml 水感轻肌款"},
+          "price": 170.0,
+          "image_path": "1_美妆护肤/images/p_beauty_006_live.jpg",
+          "reason": "30ml 水感轻肌款，数据源价格 ¥170；防晒相关需求匹配。"
+        },
+        {
+          "variant_id": "s_p_beauty_006_2",
+          "parent_product_id": "p_beauty_006",
+          "label": "40ml 清爽型",
+          "properties": {"规格": "40ml 清爽型"},
+          "price": 190.0,
+          "image_path": "1_美妆护肤/images/p_beauty_006_live.jpg",
+          "reason": "40ml 清爽型，数据源价格 ¥190；防晒相关需求匹配。"
+        }
+      ]
     }
   ]
 }
@@ -87,6 +107,7 @@ status(retrieving) -> status(generating) -> token... -> done
 约束：
 
 - 商品卡片中的价格、品牌、标题、图片路径必须来自数据源。
+- `variants` 为可选字段；存在时表示同一 parent product 下的可购买 SKU/规格，Android 会渲染为同系列堆叠卡。
 - 商品详情字段来自 `data/enriched` 或原始 `rag_knowledge`，不得由模型自由补全。
 - 模型只能解释已召回商品，不允许编造优惠、库存、价格或未提供功效。
 - 生成层会做后置校验：如果模型输出包含未授权价格、库存、优惠、购买链接等商业承诺，后端会改用基于商品卡片的安全兜底回答继续流式输出。

@@ -19,6 +19,17 @@ data class ProductCard(
     val suitableFor: List<String> = emptyList(),
     val avoidFor: List<String> = emptyList(),
     val description: String = "",
+    val variants: List<ProductVariantCard> = emptyList(),
+)
+
+data class ProductVariantCard(
+    val variantId: String,
+    val parentProductId: String,
+    val label: String,
+    val properties: Map<String, String> = emptyMap(),
+    val price: Double,
+    val imagePath: String,
+    val reason: String,
 )
 
 data class ChatMessage(

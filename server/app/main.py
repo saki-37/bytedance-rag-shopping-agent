@@ -53,6 +53,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 async for token in _stream_text(result.clarification_question):
                     yield _event("token", {"token": token})
             else:
+                yield _event("products", {"products": [card.model_dump() for card in result.cards]})
                 async for token in stream_answer(
                     settings=settings,
                     user_message=retrieval_message,
@@ -61,7 +62,6 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                     cards=result.cards,
                 ):
                     yield _event("token", {"token": token})
-                yield _event("products", {"products": [card.model_dump() for card in result.cards]})
             yield _event("done", {"ok": True})
         except Exception as exc:  # Keep SSE shape stable for the Android client.
             yield _event("error", {"message": str(exc)})

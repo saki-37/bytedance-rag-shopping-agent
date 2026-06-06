@@ -27,6 +27,7 @@
 - [依赖版本与复现说明](20_reproducibility_and_dependencies.md)
 - [Groundedness Case 全量分析](21_groundedness_case_analysis.md)
 - [答辩口袋稿](22_defense_cheatsheet.md)
+- [SKU 级同系列规格展示方案](23_variant_sku_display_plan.md)
 
 ## 当前里程碑
 

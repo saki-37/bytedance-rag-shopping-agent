@@ -15,6 +15,16 @@ class ChatRequest(BaseModel):
     history: list[ChatMessage] = Field(default_factory=list)
 
 
+class ProductVariantCard(BaseModel):
+    variant_id: str
+    parent_product_id: str
+    label: str
+    properties: dict[str, str] = Field(default_factory=dict)
+    price: float
+    image_path: str
+    reason: str
+
+
 class ProductCard(BaseModel):
     product_id: str
     title: str
@@ -32,6 +42,7 @@ class ProductCard(BaseModel):
     suitable_for: list[str] = Field(default_factory=list)
     avoid_for: list[str] = Field(default_factory=list)
     description: str = ""
+    variants: list[ProductVariantCard] = Field(default_factory=list)
 
 
 class UniversalConstraints(BaseModel):

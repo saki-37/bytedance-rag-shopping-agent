@@ -12,6 +12,7 @@ from app.models import (
     FilteredProduct,
     GuardrailChecks,
     ProductCard,
+    ProductVariantCard,
     QueryIntent,
     RetrievalChannels,
     RetrievalHit,
@@ -221,6 +222,7 @@ def _hard_budget(query: str) -> float | None:
         r"(\d+(?:\.\d+)?)\s*元?\s*(?:以[内下]|以内|以下|之内|内)",
         r"(?:预算|价格|价位).{0,8}(?:放宽到|放宽至|放到|放至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:预算|价格|价位)\s*(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
+        r"(?:预算|价格|价位).{0,8}(?:可能只有|只有|只剩|大概|大约|最多|上限|控制在)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:放宽到|放宽至|放到|放至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
         r"(?:预算|价格|价位)\s*(?:在|不超过|别超过|低于|小于|不高于|<=)?\s*(\d+(?:\.\d+)?)",
         r"(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
@@ -371,9 +373,9 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
                 FilteredProduct(product_id=raw["product_id"], reason=f"sub_category {raw.get('sub_category', '')} not in {required_sub_categories}")
             )
             continue
-        if not is_referenced_product and budget is not None and float(raw["base_price"]) > budget:
+        if not is_referenced_product and budget is not None and not _has_price_within_budget(raw, budget):
             hard_filtered_out.append(
-                FilteredProduct(product_id=raw["product_id"], reason=f"price {raw['base_price']} > budget {budget:g}")
+                FilteredProduct(product_id=raw["product_id"], reason=f"price {_min_purchase_price(raw):g} > budget {budget:g}")
             )
             continue
         excluded_term = _matched_exclude_term(intent.exclude_terms, item)
@@ -456,15 +458,15 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
             clarification_question=_no_result_clarification(intent),
         )
 
-    scored.sort(key=lambda pair: (pair[0], -float(pair[1]["raw"]["base_price"])), reverse=True)
+    scored.sort(key=lambda pair: (pair[0], -_min_purchase_price(pair[1]["raw"])), reverse=True)
     selected = [item for _, item, _ in scored[:limit]]
     final_hits = [
         RetrievalHit(product_id=item["raw"]["product_id"], score=round(score, 3), reasons=reasons)
         for score, item, reasons in scored[:limit]
     ]
 
-    cards = [_to_card(item, query) for item in selected]
-    context = "\n\n".join(_context_block(item) for item in selected)
+    cards = [_to_card(item, query, budget=budget) for item in selected]
+    context = "\n\n".join(_context_block(item, budget=budget) for item in selected)
     trace = RetrievalTrace(
         query=query,
         parsed_intent=intent,
@@ -1013,7 +1015,7 @@ def _field_filter(field: str, values: list[str]) -> dict:
     return {field: {"$in": unique_values}}
 
 
-def _to_card(item: dict, query: str) -> ProductCard:
+def _to_card(item: dict, query: str, budget: float | None = None) -> ProductCard:
     raw = item["raw"]
     attrs = item.get("attributes", {})
     display = item.get("display", {})
@@ -1026,13 +1028,15 @@ def _to_card(item: dict, query: str) -> ProductCard:
     )
     if "防晒" in query and raw["sub_category"] == "防晒":
         reason = "防晒相关需求匹配；请结合肤质、户外时长和补涂频率选择。"
+    variants = _variant_cards(raw=raw, parent_reason=reason, budget=budget)
+    display_price = variants[0].price if variants else float(raw["base_price"])
     return ProductCard(
         product_id=raw["product_id"],
         title=raw["title"],
         brand=raw["brand"],
         category=raw["category"],
         sub_category=raw["sub_category"],
-        price=float(raw["base_price"]),
+        price=display_price,
         image_path=raw["image_path"],
         tags=tags,
         reason=reason,
@@ -1043,7 +1047,67 @@ def _to_card(item: dict, query: str) -> ProductCard:
         suitable_for=_string_list(attrs.get("suitable_for", [])),
         avoid_for=_string_list(attrs.get("avoid_for", [])),
         description=_knowledge_text(knowledge),
+        variants=variants,
     )
+
+
+def _variant_cards(raw: dict, parent_reason: str, budget: float | None = None) -> list[ProductVariantCard]:
+    variants: list[ProductVariantCard] = []
+    for sku in raw.get("skus", []):
+        if not isinstance(sku, dict):
+            continue
+        price = float(sku.get("price", raw.get("base_price", 0)))
+        if budget is not None and price > budget:
+            continue
+        properties = _sku_properties(sku)
+        label = _sku_label(properties)
+        if not label:
+            label = str(sku.get("sku_id", "")).strip() or "默认规格"
+        variants.append(
+            ProductVariantCard(
+                variant_id=str(sku.get("sku_id", "")),
+                parent_product_id=str(raw["product_id"]),
+                label=label,
+                properties=properties,
+                price=price,
+                image_path=str(sku.get("image_path") or raw.get("image_path", "")),
+                reason=_variant_reason(label=label, price=price, parent_reason=parent_reason),
+            )
+        )
+    return variants
+
+
+def _sku_properties(sku: dict) -> dict[str, str]:
+    properties = sku.get("properties", {})
+    if not isinstance(properties, dict):
+        return {}
+    return {str(key): str(value) for key, value in properties.items() if str(value).strip()}
+
+
+def _sku_label(properties: dict[str, str]) -> str:
+    return " / ".join(value for value in properties.values() if value.strip())
+
+
+def _variant_reason(label: str, price: float, parent_reason: str) -> str:
+    return f"{label}，数据源价格 ¥{price:g}；{parent_reason}"
+
+
+def _min_purchase_price(raw: dict) -> float:
+    prices = [
+        float(sku.get("price", raw.get("base_price", 0)))
+        for sku in raw.get("skus", [])
+        if isinstance(sku, dict)
+    ]
+    if prices:
+        return min(prices)
+    return float(raw.get("base_price", 0))
+
+
+def _has_price_within_budget(raw: dict, budget: float) -> bool:
+    skus = [sku for sku in raw.get("skus", []) if isinstance(sku, dict)]
+    if skus:
+        return any(float(sku.get("price", raw.get("base_price", 0))) <= budget for sku in skus)
+    return float(raw.get("base_price", 0)) <= budget
 
 
 def _string_list(value: object) -> list[str]:
@@ -1073,7 +1137,7 @@ def _knowledge_text(knowledge: dict) -> str:
     return "\n".join(parts)
 
 
-def _context_block(item: dict) -> str:
+def _context_block(item: dict, budget: float | None = None) -> str:
     raw = item["raw"]
     knowledge = raw.get("rag_knowledge", {})
     attrs = item.get("attributes", {})
@@ -1090,6 +1154,27 @@ def _context_block(item: dict) -> str:
 美妆属性: {beauty}
 品类属性: {category_attrs}
 变体维度: {variants}
+可用SKU: {_sku_context(raw, budget)}
 证据来源: {source}
 商品资料: {_knowledge_text(knowledge)}
 """
+
+
+def _sku_context(raw: dict, budget: float | None = None) -> list[dict[str, object]]:
+    context: list[dict[str, object]] = []
+    for sku in raw.get("skus", []):
+        if not isinstance(sku, dict):
+            continue
+        price = float(sku.get("price", raw.get("base_price", 0)))
+        if budget is not None and price > budget:
+            continue
+        properties = _sku_properties(sku)
+        context.append(
+            {
+                "variant_id": sku.get("sku_id", ""),
+                "label": _sku_label(properties),
+                "properties": properties,
+                "price": price,
+            }
+        )
+    return context
