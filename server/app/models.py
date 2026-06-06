@@ -45,6 +45,13 @@ class ProductCard(BaseModel):
     variants: list[ProductVariantCard] = Field(default_factory=list)
 
 
+class AnswerDirective(BaseModel):
+    mode: Literal["compare"] = "compare"
+    output_format: Literal["markdown_table"] = "markdown_table"
+    target_product_ids: list[str] = Field(default_factory=list)
+    focus_dimensions: list[str] = Field(default_factory=list)
+
+
 class UniversalConstraints(BaseModel):
     budget_max: float | None = None
     brand_exclude: list[str] = Field(default_factory=list)
@@ -149,6 +156,7 @@ class HealthResponse(BaseModel):
 class FeedbackRequest(BaseModel):
     feedback: Literal["helpful", "inaccurate"]
     message: str = Field(min_length=1)
+    trace_id: str | None = None
     conversation_id: str | None = None
     turn_id: str | None = None
     note: str | None = None

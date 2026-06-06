@@ -28,6 +28,8 @@
 - [Groundedness Case 全量分析](21_groundedness_case_analysis.md)
 - [答辩口袋稿](22_defense_cheatsheet.md)
 - [SKU 级同系列规格展示方案](23_variant_sku_display_plan.md)
+- [商品对比表格工作流调研与方案](24_comparison_table_workflow_research.md)
+- [Runtime Trace Log 与可追溯反馈闭环](25_runtime_trace_log_plan.md)
 
 ## 当前里程碑
 

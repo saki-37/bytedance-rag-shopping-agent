@@ -25,6 +25,7 @@ def main() -> None:
     feedback_payload = {
         "conversation_id": "feedback-smoke",
         "turn_id": "turn-1",
+        "trace_id": debug["trace_id"],
         "message": message,
         "retrieval_message": debug["retrieval_message"],
         "answer": "这是一次用于验证反馈闭环的模拟回答。",

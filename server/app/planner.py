@@ -22,6 +22,24 @@ class PlannerBudgetUpdate(BaseModel):
     value: float | None = None
 
 
+class PlannerComparisonPlan(BaseModel):
+    enabled: bool = False
+    target_policy: Literal[
+        "none",
+        "latest_all_products",
+        "latest_first_n",
+        "mentioned_product_ids",
+        "mentioned_product_names",
+        "unknown",
+    ] = "none"
+    target_product_ids: list[str] = Field(default_factory=list)
+    target_indexes: list[int] = Field(default_factory=list)
+    focus_dimensions: list[str] = Field(default_factory=list)
+    output_format: Literal["markdown_table"] = "markdown_table"
+    needs_clarification: bool = False
+    clarification_question: str | None = None
+
+
 class RetrievalPlan(BaseModel):
     turn_type: Literal[
         "new_search",
@@ -42,6 +60,7 @@ class RetrievalPlan(BaseModel):
         "mentioned_product_ids",
         "unknown",
     ] = "none"
+    comparison_plan: PlannerComparisonPlan = Field(default_factory=PlannerComparisonPlan)
     needs_clarification: bool = False
     clarification_question: str | None = None
     confidence: float = 0.0
@@ -133,7 +152,7 @@ async def _collect_plan_payload(
                 },
             ],
             temperature=0.0,
-            max_tokens=450,
+            max_tokens=650,
         )
         content = response.choices[0].message.content or ""
         return _loads_json_object(content)
@@ -167,6 +186,16 @@ def _planner_user_prompt(request: ChatRequest, rule_build: RetrievalMessageBuild
         "facets_patch": allowed_facets,
         "exclude_terms_patch": EXCLUDE_TERMS,
         "referenced_product_policy": "none | previous_top_product | mentioned_product_ids | unknown",
+        "comparison_plan": {
+            "enabled": "boolean",
+            "target_policy": "none | latest_all_products | latest_first_n | mentioned_product_ids | mentioned_product_names | unknown",
+            "target_product_ids": "array of product ids already present in history.product_ids only",
+            "target_indexes": "0-based indexes when user says first/second/前两个",
+            "focus_dimensions": "array of short user-mentioned comparison dimensions",
+            "output_format": "markdown_table",
+            "needs_clarification": "boolean",
+            "clarification_question": "string or null",
+        },
         "needs_clarification": "boolean",
         "clarification_question": "string or null",
         "confidence": "0.0-1.0",
@@ -180,6 +209,9 @@ def _planner_user_prompt(request: ChatRequest, rule_build: RetrievalMessageBuild
         "- facets_patch 只能使用 schema 中列出的枚举值；不要因为“夏天”直接推断“户外”。\n"
         "- exclude_terms_patch 只能使用用户明确说要避开的词。\n"
         "- referenced_product_policy 只能用于“它/这款/第一款/刚才那款”等指代；不能捏造商品 ID。\n"
+        "- 如果用户要求对比/怎么选/哪个更适合，turn_type=compare，并填写 comparison_plan。\n"
+        "- comparison_plan.target_product_ids 只能来自历史 product_ids；如果用户只是点名品牌/商品名但历史没有对应 ID，target_policy=mentioned_product_names，不要编 ID。\n"
+        "- 用户说“这几个/它们/都对比”时，target_policy=latest_all_products；说“前两个”时，target_policy=latest_first_n 且 target_indexes=[0,1]。\n"
         "- 不要输出推理过程。\n\n"
         f"历史对话：\n{history}\n\n"
         f"当前用户消息：\n{request.message}\n\n"
@@ -218,6 +250,7 @@ def _validate_plan(
         "exclude_terms_patch": [],
         "referenced_product_ids": [],
         "referenced_product_policy": plan.referenced_product_policy,
+        "comparison_plan": {},
         "needs_clarification": plan.needs_clarification,
         "clarification_question": _clean_text(plan.clarification_question or "", limit=80) or None,
         "confidence": max(0.0, min(float(plan.confidence), 1.0)),
@@ -242,6 +275,11 @@ def _validate_plan(
     if referenced_ids:
         additions.append(f"- 指代商品ID：{'、'.join(referenced_ids)}")
     validated["referenced_product_ids"] = referenced_ids
+
+    comparison_plan, comparison_lines = _validate_comparison_plan(plan, request, validation_errors)
+    if comparison_lines:
+        additions.extend(comparison_lines)
+    validated["comparison_plan"] = comparison_plan
 
     return validated, additions, validation_errors
 
@@ -350,6 +388,112 @@ def _validate_product_reference(
     if any(term in request.message for term in ["它", "这个", "这款", "刚才", "上一款"]):
         return [product_ids[0]]
     return []
+
+
+def _validate_comparison_plan(
+    plan: RetrievalPlan,
+    request: ChatRequest,
+    validation_errors: list[str],
+) -> tuple[dict[str, object], list[str]]:
+    if plan.turn_type != "compare" and not plan.comparison_plan.enabled:
+        return {}, []
+
+    latest_product_ids = _latest_history_product_ids(request.history)
+    target_ids = _comparison_target_ids_from_history(plan.comparison_plan, request.message, latest_product_ids)
+    if not target_ids and plan.comparison_plan.target_product_ids:
+        validation_errors.append("comparison_target_ids_not_in_history")
+
+    focus_dimensions = _comparison_focus_dimensions(plan.comparison_plan.focus_dimensions, request.message)
+    comparison_plan: dict[str, object] = {
+        "enabled": True,
+        "target_policy": plan.comparison_plan.target_policy,
+        "target_product_ids": target_ids,
+        "target_indexes": plan.comparison_plan.target_indexes[:4],
+        "focus_dimensions": focus_dimensions,
+        "output_format": "markdown_table",
+        "needs_clarification": plan.comparison_plan.needs_clarification,
+        "clarification_question": _clean_text(plan.comparison_plan.clarification_question or "", limit=80) or None,
+    }
+    lines = ["- 意图：对比/选择", "- 输出形式：Markdown对比表"]
+    if target_ids:
+        lines.append(f"- 指代商品ID：{'、'.join(target_ids)}")
+    if focus_dimensions:
+        lines.append(f"- 对比关注点：{'、'.join(focus_dimensions)}")
+    return comparison_plan, lines
+
+
+def _comparison_target_ids_from_history(
+    comparison_plan: PlannerComparisonPlan,
+    message: str,
+    latest_product_ids: list[str],
+) -> list[str]:
+    if not latest_product_ids:
+        return []
+    target_ids = [
+        product_id
+        for product_id in comparison_plan.target_product_ids
+        if product_id in latest_product_ids
+    ]
+    if target_ids:
+        return list(dict.fromkeys(target_ids))
+
+    indexes = _comparison_indexes(message)
+    if comparison_plan.target_indexes:
+        indexes.extend(index for index in comparison_plan.target_indexes if isinstance(index, int))
+    indexes = list(dict.fromkeys(indexes))
+    if indexes:
+        return [latest_product_ids[index] for index in indexes if 0 <= index < len(latest_product_ids)]
+
+    if comparison_plan.target_policy == "latest_first_n" or _references_first_two_products(message):
+        return latest_product_ids[:2]
+    if comparison_plan.target_policy == "latest_all_products" or _references_all_previous_products(message):
+        return latest_product_ids
+    return []
+
+
+def _comparison_indexes(message: str) -> list[int]:
+    normalized = message.strip()
+    if _references_first_two_products(normalized):
+        return [0, 1]
+    markers = [
+        (r"(第一|第1(?:个|款|件)?|1(?:号|个|款|件))", 0),
+        (r"(第二|第2(?:个|款|件)?|2(?:号|个|款|件))", 1),
+        (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
+    ]
+    indexes = [index for pattern, index in markers if re.search(pattern, normalized)]
+    if indexes and any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
+        indexes.insert(0, 0)
+    return list(dict.fromkeys(indexes))
+
+
+def _comparison_focus_dimensions(raw_dimensions: list[str], message: str) -> list[str]:
+    allowed_by_signal = [
+        ("价格", ["价格", "预算", "便宜", "贵", "性价比"]),
+        ("适合肤质", ["肤质", "油皮", "干皮", "敏感", "混油", "混干"]),
+        ("通勤场景", ["通勤", "上班", "日常"]),
+        ("户外/防水防汗", ["户外", "防水", "防汗", "海边", "运动"]),
+        ("补涂方便度", ["补涂", "便携", "随身"]),
+        ("注意事项", ["注意", "风险", "过敏", "敏感", "避开"]),
+    ]
+    dimensions: list[str] = []
+    for label, signals in allowed_by_signal:
+        if any(signal in message for signal in signals):
+            dimensions.append(label)
+    for raw in raw_dimensions:
+        cleaned = _clean_text(str(raw), limit=16)
+        if cleaned and any(signal in message for signal in [cleaned, cleaned.lower()]):
+            dimensions.append(cleaned)
+    return list(dict.fromkeys(dimensions))[:6]
+
+
+def _references_first_two_products(message: str) -> bool:
+    return bool(re.search(r"(前两|前二|前2|前两个|前二个|前两款|前2款)", message))
+
+
+def _references_all_previous_products(message: str) -> bool:
+    if not any(term in message for term in ["对比", "比较", "怎么选", "哪个更", "哪款更", "区别"]):
+        return False
+    return any(term in message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])
 
 
 def _append_planner_additions(rule_message: str, additions: list[str], current_message: str) -> str:

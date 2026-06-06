@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     index_dir: Path = ROOT_DIR / "data" / "indexes" / "chroma"
     image_base_path: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"
     feedback_dir: Path = ROOT_DIR / "data" / "tmp" / "feedback"
+    trace_dir: Path = ROOT_DIR / "data" / "tmp" / "traces"
 
 
 @lru_cache

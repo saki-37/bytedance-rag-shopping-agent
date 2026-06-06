@@ -39,28 +39,29 @@ SSE 流式聊天接口。
 
 事件类型：
 
-- `status`：阶段状态，`retrieving` 或 `generating`。
+- `status`：阶段状态，`retrieving` 或 `generating`，payload 会带 `trace_id`。
 - `token`：模型输出文本片段。
-- `products`：本轮召回并展示的商品卡片。
-- `done`：流结束。
-- `error`：可恢复错误。
+- `products`：本轮召回并展示的商品卡片，payload 会带 `trace_id`。
+- `done`：流结束，payload 会带 `trace_id`。
+- `error`：可恢复错误，payload 会带 `trace_id`。
 
 推荐型回答的事件顺序为：
 
 ```text
-status(retrieving) -> status(generating) -> products -> token... -> done
+status(retrieving, trace_id) -> status(generating, trace_id) -> products(trace_id) -> token... -> done(trace_id)
 ```
 
 这样 Android 端会先拿到结构化商品卡片，再随着 `token` 流式输出把卡片嵌入到对应说明段落后。信息不足需要追问时，后端只返回追问文本，不发送 `products`：
 
 ```text
-status(retrieving) -> status(generating) -> token... -> done
+status(retrieving, trace_id) -> status(generating, trace_id) -> token... -> done(trace_id)
 ```
 
 `products` 事件示例：
 
 ```json
 {
+  "trace_id": "uuid",
   "products": [
     {
       "product_id": "p_beauty_006",
@@ -150,6 +151,7 @@ GET /assets/1_%E7%BE%8E%E5%A6%86%E6%8A%A4%E8%82%A4/images/p_beauty_006_live.jpg
 
 ```json
 {
+  "trace_id": "uuid",
   "products": [
     {
       "product_id": "p_beauty_006",
@@ -187,6 +189,26 @@ GET /assets/1_%E7%BE%8E%E5%A6%86%E6%8A%A4%E8%82%A4/images/p_beauty_006_live.jpg
 - 仅用于本地 debug / benchmark。
 - 不返回真实 API Key 或模型配置。
 - `trace` 是 V1 检索可解释性的核心证据，后续评测表应引用它。
+- 每次调用会写入一条 runtime trace 到 `data/tmp/traces/trace_YYYY-MM-DD.jsonl`，并在响应中返回同一个 `trace_id`。
+
+## Runtime Trace Log
+
+`/api/chat/stream` 和 `/api/debug/retrieve` 每轮都会生成一个 `trace_id`，并把有界运行快照写入本地 JSONL：
+
+```text
+data/tmp/traces/trace_YYYY-MM-DD.jsonl
+```
+
+单条记录包含：
+
+- `trace_id`、`endpoint`、`status`、`latency_ms`。
+- 当前请求的 `message`、`conversation_id` 和 `history`。
+- `retrieval_message`、`conversation_state`、`retrieval_trace`。
+- `answer_directive`，用于复盘对比类问题最终选择了哪些商品。
+- 最终 `products` 顺序、流式拼接后的 `answer`、`token_count`、`answer_char_count`、`error`。
+- `settings` 只记录 `mock_llm`、是否配置 Ark key/model、Planner timeout，不记录 API key、header 或完整环境变量。
+
+该目录被 `.gitignore` 的 `data/tmp/` 覆盖，不进入 Git。后续用户反馈可以通过 `trace_id` 回指同一条 runtime trace。
 
 ## POST `/api/feedback`
 
@@ -198,6 +220,7 @@ GET /assets/1_%E7%BE%8E%E5%A6%86%E6%8A%A4%E8%82%A4/images/p_beauty_006_live.jpg
 {
   "conversation_id": "local-demo",
   "turn_id": "turn-001",
+  "trace_id": "uuid-from-chat-stream-or-debug",
   "feedback": "inaccurate",
   "message": "我是油皮，想要200元以内通勤防晒",
   "retrieval_message": "我是油皮，想要200元以内通勤防晒",
@@ -231,6 +254,7 @@ GET /assets/1_%E7%BE%8E%E5%A6%86%E6%8A%A4%E8%82%A4/images/p_beauty_006_live.jpg
 
 - 记录的是有界证据快照，不是无限保存完整聊天。
 - `history` 最多保留最近 8 条消息，用于判断多轮上下文是否丢失。
+- `trace_id` 用于关联 `data/tmp/traces/` 中同一轮 runtime trace；Android 暂时不上传完整 `RetrievalTrace` 也可以先传这个字段。
 - `products`、`trace`、`retrieval_message` 和 `answer` 用于区分是检索问题、生成问题、商品证据问题，还是用户偏好表达问题。
 - 记录文件写入 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`，该目录被 `.gitignore` 忽略，不进入 Git。
 - 反馈值当前只支持 `helpful` 和 `inaccurate`，先保持足够轻，不扩张成复杂问卷。
