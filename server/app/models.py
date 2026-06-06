@@ -113,6 +113,17 @@ class SourceTrace(BaseModel):
     unsupported_claims: list[SourceClaim] = Field(default_factory=list)
 
 
+class PlannerTrace(BaseModel):
+    enabled: bool = False
+    called: bool = False
+    applied: bool = False
+    fallback_reason: str | None = None
+    latency_ms: int | None = None
+    raw_plan: dict[str, object] = Field(default_factory=dict)
+    validated_plan: dict[str, object] = Field(default_factory=dict)
+    validation_errors: list[str] = Field(default_factory=list)
+
+
 class RetrievalTrace(BaseModel):
     query: str
     parsed_intent: QueryIntent
@@ -126,6 +137,7 @@ class RetrievalTrace(BaseModel):
     constraint_trace: ConstraintTrace = Field(default_factory=ConstraintTrace)
     safety_trace: SafetyTrace = Field(default_factory=SafetyTrace)
     source_trace: SourceTrace = Field(default_factory=SourceTrace)
+    planner_trace: PlannerTrace = Field(default_factory=PlannerTrace)
 
 
 class HealthResponse(BaseModel):

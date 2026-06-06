@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     ark_api_key: str | None = None
     ark_base_url: str = "https://ark.cn-beijing.volces.com/api/v3/"
     ark_model: str | None = None
+    planner_timeout_seconds: float = 20.0
 
     raw_data_dir: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"
     enriched_data_dir: Path = ROOT_DIR / "data" / "enriched"

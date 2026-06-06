@@ -389,6 +389,7 @@ def build_turn_record(
         "ranking_signals": trace.get("ranking_signals", {}),
         "guardrail_checks": trace["guardrail_checks"],
         "constraint_trace": trace.get("constraint_trace", {}),
+        "planner_trace": trace.get("planner_trace", {}),
         "safety_trace": trace.get("safety_trace", {}),
         "source_trace": trace.get("source_trace", {}),
         "judge_checks": judge_checks,

@@ -27,6 +27,25 @@
 
 默认评测不再假设 mock。除非命令里显式出现 `--mock-llm`、`MOCK_LLM=true` 或 `--retrieval-only`，否则应按真实 API 口径理解；如果 `.env` 缺 Key 导致 safe fallback，报告里必须单独说明这不是一次有效的真实 API 生成评测。
 
+### 正式 Benchmark 执行顺序
+
+正式 benchmark 的默认顺序必须是：
+
+```text
+真实 API + 真实代理
+-> 记录真实结果和失败 case
+-> 再用 mock / retrieval-only 做拆因
+-> 修复后回到真实 API 复验
+```
+
+也就是说：
+
+- **效果结论只以真实 API benchmark 为准**，尤其是 groundedness、Planner、生成质量和 Android 端体验。
+- Mock / safe fallback 只用于离线结构检查、网络不可用时的 smoke test、或真实 API 失败后的问题拆解。
+- 如果只跑了 mock / retrieval-only，报告里必须写“这不是正式 benchmark，只证明本地结构链路”。
+- Codex 或本地脚本需要真实 API / 代理 / Gradle 下载时，应优先使用非沙盒网络或本机终端，不先在网络受限环境里空等。
+- 真实 API benchmark 若因网络、Key 或代理失败，不应直接用 mock 结果替代；应先修配置，再重跑真实 API。
+
 ## 本机验证环境
 
 以下是当前开发机已验证过的环境，不代表只能使用这些小版本，但建议提交/答辩时优先保持一致。
@@ -220,7 +239,7 @@ server/.venv/bin/python scripts/run_comparison_queries.py --require-vector
 server/.venv/bin/python scripts/check_generation_guardrails.py
 ```
 
-反编造 / groundedness 评测分两种：
+反编造 / groundedness 评测分两种。正式评测先跑真实 API：
 
 真实 API 口径，也就是后续默认用于判断生成质量的命令：
 
@@ -229,7 +248,7 @@ MOCK_LLM=false PYTHONDONTWRITEBYTECODE=1 \
   server/.venv/bin/python scripts/run_groundedness_cases.py
 ```
 
-离线 / 结构口径，必须显式标注为 mock 或 retrieval-only：
+真实 API 跑完后，若需要拆因或离线回归，再跑结构口径。它必须显式标注为 mock 或 retrieval-only：
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
@@ -268,6 +287,24 @@ server/.venv/bin/python scripts/review_benchmark_with_ai.py \
   --mock-review
 ```
 
+Planner 修改后的 targeted 性能检查：
+
+```bash
+export https_proxy=http://127.0.0.1:7897
+export http_proxy=http://127.0.0.1:7897
+export all_proxy=socks5://127.0.0.1:7897
+
+server/.venv/bin/python scripts/probe_planner.py --repeat 3
+```
+
+该脚本默认要求真实 API 配置，会输出 `planner_trace`、`validated_plan`、`fallback_reason` 和 `latency_ms`；如果只想列出 case，可运行：
+
+当前默认 `PLANNER_TIMEOUT_SECONDS=20`。这是为了先验证 Planner 的真实稳定性上限；最近一轮 15 次真实 Planner probe 在该配置下无 timeout，按修正后的判定为 15/15 PASS，median latency 约 11.3 秒，p95 约 16.0 秒。如果 Android 端体验明显变慢，后续再评估 Router-gated Planner 或更快的 API。
+
+```bash
+server/.venv/bin/python scripts/probe_planner.py --list-cases
+```
+
 轻量反馈闭环 smoke test：
 
 ```bash
@@ -285,7 +322,7 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 | Android 显示 `unexpected end of stream` | 本地 HTTP 连接被后端/模拟器提前关闭，或旧连接复用异常 | 当前客户端已关闭连接池复用并设置 `Connection: close`；若复现，先重启后端并重新运行 `adb reverse` |
 | Android Studio 提示 `Couldn't terminate previous instance of app` | Studio/adb 没能停止旧进程 | 手动执行 `adb shell am force-stop com.saki.bytedance.ragshopping`；仍失败时重启 adb 或模拟器 |
 | Gradle 依赖下载慢或失败 | Maven / Google 仓库网络不稳定 | 使用代理参数，或在 Android Studio 中重新 Sync |
-| 真实 Doubao 请求超时 | 网络代理或 Key/模型名配置异常 | 先用 retrieval-only 或 `MOCK_LLM=true` 验证链路，再检查 `.env` 和代理；不要把 fallback 结果记成真实 API 结果 |
+| 真实 Doubao 请求超时 | 网络代理、Key/模型名配置异常，或 Planner / 生成模型本身延迟偏高 | 先确认 `.env`、代理和非沙盒网络；必要时用 targeted real API case 定位。Mock / retrieval-only 只能做拆因，不能替代正式 benchmark |
 | Chroma 检索无结果 | 索引未构建或 enriched 数据未生成 | 重新运行 `python scripts/build_index.py` |
 | 反馈脚本写入失败 | `data/tmp/feedback/` 无写入权限或当前沙盒不允许写仓库临时目录 | 在真实本地终端运行，或确认仓库目录可写 |
 | AI 语义复核无法运行 | `.env` 缺少 `ARK_API_KEY` 或 `ARK_MODEL` | 先用 `--mock-review` 做离线烟测；真实复核前确认 `.env` 已配置 |
@@ -301,5 +338,5 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 | 索引构建 | `python scripts/build_index.py` | Chroma `products` collection 重建成功 |
 | 后端健康 | `curl http://127.0.0.1:8000/health` | 返回健康状态 |
 | Android 构建 | `./gradlew :client:android:app:assembleDebug` | `BUILD SUCCESSFUL` |
-| 核心评测 | golden / conversation / groundedness 脚本 | 结果与 `docs/11_evaluation_report.md` 当前记录一致或有解释 |
+| 核心评测 | golden / conversation / groundedness 脚本 | 优先真实 API 结果；若有 mock / retrieval-only，必须标注为辅助拆因结果 |
 | AI 复核 | `python scripts/review_benchmark_with_ai.py --input <benchmark.jsonl>` | 输出 `*_ai_review.jsonl`，高风险项有解释 |

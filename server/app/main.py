@@ -8,11 +8,11 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.conversation_state import build_retrieval_message
 from app.data_loader import load_enriched_products, load_raw_products
 from app.feedback import save_feedback
 from app.llm import stream_answer
-from app.models import ChatRequest, ConstraintTrace, FeedbackRequest, FeedbackResponse, HealthResponse
+from app.models import ChatRequest, ConstraintTrace, FeedbackRequest, FeedbackResponse, HealthResponse, PlannerTrace
+from app.planner import build_planned_retrieval_message
 from app.retrieval import retrieve
 
 settings = get_settings()
@@ -44,7 +44,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
     async def events() -> AsyncIterator[str]:
         try:
             yield _event("status", {"status": "retrieving"})
-            retrieval_build = build_retrieval_message(request)
+            retrieval_build = await build_planned_retrieval_message(settings, request)
             retrieval_message = retrieval_build.message
             result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
             _attach_conversation_trace(result.trace, retrieval_build.trace)
@@ -70,8 +70,8 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 
 
 @app.post("/api/debug/retrieve")
-def debug_retrieve(request: ChatRequest) -> dict:
-    retrieval_build = build_retrieval_message(request)
+async def debug_retrieve(request: ChatRequest) -> dict:
+    retrieval_build = await build_planned_retrieval_message(settings, request)
     retrieval_message = retrieval_build.message
     result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
     _attach_conversation_trace(result.trace, retrieval_build.trace)
@@ -103,3 +103,6 @@ def _attach_conversation_trace(retrieval_trace, conversation_trace: dict) -> Non
     constraint_trace = conversation_trace.get("constraint_trace")
     if constraint_trace:
         retrieval_trace.constraint_trace = ConstraintTrace(**constraint_trace)
+    planner_trace = conversation_trace.get("planner_trace")
+    if planner_trace:
+        retrieval_trace.planner_trace = PlannerTrace(**planner_trace)

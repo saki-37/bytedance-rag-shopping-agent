@@ -118,9 +118,181 @@ flowchart TD
 
 ```text
 rule-only 负责不能错的显式边界
-planner 只在规则低置信度、代词/抽象偏好/长多轮时补理解
+always-light planner 每轮补一份结构化检索计划
 validator 始终保留最后否决权
 ```
+
+## 产业侧 / 产品侧公开信号
+
+日期：2026-06-05
+
+这一节补充公开可查的产业侧信息。需要注意：大型平台通常不会完整披露购物 Agent 的内部架构，因此下面分成两类：
+
+- **公开确认**：平台或论文明确说明的数据源、模块或流程。
+- **工程推断**：从公开描述中可以较稳妥推断出的架构倾向，但不是官方完整设计图。
+
+### 1. Amazon Rufus：实时路由 + 多模型 + 商品知识图谱 + RAG
+
+Amazon 对 Rufus 的公开描述里，几个信号非常明确：
+
+- Rufus 是 generative / agentic AI shopping assistant。
+- 数据源包括 Amazon 商品目录、用户评论、社区 Q&A、外部 Web 信息。
+- 使用 Amazon Bedrock 上的多模型组合，包括 Claude Sonnet、Amazon Nova 和基于 Amazon store knowledge 的自定义模型。
+- 使用 real-time router 根据 query type 做模型选择，以平衡能力、延迟和回答质量。
+- 持续扩展 product attributes 和 customer preferences 的 knowledge graph。
+- 使用 RAG 从外部可信来源抽取趋势和商品相关信息。
+
+对本项目的启发：
+
+1. **大平台不是纯规则，也不是纯 LLM**。Rufus 更像是 `router + multiple models + catalog / review / Q&A / web RAG + knowledge graph` 的组合。
+2. **router 是公开出现的关键词**。这说明“每个 query 先走一个调度/路由层”在产业系统里是合理的，而不是只在规则失败时才补救。
+3. **知识图谱和用户偏好图谱是购物场景核心资产**。我们的轻量 graph relation score 和用户约束 state 可以作为小数据集版本的对应实现。
+4. **实时性和延迟是产品约束**。不能简单“每轮都多次 LLM planning + 多次检索 + 多次生成”，否则 Android 端体验会变慢。
+
+### 2. Taobao LEAPS：非侵入式 LLM 插件，Broaden-and-Refine
+
+Taobao AI Search 的 LEAPS 论文非常贴近我们现在的问题。公开摘要里说，用户搜索行为从离散关键词转向自然语言、多约束 query，传统电商搜索架构难以处理。LEAPS 不是替换原搜索系统，而是在传统搜索 pipeline 两端接插件：
+
+- **Upstream Query Expander**：生成自适应、互补的 query combinations，尽量扩大候选集，避免自然语言太精确导致 zero-result。
+- **Downstream Relevance Verifier**：综合 OCR、评论等多源信号，用 reasoning 过滤噪声。
+- 其非侵入式架构保留已有短文本检索性能，同时低成本接入不同后端。
+
+对本项目的启发：
+
+1. **不是 rule parser 低置信度才调用 LLM 的单点补丁**。LEAPS 更像是在检索前后都接 LLM 增强：前面扩 query，后面验 relevance。
+2. **保留原检索系统是产业常见做法**。这和我们不想重接 LangGraph / LlamaIndex 主框架一致。
+3. **自然语言多约束 query 会导致 zero-result / noisy generic results**。这正好对应我们现在的“预算 150 没识别”和“油皮+户外没有真正收窄”的体验问题。
+4. **轻量 Planner 可以拆成两块**：
+   - `Planner / Expander`：把口语、多轮、数字、隐含约束翻译成结构化计划或补全 query。
+   - `Verifier`：检查候选商品是否真的满足用户约束，不满足时生成追问或放宽建议。
+
+### 3. Walmart Semantic Retrieval：传统倒排 + embedding retrieval 的混合召回
+
+Walmart 的 semantic retrieval 论文强调：在 product search 里，rerank 之前的 candidate retrieval 比普通 Web search 更关键，尤其是 tail queries，因为这类 query 往往有复杂、具体的 intent。它们部署的是传统 inverted index 和 embedding-based neural retrieval 的混合系统。
+
+对本项目的启发：
+
+1. **大规模电商检索仍保留传统检索骨架**，不是把商品搜索完全交给 LLM。
+2. **tail query / complex intent 是核心问题**。我们的 benchmark 应该更多覆盖长自然语言、多约束、口语预算、否定条件和多轮收窄。
+3. **Planner 不应该替代 retrieval**。它更适合作为 query rewriting / structured filter 构造层，把复杂 intent 交给确定性检索系统执行。
+
+### 4. Google Shopping Graph：结构化商品数据是 AI 购物体验的底座
+
+Google Shopping Help 明确说明 Shopping Graph 是动态商品信息库，包含商品名、描述、价格、图片、评论等信息；这些数据来自 Merchant Center、Manufacturer Center 等商家数据源，并用于 Search、Ads、YouTube 和生成式 AI 功能，包括 review summaries、buying guidance、product recommendations。
+
+对本项目的启发：
+
+1. **AI shopping 的基础不是 prompt，而是商品数据图谱/结构化 feed**。
+2. **价格、图片、评论、商品描述都应来自数据源**。这支持我们现在“商品卡字段不由模型生成”的设计。
+3. **生成式 AI 功能可以在结构化商品图谱上运行**。我们的 `data/enriched`、metadata、graph relation、retrieval trace 是小规模比赛版本的 Shopping Graph。
+
+### 5. OpenAI / Stripe Agentic Commerce Protocol：发现和购买分层
+
+OpenAI 的 Instant Checkout / Agentic Commerce Protocol 公开说明里，有两个层次值得拆开：
+
+- **Product discovery**：用户问购物问题时，ChatGPT 展示相关商品；产品结果按 relevance 排序，且 Instant Checkout 不影响排序。
+- **Transaction / checkout**：如果商品支持 Instant Checkout，用户确认后，订单、支付、履约由商家系统处理；ChatGPT 作为用户 AI agent 在用户和商家之间传递必要信息。
+
+Stripe 也说明，ChatGPT 用户先在 chat 里获得推荐，准备购买时才进入 inline checkout；订单通过 ACP 流向商家后端。
+
+对本项目的启发：
+
+1. **发现 / 决策辅助 / 下单是分层的**。我们第一阶段只做 discovery + decision support，不做 checkout，是合理边界。
+2. **交易动作必须有用户确认和商家后端校验**。这支持我们不让模型承诺库存、优惠、下单结果。
+3. **商品 feed / structured product data 是 agentic commerce 的前置条件**。后续如果做提交材料，可以强调本项目先实现“可解释商品发现层”。
+
+### 6. 行业工程文章的共识：Catalog Graph + Hybrid Retrieval + Grounded Generation + Evaluation
+
+一些电商 AI 工程文章虽然不是大平台内部论文，但它们反复出现类似架构：
+
+```text
+catalog / product graph
+-> hybrid retrieval
+-> grounded structured generation
+-> conversion / feedback / eval
+```
+
+Redis 的 AI shopping assistant 文章把购物助手分成 semantic search、RAG assistant、agentic system 等类型，并强调生产问题集中在：
+
+- 商品规格、价格、库存幻觉。
+- live catalog freshness。
+- 多步骤 pipeline latency。
+- session memory 和长期用户偏好。
+
+Alhena 的 hybrid RAG 文章则强调向量搜索和 knowledge graph 各有盲点：向量适合自然语言模糊匹配，graph 适合实体、变体、政策、兼容性等结构化关系；它们采用 vector leg + graph leg + fusion，再交给 agent 使用。
+
+对本项目的启发：
+
+1. **“每轮都 LLM Planner”不一定是产业唯一做法**。更常见的是 router / retrieval / graph / generator / verifier 多层混合。
+2. **低延迟场景下，planner 调用应该被预算化**：可以默认只做一次轻量 structured planning，而不是多轮 agent loop。
+3. **重要的不是 LLM 是否每轮都参与，而是每轮是否有可解释 retrieval plan**。这个 plan 可以由规则、LLM 或二者融合得到。
+
+## 开源框架可借鉴部分
+
+这轮调研里，真正值得借鉴的不是直接接入某个框架，而是把它们拆成几个小的工程思想：
+
+| 框架 / 模块 | 可借鉴点 | 本项目采用方式 |
+| --- | --- | --- |
+| LangChain SelfQueryRetriever | LLM 先把自然语言拆成 semantic query + metadata filter，再交给 vector store 执行 | 借鉴 structured query 思路，让 Planner 输出 JSON `RetrievalPlan`，而不是直接改写自然语言 |
+| LlamaIndex Router / Selector | 通过 selector 在多个 query engine / retriever 之间选择路径 | 借鉴“先判断 turn type / route”的概念，但第一版不引入运行时框架 |
+| LangGraph Agentic RAG | 用节点和 conditional edges 拆出 retrieve、grade、rewrite、generate 等阶段 | 借鉴 trace 思路，把 Planner 调用、校验、fallback 记录到 `planner_trace` |
+| Haystack ConditionalRouter | 用显式条件把 pipeline 分到不同分支 | 借鉴规则路由和 fallback 思路，用本地 validator 保证 Planner 不能越过硬约束 |
+| OpenAI Structured Outputs / function calling 类模式 | 用 schema 限定模型输出，降低自由文本不稳定性 | Doubao 侧先用 prompt + JSON parse + Pydantic 校验模拟；不依赖特定 OpenAI 运行时 |
+
+因此这里的结论是：**框架给我们结构，但不接管系统**。电商导购里的预算、排除条件、商品事实和价格都必须由本地 schema / 商品数据 / guardrail 兜住；Planner 只能帮系统写一份可执行、可校验的检索计划。
+
+## 对“rule parser -> 低置信度才 LLM Planner”的重新审视
+
+这轮产业侧和开源框架调研使我们需要重新审视原来的短期路线。
+
+原路线：
+
+```text
+rule parser
+-> 如果低置信度，再 LLM planner
+-> validator
+-> retrieval
+```
+
+这个路线优点是成本低、延迟低、可解释；缺点是用户体验依赖规则覆盖度，容易出现“我的预算可能只有150”这种口语表达漏识别。
+
+结合 Rufus / LEAPS / Walmart / Google Shopping Graph 的公开信号，更合理的候选路线有三种：
+
+| 路线 | 做法 | 优点 | 风险 | 适合当前项目吗 |
+| --- | --- | --- | --- | --- |
+| Rule-first fallback | 规则能解析就不用 LLM；规则低置信度才调用 planner | 低成本、低延迟、容易解释 | 规则漏掉时体验断裂；低置信度判断本身也可能漏 | 可作为 baseline，但体验风险已暴露 |
+| Always-light planner | 每轮都调用一次轻量 Planner，输出 JSON plan；规则和 validator 负责校验与覆盖 | 口语、多轮、数字、隐含约束更稳；体验更一致 | 增加一次 LLM 延迟和成本；JSON 稳定性需测试 | **比赛 P0 先采用** |
+| Router-gated planner | 每轮先用极轻量 router 判断 turn type；购物/多约束/多轮收窄走 planner，普通明确 query 走 rule-only | 比 fallback 更主动，比 always planner 更省 | 需要设计 router 规则或小模型；实现稍复杂 | 可能是最平衡方案 |
+
+当前实现决策：比赛 P0 先做 **Always-light planner**。原因是我们真实体验里已经看到“预算可能只有150”这类口语表达会绕过规则 parser；每轮轻量 Planner 更能证明系统不是事后补 regex，而是每轮都有可解释的检索计划。若后续真实延迟、JSON 稳定性或 API 可用性不达标，再降级成 Router-gated planner。
+
+2026-06-05 实现验证补充：
+
+- Planner 已接入后端主链路，每轮先尝试生成结构化 `RetrievalPlan`，再由本地 validator 合并到 rule-only state。
+- 真实 Doubao Planner 对“我的预算可能只有150”可以输出 `budget_update=set, value=150`，并补出 `油皮 / 防晒 / 户外 / 防晒子类` 等结构化字段。
+- 当前一次真实调用延迟约 11.5 秒，三轮 Planner probe 的 p95 曾顶到 12 秒超时边界；因此先将默认 `PLANNER_TIMEOUT_SECONDS` 提到 20，用来验证 Planner 稳定性上限。这个延迟对 Android 体验偏高，后续如果真实 demo 卡顿，仍应评估是否降级成 Router-gated planner 或切换更快的 API。
+- 即使 Planner 超时或 API 失败，预算口语解析的确定性规则仍会兜底；Planner trace 会记录 `fallback_reason`，用于答辩解释和 failure case 复盘。
+
+第一版路线：
+
+```text
+current message + history
+-> planner outputs JSON RetrievalPlan
+-> validator merges rule + planner
+-> retrieval executes hard filters
+-> verifier checks candidates
+-> answer / clarification
+```
+
+如果后续降级成 Router-gated planner，router 可以先不用 LLM，用规则触发即可：
+
+- 当前轮有数字但 `_hard_budget` 没解析出来。
+- 当前轮是短 follow-up。
+- 当前轮含“可能 / 大概 / 只有 / 想降 / 收窄 / 便宜点 / 更适合 / 它 / 第一款”。
+- 当前轮和历史合并后出现 zero-result 或候选均不满足关键 facet。
+- 当前轮是多轮对话中的第 3 轮以后。
+
+这比“规则低置信度才 planner”更主动，因为它不只看解析 confidence，也看**体验风险信号**。
 
 ## 为什么不直接接入现成框架
 
@@ -153,7 +325,7 @@ Planner 应该放在检索前：
 ```text
 history + current_message
 -> rule parser
--> optional LLM planner
+-> always-light LLM planner
 -> plan validator
 -> merged retrieval state
 -> hybrid retrieval
@@ -210,7 +382,7 @@ Planner 输出必须经过校验：
 | 排除条件 | 不能无理由丢弃用户前文明确排除项 |
 | 类目/子类 | 必须在 schema 枚举或已知词典内 |
 | 商品事实 | Planner 不能新增“含/不含/有效/不过敏”等事实 |
-| 失败处理 | JSON 不合法或低置信度时，退回 rule-only |
+| 失败处理 | JSON 不合法、超时、低置信度或 API 不可用时，退回 rule-only |
 
 ## 和当前实现的关系
 
@@ -250,7 +422,7 @@ Planner 输出必须经过校验：
 仍未覆盖：
 
 - 上一轮 top products 的结构化保存。
-- 抽象偏好和复杂长对话的低置信度 planner fallback。
+- 抽象偏好和复杂长对话的稳定 planner-assisted 检索计划。
 
 2026-06-03 继续补齐商品卡指代第一版：
 
@@ -259,19 +431,52 @@ Planner 输出必须经过校验：
 - `retrieval.py` 会将 `referenced_product_ids` 作为商品事实追问的聚焦条件。
 - 已覆盖 `CQ-06`；但“像刚才那款但更便宜”这类替代推荐仍未实现。
 
-### Step B：Planner-assisted Fallback
+### Step B：Always-light Planner
 
-只在规则吃力时调用 LLM Planner：
+每轮调用轻量 LLM Planner，但只让它输出可校验 JSON：
 
-- 有代词但无明确商品。
-- 多轮超过 3 轮。
-- 用户表达抽象偏好。
-- benchmark 失败 case。
-- 规则解析低信心。
+- `turn_type`：新搜索、继续筛选、商品事实追问、对比、澄清、重置或闲聊。
+- `budget_update`：只接受用户当前轮明确给出的预算数字；否则 keep / relax。
+- `facets_patch`：只能使用本地 schema 枚举值。
+- `exclude_terms_patch`：只能使用用户明确提出的排除词。
+- `referenced_product_policy`：只能映射到 history 中真实出现过的商品卡。
+- JSON 不合法、超时或校验失败时，退回 rule-only state merge。
 
 ### Step C：Planner Benchmark
 
-用同一套 case 对比：
+Planner 修改后的测试也遵循“真实 API 优先”。第一轮不先跑 mock，而是先用真实代理跑小样本 targeted benchmark，确认 Planner 的真实延迟、JSON 稳定性和 retrieval 改善是否成立；mock / rule-only 只在真实结果之后用于拆因。
+
+建议分三层测试：
+
+| 层级 | 目的 | 真实 API 要求 | 关键指标 |
+| --- | --- | --- | --- |
+| Planner-only targeted probe | 只测 `current message + history -> RetrievalPlan -> validator` | 必须真实 API，重复 3 次 | `latency_ms`、`called/applied/fallback_reason`、JSON 合法率、validated plan 是否包含正确预算/字段 |
+| Retrieval debug benchmark | 测 Planner 合并后是否改善召回和无结果追问 | 必须真实 API，必要时用 `/api/debug/retrieve` | 候选商品是否越界、`planner_trace` 是否解释改动、是否减少错误追问 |
+| End-to-end generation benchmark | 测真实 Android / SSE / Doubao 回答体验 | 必须真实 API | 首 token 时间、总耗时、是否触发 guardrail、回答是否自然且不编造 |
+
+第一批 targeted case：
+
+| Case | 用户轮次 | 预期 |
+| --- | --- | --- |
+| 口语预算 | `夏天防晒 -> 我是油皮户外 -> 我的预算可能只有150` | Planner 能输出 `budget_update=set, value=150`，并保留油皮/户外/防晒 |
+| 预算极限无结果 | `油皮户外防晒 -> 我的预算可能只有100` | retrieval 不推荐超预算 SKU，进入“没有同时满足，询问可放宽项” |
+| 商品指代 | `推荐通勤防晒 -> 第一款有没有酒精？` | 不新增商品事实，只聚焦 history 里的真实 `product_id` |
+| 排除继承 | `不要酒精/刺激 -> 先放宽预算` | 放宽预算不等于放宽排除条件 |
+| 泛需求追问 | `我想买护肤品，你推荐什么？` | Planner 不应过度猜测，仍应追问肤质/预算/功效 |
+
+已落地脚本：
+
+```bash
+export https_proxy=http://127.0.0.1:7897
+export http_proxy=http://127.0.0.1:7897
+export all_proxy=socks5://127.0.0.1:7897
+
+server/.venv/bin/python scripts/probe_planner.py --repeat 3
+```
+
+该脚本默认要求真实 API 配置；只有传 `--allow-mock` 才允许离线 smoke。输出 JSONL 会记录每轮 `planner_trace`、`validated_plan`、`fallback_reason` 和 `latency_ms`。
+
+对比方式：
 
 ```text
 rule-only retrieval
@@ -285,7 +490,46 @@ rule + planner retrieval
 - 是否减少错误追问。
 - 是否减少错商品召回。
 - 是否引入新的幻觉或过度推断。
-- 延迟是否可接受。
+- Planner p50 / p95 延迟是否可接受；如果 3 次平均仍接近或超过 `PLANNER_TIMEOUT_SECONDS`，应优先降级为 Router-gated planner。
+
+当前实现验证：
+
+- 12 秒 timeout 下，15 次真实 Planner probe 为 9/15 PASS，失败主要来自 timeout。
+- 提到 20 秒 timeout 后，同一组 15 次真实 probe 按修正后的判定为 15/15 PASS，无 timeout；median latency 约 11.3 秒，p95 约 16.0 秒。
+- `generic_clarify` 会输出 `needs_clarification=true` 和追问问题，但没有可合并检索增量，因此 trace 为 `planner_no_valid_delta`；这在该 case 中应视为合理行为。
+
+结论：调大 timeout 可以显著提升 Planner 稳定性；但延迟仍然偏高。后续评估不能只看是否 PASS，也要看是否值得每轮 Always-light 调用。
+
+### 2026-06-06 效果复盘与优化判断
+
+这轮先按用户要求“只看效果，不急着改核心逻辑”来判断。结论是：**Planner 当前效果基本可用，暂时不需要立刻重构成 Router-gated 或重接框架**。
+
+从 20 秒 timeout 的真实 API probe 看：
+
+- `oral_budget_150`：3/3 能把“我的预算可能只有150”稳定转成 `budget_update=set, value=150`。
+- `oral_budget_100`：3/3 能把“预算可能只有100”稳定转成 `budget_update=set, value=100`，可用于预算极限/无结果边界测试。
+- `product_reference`：3/3 能把“第一款”映射到 history 里真实出现过的商品 `p_beauty_006`，没有凭空造商品。
+- `exclude_inheritance`：3/3 能识别“先放宽预算”是预算放宽，不是排除条件放宽；但 `exclude_terms_patch` 有时为空，只靠 rule baseline 继承旧排除项，trace 解释性还可以更清楚。
+- `generic_clarify`：3/3 输出 `needs_clarification=true` 和追问问题；没有可合并检索增量时出现 `planner_no_valid_delta`，这是合理的，不应误判为失败。
+
+因此当前优化优先级调整为：
+
+| 优先级 | 优化项 | 是否现在做 |
+| --- | --- | --- |
+| P0 | 保持 `PLANNER_TIMEOUT_SECONDS=20`，把真实延迟和真实 API probe 作为 Demo 前复验项 | 已完成配置，继续复验 |
+| P1 | 微调 Planner prompt / validator trace，让“历史继承的排除条件、肤质、场景”在 trace 里更稳定可见 | 可做，但不是阻塞项 |
+| P1 | 把 `needs_clarification` 从 Planner trace 更清楚地传到后续检索/回答策略，减少泛需求时的过度推荐 | 建议后续做 |
+| P2 | 如果 Android 体验明显慢，再尝试更快 API、Router-gated Planner 或只对多轮/口语/指代触发 Planner | 暂不优先 |
+| 暂不做 | 合并 Planner 调用和最终回答调用 | 不建议，容易降低可解释性和反幻觉边界 |
+| 暂不做 | 接入 LangGraph / LlamaIndex / Haystack 运行时 | 不建议，重依赖收益不足 |
+
+短期判断：
+
+```text
+Planner 质量：可用
+主要风险：延迟偏高
+当前策略：保留 Always-light Planner，用真实 API 继续观察；先不做大重构
+```
 
 ## 当前结论
 
@@ -293,7 +537,7 @@ rule + planner retrieval
 2. 最新 Agentic RAG / logical retrieval / self-query 工作支持“LLM 参与检索计划”的方向。
 3. 但 LLM Planner 不应直接生成答案，也不应越过硬规则。
 4. 本项目短期最合适的是自研轻量 Planner，而不是接入完整 agentic RAG 框架。
-5. rule-only state merge 第一版已经完成；下一步应用 groundedness benchmark 找出哪些 case 真正需要 Planner。
+5. rule-only state merge 和 always-light Planner 第一版已经完成；当前下一步不是马上大改 Planner，而是用真实 API benchmark 和 Android demo 继续验证延迟、边界表达和 trace 解释性。
 
 一句话：
 
@@ -312,6 +556,17 @@ rule + planner retrieval
 - LlamaIndex Routers: https://developers.llamaindex.ai/python/framework/module_guides/querying/router/
 - LlamaIndex Structured Planning Agent: https://docs.llamaindex.ai/en/v0.12.15/examples/agent/structured_planner/
 - LangChain SelfQueryRetriever: https://reference.langchain.com/python/langchain-classic/retrievers/self_query/base/SelfQueryRetriever
+- Haystack ConditionalRouter: https://docs.haystack.deepset.ai/docs/conditionalrouter
+- OpenAI Structured Outputs: https://platform.openai.com/docs/guides/structured-outputs
 - Corrective RAG: https://arxiv.org/abs/2401.15884
 - Self-RAG: https://arxiv.org/abs/2310.11511
 - LightRAG: https://github.com/HKUDS/LightRAG
+- Amazon Rufus personalized shopping features: https://www.aboutamazon.com/news/retail/amazon-rufus-ai-assistant-personalized-shopping-features
+- Semantic Retrieval at Walmart: https://arxiv.org/abs/2412.04637
+- LEAPS: An LLM-Empowered Adaptive Plugin in Taobao AI Search: https://arxiv.org/abs/2601.05513
+- Google Shopping info sources / Shopping Graph: https://support.google.com/googleshopping/answer/14336735?hl=en
+- OpenAI Instant Checkout and Agentic Commerce Protocol: https://openai.com/index/buy-it-in-chatgpt/
+- Stripe Instant Checkout / ACP announcement: https://stripe.com/newsroom/news/stripe-openai-instant-checkout
+- Redis AI shopping assistant architecture overview: https://redis.io/blog/ai-shopping-assistant/
+- Alhena Hybrid RAG for ecommerce: https://alhena.ai/blog/hybrid-rag-vectors-graphs-ecommerce-ai/
+- ShoppingComp benchmark: https://arxiv.org/abs/2511.22978

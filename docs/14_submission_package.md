@@ -114,8 +114,14 @@ MOCK_LLM=false
 
 ## 评测复现路径
 
+正式 benchmark 先跑真实 API。若本地需要代理，先在终端设置代理；不要把 mock 结果当作正式效果结论。
+
 ```bash
 cd bytedance-rag-shopping-agent
+export https_proxy=http://127.0.0.1:7897
+export http_proxy=http://127.0.0.1:7897
+export all_proxy=socks5://127.0.0.1:7897
+
 server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 server/.venv/bin/python scripts/run_conversation_cases.py

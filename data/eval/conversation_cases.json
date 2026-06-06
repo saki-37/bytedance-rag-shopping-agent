@@ -45,19 +45,19 @@
   },
   {
     "id": "CQ-03",
-    "title": "用户降低预算时使用最新预算覆盖上一轮预算",
+    "title": "用户降低预算时使用最新预算覆盖上一轮预算，并在无满足SKU时追问",
     "turns": [
       {
         "user": "我是油皮，想要200元以内通勤防晒。敏感肌最近屏障不稳定，想找修护面霜。不要酒精味太重或者刺激感强的产品。我想买护肤品，你推荐什么？"
       },
       {
-        "user": "我想把预算降到150元",
+        "user": "我想把预算降到80元",
         "expect": {
           "must_clarify": true,
           "max_products": 0,
-          "expected_budget_max": 150,
+          "expected_budget_max": 80,
           "expected_exclude_terms": ["酒精", "刺激"],
-          "clarification_contains": ["150元以内", "没有同时满足"],
+          "clarification_contains": ["80元以内", "没有同时满足"],
           "forbidden_product_ids": ["p_beauty_006"]
         }
       }
@@ -170,6 +170,53 @@
           "expected_product_ids_exact": ["p_beauty_006"],
           "expected_state_referenced_product_ids": ["p_beauty_006"],
           "retrieval_message_contains": ["指代商品ID：p_beauty_006", "第一款有没有酒精"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "CQ-07",
+    "title": "口语预算收窄：夏季防晒多轮收窄到100时不能推荐超预算商品",
+    "turns": [
+      {
+        "user": "夏天快到了，想看看防晒!",
+        "expect": {
+          "must_clarify": false,
+          "min_products": 1,
+          "expected_facets": {
+            "effect": ["防晒"]
+          }
+        }
+      },
+      {
+        "user": "我是油皮，主要是户外需求",
+        "expect": {
+          "must_clarify": false,
+          "min_products": 1,
+          "expected_facets": {
+            "skin_type": ["油皮"],
+            "effect": ["防晒"],
+            "use_case": ["户外"]
+          },
+          "state_merge_applied": true
+        }
+      },
+      {
+        "user": "我的预算可能只有100",
+        "expect": {
+          "must_clarify": true,
+          "max_products": 0,
+          "expected_budget_max": 100,
+          "expected_facets": {
+            "skin_type": ["油皮"],
+            "effect": ["防晒"],
+            "use_case": ["户外"]
+          },
+          "clarification_contains": ["100元以内", "没有同时满足"],
+          "forbidden_product_ids": ["p_beauty_006", "p_beauty_010", "p_beauty_023"],
+          "state_merge_applied": true,
+          "expected_state_actions_contains": ["set_budget=100"],
+          "retrieval_message_contains": ["100元以内"]
         }
       }
     ]

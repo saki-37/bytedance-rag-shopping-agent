@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -54,6 +56,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -259,11 +264,15 @@ private fun MessageBubble(
                             onProductClick = onProductClick,
                         )
                     } else {
-                        Text(
-                            text = message.content,
-                            color = textColor,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                        if (message.role == Role.Assistant) {
+                            MarkdownText(markdown = message.content, color = textColor)
+                        } else {
+                            Text(
+                                text = message.content,
+                                color = textColor,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
                     }
                 }
                 if (message.role == Role.Assistant && message.content.isNotBlank() && showFeedback) {
@@ -285,21 +294,155 @@ private fun AssistantMessageContent(
     val blocks = remember(content, products, isStreaming) {
         buildAssistantContentBlocks(content, products, isStreaming)
     }
+    val pendingText = mutableListOf<String>()
+
+    fun flushText() {
+        if (pendingText.isNotEmpty()) {
+            pendingText.clear()
+        }
+    }
 
     blocks.forEach { block ->
         if (block.text.isNotBlank()) {
-            Text(
-                text = block.text,
-                color = Ink,
-                style = MaterialTheme.typography.bodyMedium,
+            pendingText += block.text
+        }
+        if (block.products.isNotEmpty()) {
+            if (pendingText.isNotEmpty()) {
+                MarkdownText(markdown = pendingText.joinToString("\n"), color = Ink)
+                flushText()
+            }
+            block.products.forEach { product ->
+                ProductCardView(
+                    product = product,
+                    assetBaseUrl = assetBaseUrl,
+                    onClick = { onProductClick(product) },
+                )
+            }
+        }
+    }
+    if (pendingText.isNotEmpty()) {
+        MarkdownText(markdown = pendingText.joinToString("\n"), color = Ink)
+    }
+}
+
+@Composable
+private fun MarkdownText(markdown: String, color: Color) {
+    val blocks = remember(markdown) { parseMarkdownBlocks(markdown) }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        blocks.forEach { block ->
+            when (block) {
+                is MarkdownBlock.Heading -> MarkdownHeading(block = block, color = color)
+                is MarkdownBlock.ListItem -> MarkdownListItem(block = block, color = color)
+                is MarkdownBlock.Paragraph -> MarkdownParagraph(block.text, color)
+                is MarkdownBlock.Table -> MarkdownTable(block = block, color = color)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MarkdownHeading(block: MarkdownBlock.Heading, color: Color) {
+    val style = when (block.level) {
+        1 -> MaterialTheme.typography.titleMedium
+        2 -> MaterialTheme.typography.titleSmall
+        else -> MaterialTheme.typography.bodyLarge
+    }
+    Text(
+        text = parseInlineMarkdown(block.text),
+        color = color,
+        fontWeight = FontWeight.Bold,
+        style = style,
+    )
+}
+
+@Composable
+private fun MarkdownParagraph(text: String, color: Color) {
+    Text(
+        text = parseInlineMarkdown(text),
+        color = color,
+        style = MaterialTheme.typography.bodyMedium,
+    )
+}
+
+@Composable
+private fun MarkdownListItem(block: MarkdownBlock.ListItem, color: Color) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = block.marker,
+            color = AccentGreenDark,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Text(
+            text = parseInlineMarkdown(block.text),
+            color = color,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+@Composable
+private fun MarkdownTable(block: MarkdownBlock.Table, color: Color) {
+    val columnCount = maxOf(
+        block.headers.size,
+        block.rows.maxOfOrNull { it.size } ?: 0,
+    )
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SurfaceWhite)
+            .horizontalScroll(rememberScrollState()),
+    ) {
+        MarkdownTableRow(
+            cells = block.headers,
+            columnCount = columnCount,
+            isHeader = true,
+            color = color,
+        )
+        block.rows.forEachIndexed { index, row ->
+            MarkdownTableRow(
+                cells = row,
+                columnCount = columnCount,
+                isHeader = false,
+                color = color,
+                rowIndex = index,
             )
         }
-        block.products.forEach { product ->
-            ProductCardView(
-                product = product,
-                assetBaseUrl = assetBaseUrl,
-                onClick = { onProductClick(product) },
-            )
+    }
+}
+
+@Composable
+private fun MarkdownTableRow(
+    cells: List<String>,
+    columnCount: Int,
+    isHeader: Boolean,
+    color: Color,
+    rowIndex: Int = 0,
+) {
+    Row {
+        repeat(columnCount) { index ->
+            val cellText = cells.getOrNull(index).orEmpty()
+            Box(
+                modifier = Modifier
+                    .width(124.dp)
+                    .background(
+                        when {
+                            isHeader -> AppGreenSoft
+                            rowIndex % 2 == 0 -> SurfaceWhite
+                            else -> WarmSurface
+                        }
+                    )
+                    .padding(horizontal = 8.dp, vertical = 7.dp),
+            ) {
+                Text(
+                    text = parseInlineMarkdown(cellText),
+                    color = if (isHeader) AccentGreenDark else color,
+                    fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
     }
 }
@@ -308,6 +451,128 @@ private data class AssistantContentBlock(
     val text: String,
     val products: List<ProductCard> = emptyList(),
 )
+
+private sealed class MarkdownBlock {
+    data class Heading(val level: Int, val text: String) : MarkdownBlock()
+    data class Paragraph(val text: String) : MarkdownBlock()
+    data class ListItem(val marker: String, val text: String) : MarkdownBlock()
+    data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownBlock()
+}
+
+private val MarkdownHeadingRegex = Regex("""^\s*(#{1,6})\s+(.+)$""")
+private val MarkdownOrderedListRegex = Regex("""^\s*(\d+)[.)]\s+(.+)$""")
+private val MarkdownUnorderedListRegex = Regex("""^\s*[-*•]\s+(.+)$""")
+private val MarkdownBoldRegex = Regex("""(\*\*[^*]+\*\*|__[^_]+__)""")
+
+private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
+    val lines = markdown
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .split("\n")
+    val blocks = mutableListOf<MarkdownBlock>()
+    var index = 0
+
+    while (index < lines.size) {
+        val line = lines[index].trim()
+        if (line.isBlank()) {
+            index += 1
+            continue
+        }
+
+        if (index + 1 < lines.size && isMarkdownTableRow(line) && isMarkdownTableSeparator(lines[index + 1])) {
+            val headers = parseMarkdownTableRow(line)
+            val rows = mutableListOf<List<String>>()
+            index += 2
+            while (index < lines.size && isMarkdownTableRow(lines[index])) {
+                rows += parseMarkdownTableRow(lines[index])
+                index += 1
+            }
+            blocks += MarkdownBlock.Table(headers = headers, rows = rows)
+            continue
+        }
+
+        val headingMatch = MarkdownHeadingRegex.matchEntire(line)
+        if (headingMatch != null) {
+            blocks += MarkdownBlock.Heading(
+                level = headingMatch.groupValues[1].length,
+                text = headingMatch.groupValues[2].trim(),
+            )
+            index += 1
+            continue
+        }
+
+        val orderedListMatch = MarkdownOrderedListRegex.matchEntire(line)
+        if (orderedListMatch != null) {
+            blocks += MarkdownBlock.ListItem(
+                marker = "${orderedListMatch.groupValues[1]}.",
+                text = orderedListMatch.groupValues[2].trim(),
+            )
+            index += 1
+            continue
+        }
+
+        val unorderedListMatch = MarkdownUnorderedListRegex.matchEntire(line)
+        if (unorderedListMatch != null) {
+            blocks += MarkdownBlock.ListItem(marker = "•", text = unorderedListMatch.groupValues[1].trim())
+            index += 1
+            continue
+        }
+
+        val paragraphLines = mutableListOf(line)
+        index += 1
+        while (index < lines.size && shouldMergeIntoParagraph(lines[index])) {
+            paragraphLines += lines[index].trim()
+            index += 1
+        }
+        blocks += MarkdownBlock.Paragraph(paragraphLines.joinToString("\n"))
+    }
+
+    return blocks
+}
+
+private fun shouldMergeIntoParagraph(line: String): Boolean {
+    val trimmed = line.trim()
+    if (trimmed.isBlank()) return false
+    if (MarkdownHeadingRegex.matches(trimmed)) return false
+    if (MarkdownOrderedListRegex.matches(trimmed)) return false
+    if (MarkdownUnorderedListRegex.matches(trimmed)) return false
+    if (isMarkdownTableRow(trimmed)) return false
+    return true
+}
+
+private fun parseInlineMarkdown(text: String): AnnotatedString {
+    return buildAnnotatedString {
+        var cursor = 0
+        MarkdownBoldRegex.findAll(text).forEach { match ->
+            append(text.substring(cursor, match.range.first))
+            val boldText = match.value.substring(2, match.value.length - 2)
+            pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+            append(boldText)
+            pop()
+            cursor = match.range.last + 1
+        }
+        append(text.substring(cursor))
+    }
+}
+
+private fun isMarkdownTableRow(line: String): Boolean {
+    val trimmed = line.trim()
+    return trimmed.contains("|") && parseMarkdownTableRow(trimmed).size >= 2
+}
+
+private fun isMarkdownTableSeparator(line: String): Boolean {
+    val cells = parseMarkdownTableRow(line)
+    if (cells.size < 2) return false
+    return cells.all { it.matches(Regex(""":?-{3,}:?""")) }
+}
+
+private fun parseMarkdownTableRow(line: String): List<String> {
+    return line
+        .trim()
+        .trim('|')
+        .split("|")
+        .map { it.trim() }
+}
 
 private data class AssistantTextBlock(
     val text: String,
