@@ -1,6 +1,6 @@
 # 采分点确认与待办看板
 
-更新：2026-06-04
+更新：2026-06-06
 
 用途：把“现在能拿哪些分、哪些还只是第一版、哪些先记下来不扩张”放在一页。每次想继续做功能前，先看这页，避免把局部想法误当成主线。
 
@@ -10,7 +10,7 @@
 
 项目已经有一个可提交的端到端版本：Android 原生客户端、FastAPI 后端、RAG 检索、Doubao/Mock 流式回复、商品卡片、详情、图片、评测脚本和安全配置都已形成闭环。
 
-接下来最值得补的不是再开大功能，而是把“回答不编造、资料可追踪、失败可复盘”做成更强的证据。
+接下来最值得补的不是再开大功能，而是把“100 条官方数据已基础覆盖”的证据和“美妆深度回答不编造、资料可追踪、失败可复盘”的证据继续收口。
 
 ## 按官方采分点看当前状态
 
@@ -19,7 +19,8 @@
 | 基础功能完整性 | 稳定可拿 | Android -> FastAPI -> RAG -> Doubao/Mock -> SSE -> 商品卡片；图片和详情弹窗已跑通 | 录屏可更干净；最终演示前再人工复验一次 |
 | 工程质量 | 基本可拿 | monorepo、README、API 契约、架构文档、评测报告、安全配置、密钥扫描、依赖版本与复现说明 | 最终提交前按复现检查表再跑一轮 |
 | 效果与可靠性 | 已有可讲证据，仍可继续补强 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮 8/8 stable PASS；`GRD-L03/05/08/L01` 高风险真实 API + AI review；guardrail；RetrievalTrace；graph relation score；evidence-aware fallback | 不建议继续无限扩 benchmark；若补强，应做小范围真实 API 复验或 claim-level judge 样例 |
-| 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、多品类 schema、服饰样例、Android 可见轻量反馈闭环 | 继续补强时优先做最终复验或 claim-level judge 样例，不再扩新大功能 |
+| 数据覆盖 | 已补薄支持 | raw 官方数据 100 条；25 条美妆 deep + 5 条服饰 deep + 70 条 thin；Chroma 统一索引 100 条 | 后续只需最终复验和答辩口径说明；不要把数码/食品做成美妆同等深度 |
+| 加分项深度 | 已有主打方向 | 多商品对比、可解释 trace、轻量 graph-aware relation score、Always-light Planner、多品类 schema、服饰样例、Android 可见轻量反馈闭环 | 继续补强时优先做全品类薄支持和 claim-level judge 样例，不再扩多模态/交易链路 |
 
 ## 能确认已经完成的点
 
@@ -28,7 +29,7 @@
 3. **约束感知检索**：预算、子类、排除条件、信息不足追问已经进入检索逻辑。
 4. **可解释检索**：trace 中已有 `metadata_filter`、`filter_summary`、`ranking_signals`、`retrieval_channels.graph`。
 5. **反编造第一版**：已经拦截价格、库存、优惠、下单承诺和部分无证据绝对断言。
-6. **多品类扩展证明**：除了 25 条美妆，已有 5 条服饰样例进入统一索引并通过 benchmark。
+6. **多品类扩展证明**：100 条官方商品已进入统一索引；美妆 deep、服饰 deep 样例和全品类 thin smoke benchmark 均已通过。
 7. **对比决策第一版**：两款防晒、两件 T 恤、跑步鞋/徒步鞋对比 benchmark 已通过。
 
 ## 需要补、但不要一次全做的点
@@ -37,7 +38,7 @@
 
 ## 当前执行顺序
 
-当前状态：**基础闭环、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、AI 语义复核脚本、内部 trace 分层、结果型绝对承诺 guardrail 均已有第一版**。下一步不再扩新大功能，而是把“真实回答是否可靠”变成可解释、可复跑、可答辩的证据链。
+当前状态：**基础闭环、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、AI 语义复核脚本、内部 trace 分层、结果型绝对承诺 guardrail、Always-light Planner 均已有第一版**。下一步不再扩多模态或交易功能，而是补上“100 条官方数据基础可用 + 美妆深度可靠”的证据链。
 
 | 优先级 | 动作 | 目的 | 完成标志 | 主要文件 |
 | --- | --- | --- | --- | --- |
@@ -47,6 +48,7 @@
 | P0-3 | 加固真实生成层 guardrail / repair | 减少真实 Doubao 的资料外承诺和绝对安全说法 | 第一刀已完成：`unsupported_result_absence_claims` 拦截 `不会堵塞/不会长闭口/不会残留/不会过敏/绝对温和`；`GRD-L03` 真实 API PASS；AI review PASS；全量 groundedness mock 11/11 作为安全网 | `server/app/guardrails.py`、`server/app/llm.py` |
 | P0-4 | 真实 API 回归 + AI 复核 | 证明修复后不是只在单个真实 case 或 mock 里好看 | 已完成第一轮：`GRD-05/08/L01` 真实 API + AI review；`GRD-L01` 暴露的 150 元预算边界 bug 已修复并复验 PASS | `scripts/run_*`、`scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
 | P0-5 | AI review / 评测口径对齐 | 约束继承应进入内部 trace，不要求机械显示给用户 | 已完成：AI review prompt 明确内部 trace 不必用户可见；`GRD-L01` trace-aware review 复跑 PASS, score=5, risk=low | `scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
+| P1-0 | 全品类薄支持 | 满足官方 50-100 条数据口径，同时避免全品类深度标注扩张 | 已完成：70 条 thin enriched + 100 条 Chroma index + 全品类 smoke 7/7 PASS；“早八提神不指定品类”已记录 failure case 并修复：不召回方便食品，且早八场景优先咖啡；golden/subcategory/apparel 回归 PASS | `scripts/build_thin_enriched_catalog.py`、`data/enriched/thin_products.jsonl`、`data/eval/all_category_queries.json`、`server/app/retrieval.py` |
 | P1-1 | Android 反馈按钮 | 把后端反馈闭环接到真实 demo 体验里 | 已完成：回答下方可点 `有用/不准确`，并写入 feedback JSONL | `client/android/...`、`server/app/feedback.py` |
 | P1-2 | Demo / 答辩材料收口 | 降低评委理解成本，确保能讲清架构链路和关键代码 | 第一版已完成：`docs/22_defense_cheatsheet.md` 收口项目介绍、架构链路、可靠性证据、关键代码入口和边界说明 | `docs/12_demo_script.md`、`docs/14_submission_package.md`、`docs/20_reproducibility_and_dependencies.md`、`docs/22_defense_cheatsheet.md` |
 | P2 | 暂缓的大功能 | 防止主线扩张 | 多模态、购物车、下单、全量非美妆标注都不作为当前主线 | 暂不改 |
@@ -62,7 +64,7 @@
 当前下一步分两种情况：
 
 - 如果马上提交：做 **最终复验与提交前检查**，按 `docs/20_reproducibility_and_dependencies.md` 和 `docs/14_submission_package.md` 跑真实 API、Android、secret scan 和录屏安全检查。
-- 如果还有 5-7 天：P1-1 已完成，下一步优先做 **最终复验与提交前检查**；如果继续补技术深度，再选 1-2 条高风险 case 做 claim-level judge 样例。
+- 如果还有 5-7 天：P1-0 已完成；优先做真实 Android 端体验复验和最终复现检查。如果继续补技术深度，再选 1-2 条高风险 case 做 claim-level judge 样例。
 
 ### P0：提交材料收口
 
@@ -139,7 +141,7 @@ scripts/review_benchmark_with_ai.py
 
 1. 拍照找货 / 图片输入：加分但成本高，容易拉大范围。
 2. 购物车 / 下单：偏交易链路，不是当前 RAG 可靠性主线。
-3. 全量 75 条非美妆标注：可以做，但短期不如 groundedness benchmark 更能说明能力。
+3. 全量 75 条非美妆深度标注：暂不做；100 条 raw 商品的基础薄支持已完成。
 
 ## 下一个 25 分钟入口
 

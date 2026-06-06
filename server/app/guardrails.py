@@ -74,7 +74,7 @@ def guard_answer(answer: str, user_message: str, cards: list[ProductCard]) -> Ge
             issues=issues,
             fallback_used=True,
         )
-    return GenerationGuardrailResult(answer=_append_follow_up_if_needed(stripped, user_message), passed=True)
+    return GenerationGuardrailResult(answer=_append_follow_up_if_needed(stripped, user_message, cards), passed=True)
 
 
 def build_safe_answer(cards: list[ProductCard], user_message: str | None = None) -> str:
@@ -83,11 +83,12 @@ def build_safe_answer(cards: list[ProductCard], user_message: str | None = None)
         if _has_specific_constraints(user_message):
             budget = _latest_budget_label(user_message)
             budget_clause = f"{budget}和这些条件" if budget else "这些条件"
+            options = _no_card_relaxation_options(user_message)
             return (
                 f"我读到了你前面的条件，但当前商品池里没有同时满足{budget_clause}的商品。"
-                "可以先放宽预算、放宽排除条件，或把防晒和修护拆开分别看。"
+                f"可以先{options}。"
             )
-        return "我需要先补充一点关键信息：你的肤质、预算和主要功效需求分别是什么？"
+        return f"我需要先补充一点关键信息：{_generic_clarification_question(user_message)}"
 
     evidence_notes = _build_evidence_notes(cards, user_message)
 
@@ -140,7 +141,7 @@ def build_safe_answer(cards: list[ProductCard], user_message: str | None = None)
     lines.extend(evidence_notes)
     lines.append("上面只使用已召回商品资料，暂时不补资料外的商业承诺或额外功效。")
     if _should_ask_follow_up(user_message):
-        lines.append(_FOLLOW_UP_QUESTION)
+        lines.append(_follow_up_question(user_message, cards))
     return "\n".join(lines)
 
 
@@ -258,7 +259,7 @@ def _build_evidence_notes(cards: list[ProductCard], user_message: str) -> list[s
     if _contains_any(user_message, ["不知道怎么选", "怎么选"]) and not (
         budget or _contains_any(user_message, ["油皮", "干皮", "敏感肌", "通勤", "户外"])
     ):
-        notes.append("澄清边界：更稳的推荐还需要确认肤质、预算和使用场景。")
+        notes.append(f"澄清边界：更稳的推荐还需要确认{_generic_clarification_question(user_message)}")
 
     return _dedupe_notes(notes)
 
@@ -273,20 +274,77 @@ def _should_ask_follow_up(user_message: str) -> bool:
     return _contains_any(user_message, ["看看", "推荐", "买", "选", "防晒", "护肤品"])
 
 
-_FOLLOW_UP_QUESTION = "如果你愿意，我可以继续按肤质、预算、通勤/户外场景帮你再收窄；你想先看哪一项？"
-
-
-def _append_follow_up_if_needed(answer: str, user_message: str) -> str:
+def _append_follow_up_if_needed(answer: str, user_message: str, cards: list[ProductCard]) -> str:
     if not _should_ask_follow_up(user_message):
         return answer
     if _has_follow_up_question(answer):
         return answer
-    return f"{answer.rstrip()}\n{_FOLLOW_UP_QUESTION}"
+    return f"{answer.rstrip()}\n{_follow_up_question(user_message, cards)}"
 
 
 def _has_follow_up_question(answer: str) -> bool:
     tail = answer[-120:]
     return "？" in tail and _contains_any(tail, ["你想", "你更", "可以告诉我", "继续按", "先看哪"])
+
+
+def _follow_up_question(user_message: str, cards: list[ProductCard]) -> str:
+    category = _dominant_category(cards) or _infer_category_from_text(user_message)
+    if category == "食品饮料":
+        return "如果你愿意，我可以继续按预算、咖啡/茶饮/功能饮料、含糖情况和便携包装帮你再收窄；你想先看哪一项？"
+    if category == "数码电子":
+        return "如果你愿意，我可以继续按预算、使用场景、性能/续航和便携性帮你再收窄；你想先看哪一项？"
+    if category == "服饰运动":
+        return "如果你愿意，我可以继续按预算、尺码/材质、使用场景和天气条件帮你再收窄；你想先看哪一项？"
+    if category == "美妆护肤":
+        return "如果你愿意，我可以继续按肤质、预算、通勤/户外场景帮你再收窄；你想先看哪一项？"
+    return "如果你愿意，我可以继续按预算、品类方向、使用场景和需要避开的条件帮你再收窄；你想先看哪一项？"
+
+
+def _dominant_category(cards: list[ProductCard]) -> str | None:
+    counts: dict[str, int] = {}
+    for card in cards:
+        counts[card.category] = counts.get(card.category, 0) + 1
+    if not counts:
+        return None
+    return max(counts.items(), key=lambda item: item[1])[0]
+
+
+def _infer_category_from_text(text: str) -> str | None:
+    if _contains_any(text, ["咖啡", "茶饮", "饮料", "提神", "醒脑", "犯困", "早八", "零食", "食品"]):
+        return "食品饮料"
+    if _contains_any(text, ["手机", "电脑", "平板", "耳机", "数码"]):
+        return "数码电子"
+    if _contains_any(text, ["衣服", "短袖", "鞋", "背包", "裤", "帽子", "服饰"]):
+        return "服饰运动"
+    if _contains_any(text, ["护肤", "美妆", "防晒", "面霜", "精华", "肤质"]):
+        return "美妆护肤"
+    return None
+
+
+def _generic_clarification_question(user_message: str) -> str:
+    category = _infer_category_from_text(user_message)
+    if category == "食品饮料":
+        return "你想看的品类方向、预算、含糖情况和便携需求分别是什么？"
+    if category == "数码电子":
+        return "你的预算、主要使用场景、性能/续航要求分别是什么？"
+    if category == "服饰运动":
+        return "你的预算、尺码/材质偏好、使用场景分别是什么？"
+    if category == "美妆护肤":
+        return "你的肤质、预算和主要功效需求分别是什么？"
+    return "你的预算、品类方向、使用场景和需要避开的条件分别是什么？"
+
+
+def _no_card_relaxation_options(user_message: str) -> str:
+    category = _infer_category_from_text(user_message)
+    if category == "食品饮料":
+        return "放宽预算、换一个食品/饮料品类方向，或补充含糖/便携/口味要求"
+    if category == "数码电子":
+        return "放宽预算、降低性能/续航要求，或换一个使用场景优先级"
+    if category == "服饰运动":
+        return "放宽预算、放宽材质/尺码要求，或换一个使用场景优先级"
+    if category == "美妆护肤":
+        return "放宽预算、放宽排除条件，或把防晒和修护拆开分别看"
+    return "放宽预算、调整品类方向，或补充更具体的使用场景"
 
 
 def _card_name(card: ProductCard) -> str:

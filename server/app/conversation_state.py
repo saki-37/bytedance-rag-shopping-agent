@@ -439,6 +439,13 @@ def _referenced_history_product_ids(message: str, history: list) -> list[str]:
     product_ids = _latest_history_product_ids(history)
     if not product_ids:
         return []
+    if _references_first_two_products(message):
+        return product_ids[:2]
+    indexes = _referenced_product_indexes(message)
+    if indexes:
+        return [product_ids[index] for index in indexes if index < len(product_ids)]
+    if _references_all_previous_products(message):
+        return product_ids
     index = _referenced_product_index(message)
     if index is None:
         return []
@@ -470,3 +477,26 @@ def _referenced_product_index(message: str) -> int | None:
     if any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
         return 0
     return None
+
+
+def _referenced_product_indexes(message: str) -> list[int]:
+    normalized = message.strip()
+    markers = [
+        (r"(第一|第1(?:个|款|件)?|1(?:号|个|款|件))", 0),
+        (r"(第二|第2(?:个|款|件)?|2(?:号|个|款|件))", 1),
+        (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
+    ]
+    indexes = [index for pattern, index in markers if re.search(pattern, normalized)]
+    if indexes and any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
+        indexes.insert(0, 0)
+    return list(dict.fromkeys(indexes))
+
+
+def _references_first_two_products(message: str) -> bool:
+    return bool(re.search(r"(前两|前二|前2|前两个|前二个|前两款|前2款)", message))
+
+
+def _references_all_previous_products(message: str) -> bool:
+    if not any(term in message for term in ["对比", "比较", "怎么选", "哪个更", "哪款更", "区别"]):
+        return False
+    return any(term in message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])

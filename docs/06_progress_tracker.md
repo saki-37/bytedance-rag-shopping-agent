@@ -149,7 +149,7 @@
 
 ## 当前最应该做的下一步
 
-文档状态收口、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、Always-light Planner 第一版和 targeted Planner probe 已经完成。下一步优先在 **真实 Android 端体验复验**、**真实生成层边界表达**、**claim-level judge 样例** 和 **最终复现检查** 之间选择，其中 Android 真实体验和最终复现检查优先级最高。
+文档状态收口、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、Always-light Planner 第一版、targeted Planner probe 和 **100 条全品类薄支持** 已经完成。下一步优先在 **真实 Android 端体验复验**、**真实生成层边界表达**、**claim-level judge 样例** 和 **最终复现检查** 之间选择，其中 Android 真实体验复验和最终复现检查优先级最高。
 
 原因：
 
@@ -159,11 +159,13 @@
 - 多商品对比第一版已经完成并通过 benchmark。
 - RetrievalTrace 已经能显式展示 metadata filter、过滤摘要、ranking signals 和 graph relation hits。
 - Planner 对口语预算、多轮收窄、商品指代和泛需求追问已能给出可校验计划；目前不急着重构成 Router-gated，先观察真实延迟和 Android 体验。
-- 下一条代码主线可以二选一：先修真实 Doubao 在安全边界和多轮约束里的资料外表达，或者做最终 Android / 后端 / secret scan 复验。
+- 官方 raw 数据共 100 条；当前实现为 25 条美妆 deep、5 条服饰 deep、70 条全品类 thin，统一进入 Chroma `products` collection。
+- 下一条代码主线可以二选一：先做最终 Android / 后端 / secret scan 复验，或者选 3-5 个高风险回答做 claim-level judge 样例。
 
 完成标准：
 
 - 如果走反馈闭环增强：已完成 Android 端反馈入口；后续增强应聚焦把 `inaccurate` 自动沉淀为 benchmark 或 failure case。
 - 如果走真实生成层稳定性：重点处理长对话、安全边界和商业陷阱下的 repair / fallback / 边界模板。
 - 如果走 Planner 优化：优先做 prompt / trace 一致性和 `needs_clarification` 后续策略，不先做大框架迁移。
+- 如果走多品类扩展：全品类薄支持已完成；后续只建议补少量 smoke 或演示用 query，不把数码/食品做成同等深度。
 - 两条路线都要保持 benchmark 可回归。

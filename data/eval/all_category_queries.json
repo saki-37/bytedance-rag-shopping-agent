@@ -1,0 +1,77 @@
+[
+  {
+    "id": "AC-01",
+    "title": "学生网课记笔记平板",
+    "query": "预算5000以内，适合学生做笔记和看网课的平板",
+    "expect": {
+      "expected_budget_max": 5000,
+      "expected_any_product_ids": ["p_digital_005"],
+      "allowed_sub_categories": ["平板电脑"]
+    }
+  },
+  {
+    "id": "AC-02",
+    "title": "轻薄办公笔记本",
+    "query": "想要轻薄办公笔记本，不打游戏，通勤背包里不要太重",
+    "expect": {
+      "expected_any_product_ids": ["p_digital_004"],
+      "allowed_sub_categories": ["笔记本电脑"]
+    }
+  },
+  {
+    "id": "AC-03",
+    "title": "早八便携咖啡",
+    "query": "早八想提神，想要便携咖啡，不要太甜",
+    "expect": {
+      "expected_any_product_ids": ["p_food_001"],
+      "allowed_sub_categories": ["咖啡"]
+    }
+  },
+  {
+    "id": "AC-04",
+    "title": "办公室下午茶零食",
+    "query": "办公室下午茶零食，预算100以内，最好独立小包装",
+    "expect": {
+      "expected_budget_max": 100,
+      "expected_any_product_ids": ["p_food_009"],
+      "allowed_sub_categories": ["坚果/零食"]
+    }
+  },
+  {
+    "id": "AC-05",
+    "title": "夏天速干运动短裤",
+    "query": "夏天健身想要速干透气运动短裤，预算200以内",
+    "expect": {
+      "expected_budget_max": 200,
+      "expected_any_product_ids": ["p_clothes_023"],
+      "allowed_sub_categories": ["运动短裤"]
+    }
+  },
+  {
+    "id": "AC-06",
+    "title": "高倍户外防晒",
+    "query": "油皮户外防晒，预算300以内，想要高倍一点",
+    "expect": {
+      "expected_budget_max": 300,
+      "expected_facets": {
+        "skin_type": ["油皮"],
+        "effect": ["防晒"]
+      },
+      "expected_any_product_ids": ["p_beauty_010", "p_beauty_023"],
+      "allowed_sub_categories": ["防晒"]
+    }
+  },
+  {
+    "id": "AC-07",
+    "title": "早八提神不指定品类",
+    "query": "早八想提神，有啥推荐的吗？",
+    "expect": {
+      "expected_facets": {
+        "use_case": ["提神"],
+        "sub_category": ["咖啡", "茶饮", "功能饮料"]
+      },
+      "expected_any_product_ids": ["p_food_001", "p_food_002", "p_food_022", "p_food_023"],
+      "allowed_sub_categories": ["咖啡", "茶饮", "功能饮料"]
+    }
+  }
+]

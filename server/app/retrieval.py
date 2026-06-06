@@ -63,6 +63,7 @@ FACET_LEXICON: dict[str, dict[str, list[str]]] = {
         "夜间": ["夜间", "晚上", "睡前"],
         "约会": ["约会", "聚会", "拍照", "妆造"],
         "出差": ["出差", "旅行装", "便携", "随身"],
+        "提神": ["提神", "醒脑", "清醒", "犯困", "早八"],
     },
     "sub_category": {
         "防晒": ["防晒", "防晒霜"],
@@ -78,6 +79,27 @@ FACET_LEXICON: dict[str, dict[str, list[str]]] = {
         "跑步鞋": ["跑步鞋", "慢跑鞋", "公路跑鞋", "缓震跑鞋"],
         "徒步鞋": ["徒步鞋", "登山鞋", "防水鞋", "户外鞋"],
         "背包": ["背包", "双肩包", "电脑包", "通勤包"],
+        "智能手机": ["手机", "智能手机", "拍照手机", "旗舰手机"],
+        "笔记本电脑": ["笔记本", "笔记本电脑", "电脑", "轻薄本", "办公本"],
+        "平板电脑": ["平板", "平板电脑", "学习平板", "办公平板", "网课平板"],
+        "真无线耳机": ["耳机", "蓝牙耳机", "真无线耳机", "降噪耳机"],
+        "运动长裤": ["运动长裤", "长裤", "收口裤"],
+        "卫衣": ["卫衣", "连帽卫衣"],
+        "篮球鞋": ["篮球鞋", "实战篮球鞋", "球鞋"],
+        "瑜伽裤": ["瑜伽裤", "紧身裤"],
+        "户外裤": ["户外裤", "软壳裤"],
+        "帽子": ["帽子", "棒球帽", "鸭舌帽"],
+        "速干T恤": ["速干T恤", "速干衣", "跑步短袖", "训练T恤"],
+        "运动短裤": ["运动短裤", "短裤", "训练裤", "速干短裤"],
+        "咖啡": ["咖啡", "速溶咖啡", "冻干咖啡", "提神咖啡"],
+        "茶饮": ["茶饮", "无糖茶", "瓶装茶"],
+        "碳酸饮料": ["碳酸饮料", "气泡水", "苏打水", "快乐水"],
+        "功能饮料": ["功能饮料", "能量饮料", "提神饮料"],
+        "牛奶": ["牛奶", "纯牛奶"],
+        "酸奶": ["酸奶", "风味酸奶"],
+        "坚果/零食": ["坚果", "零食", "下午茶", "每日坚果"],
+        "方便食品": ["方便食品", "方便面", "泡面", "速食"],
+        "调味品": ["调味品", "酱油", "生抽"],
     },
 }
 
@@ -126,9 +148,74 @@ APPAREL_TERMS = [
     "双肩包",
     "电脑包",
 ]
+DIGITAL_TERMS = [
+    "数码",
+    "电子",
+    "手机",
+    "智能手机",
+    "平板",
+    "平板电脑",
+    "笔记本",
+    "笔记本电脑",
+    "电脑",
+    "轻薄本",
+    "办公本",
+    "耳机",
+    "蓝牙耳机",
+    "降噪耳机",
+    "网课",
+    "做笔记",
+    "剪辑",
+    "拍照",
+    "续航",
+    "高刷",
+]
+FOOD_TERMS = [
+    "食品",
+    "饮料",
+    "零食",
+    "咖啡",
+    "茶饮",
+    "无糖茶",
+    "气泡水",
+    "苏打水",
+    "功能饮料",
+    "牛奶",
+    "酸奶",
+    "坚果",
+    "方便面",
+    "泡面",
+    "速食",
+    "调味品",
+    "早八",
+    "下午茶",
+    "提神",
+    "醒脑",
+    "清醒",
+    "犯困",
+    "控糖",
+    "减脂",
+]
 CATEGORY_TO_RAW = {
     "beauty": "美妆护肤",
     "apparel": "服饰运动",
+    "digital": "数码电子",
+    "food": "食品饮料",
+}
+ENERGY_PURPOSE_TERMS = ["提神", "醒脑", "清醒", "犯困", "困了", "很困", "犯迷糊"]
+ENERGY_SUB_CATEGORIES = ["咖啡", "茶饮", "功能饮料"]
+EARLY_ENERGY_CONTEXT_TERMS = ["早八", "早课", "早上", "上午", "上课", "上班", "通勤", "工位", "办公室"]
+STRONG_ENERGY_CONTEXT_TERMS = ["熬夜", "通宵", "长途", "开车", "运动", "健身", "训练", "快速补能", "能量饮料", "功能饮料"]
+FOOD_SUB_CATEGORIES = {
+    "咖啡",
+    "茶饮",
+    "碳酸饮料",
+    "功能饮料",
+    "牛奶",
+    "酸奶",
+    "坚果/零食",
+    "方便食品",
+    "调味品",
 }
 
 GENERIC_RECOMMEND_TERMS = ["推荐", "买什么", "护肤品", "化妆品", "随便", "看看"]
@@ -149,6 +236,21 @@ SOFT_PREFERENCE_TERMS = [
     "不沾杯",
     "不晕染",
     "防晕染",
+    "办公",
+    "学习",
+    "网课",
+    "续航",
+    "高刷",
+    "降噪",
+    "控糖",
+    "无糖",
+    "低糖",
+    "提神",
+    "醒脑",
+    "清醒",
+    "犯困",
+    "礼盒",
+    "独立包装",
 ]
 COMPARISON_TERMS = [
     "对比",
@@ -179,6 +281,7 @@ def parse_query_intent(query: str) -> QueryIntent:
     referenced_product_ids = _extract_referenced_product_ids(query)
     budget = None if _relaxes_budget(query) else _hard_budget(query)
     facets = _extract_facets(query)
+    _apply_purpose_facets(query, facets)
     exclude_terms = [] if _relaxes_exclusions(query) else _extract_exclude_terms(query)
     soft_preferences = _extract_soft_preferences(query)
     comparison_mode = _is_comparison_query(query)
@@ -208,11 +311,7 @@ def parse_query_intent(query: str) -> QueryIntent:
         exclude_terms=exclude_terms,
         comparison_mode=comparison_mode,
         needs_clarification=needs_clarification,
-        clarification_question=(
-            "你更在意肤质、预算，还是防晒/修护/控油这类具体功效？"
-            if needs_clarification
-            else None
-        ),
+        clarification_question=_clarification_question(category_candidates, facets) if needs_clarification else None,
         confidence=round(confidence, 2),
     )
 
@@ -279,6 +378,20 @@ def _extract_facets(query: str) -> dict[str, list[str]]:
     return facets
 
 
+def _apply_purpose_facets(query: str, facets: dict[str, list[str]]) -> None:
+    """Map purpose-first food queries to safe candidate sub-categories."""
+    if not any(term in query for term in ENERGY_PURPOSE_TERMS):
+        return
+    sub_categories = facets.setdefault("sub_category", [])
+    if not set(sub_categories).intersection(FOOD_SUB_CATEGORIES):
+        for sub_category in ENERGY_SUB_CATEGORIES:
+            if sub_category not in sub_categories:
+                sub_categories.append(sub_category)
+    use_cases = facets.setdefault("use_case", [])
+    if "提神" not in use_cases:
+        use_cases.append("提神")
+
+
 def _extract_exclude_terms(query: str) -> list[str]:
     terms: list[str] = []
     for term in EXCLUDE_TERMS:
@@ -308,6 +421,10 @@ def _extract_category_candidates(
         candidates.append("beauty")
     if _looks_like_apparel_query(query):
         candidates.append("apparel")
+    if _looks_like_digital_query(query):
+        candidates.append("digital")
+    if _looks_like_food_query(query):
+        candidates.append("food")
     return candidates
 
 
@@ -321,10 +438,44 @@ def _looks_like_apparel_query(query: str) -> bool:
     return any(term in query for term in APPAREL_TERMS)
 
 
+def _looks_like_digital_query(query: str) -> bool:
+    return any(term in query for term in DIGITAL_TERMS)
+
+
+def _looks_like_food_query(query: str) -> bool:
+    return any(term in query for term in FOOD_TERMS)
+
+
 def _needs_clarification(query: str, signal_count: int) -> bool:
     if signal_count > 0:
         return False
     return any(term in query for term in GENERIC_RECOMMEND_TERMS)
+
+
+def _clarification_question(category_candidates: list[str], facets: dict[str, list[str]]) -> str:
+    primary_category = category_candidates[0] if category_candidates else _category_from_facets(facets)
+    if primary_category == "food":
+        return "你更想看咖啡/茶饮/功能饮料，还是更在意预算、含糖情况和便携包装？"
+    if primary_category == "digital":
+        return "你更在意预算、使用场景、性能/续航，还是便携性？"
+    if primary_category == "apparel":
+        return "你更在意预算、尺码/材质、使用场景，还是天气条件？"
+    if primary_category == "beauty":
+        return "你更在意肤质、预算，还是防晒/修护/控油这类具体功效？"
+    return "你更在意预算、送礼/自用场景、品类方向，还是需要避开的条件？"
+
+
+def _category_from_facets(facets: dict[str, list[str]]) -> str | None:
+    sub_categories = set(facets.get("sub_category", []))
+    if sub_categories.intersection(FOOD_SUB_CATEGORIES):
+        return "food"
+    if sub_categories.intersection({"智能手机", "笔记本电脑", "平板电脑", "真无线耳机"}):
+        return "digital"
+    if sub_categories.intersection({"短袖T恤", "跑步鞋", "徒步鞋", "背包", "运动长裤", "卫衣", "篮球鞋", "瑜伽裤", "户外裤", "帽子", "速干T恤", "运动短裤"}):
+        return "apparel"
+    if sub_categories or any(key in facets for key in ["skin_type", "effect"]):
+        return "beauty"
+    return None
 
 
 def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path | None = None) -> RetrievalResult:
@@ -415,6 +566,10 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
                     reasons=graph_reasons,
                 )
             )
+        purpose_score, purpose_reasons = _purpose_priority_score(intent, item, query)
+        if purpose_score:
+            score += purpose_score
+            reasons.extend(purpose_reasons)
         if raw["product_id"] in vector_scores:
             vector_score = vector_scores[raw["product_id"]]
             score += vector_score
@@ -640,6 +795,8 @@ def _product_aliases(raw: dict) -> list[str]:
     aliases = {_normalize_alias_text(brand)}
     if brand.startswith("巴黎") and len(brand) > 2:
         aliases.add(_normalize_alias_text(brand.removeprefix("巴黎")))
+    if brand == "安热沙":
+        aliases.add(_normalize_alias_text("安耐晒"))
     if brand and title.startswith(brand):
         short_title = title[len(brand) : len(brand) + 8]
         aliases.add(_normalize_alias_text(short_title))
@@ -833,6 +990,7 @@ def _has_risky_occurrence(
 
 
 def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
+    raw = item["raw"]
     text = product_search_text(item).lower()
     score = 0.0
     reasons: list[str] = []
@@ -840,6 +998,11 @@ def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
     for facet_name, values in intent.facets.items():
         weight = weights.get(facet_name, 1.0)
         for value in values:
+            if facet_name == "sub_category":
+                if str(raw.get("sub_category", "")) == value:
+                    score += weight
+                    reasons.append(f"{facet_name}_match:{value}")
+                continue
             if value.lower() in text:
                 score += weight
                 reasons.append(f"{facet_name}_match:{value}")
@@ -848,6 +1011,33 @@ def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
             score += 1.0
             reasons.append(f"soft_preference:{preference}")
     return score, reasons
+
+
+def _purpose_priority_score(intent: QueryIntent, item: dict, query: str) -> tuple[float, list[str]]:
+    has_energy_intent = "提神" in intent.facets.get("use_case", []) or any(
+        term in query for term in ENERGY_PURPOSE_TERMS
+    )
+    if not has_energy_intent:
+        return 0.0, []
+
+    raw_sub_category = str(item["raw"].get("sub_category", ""))
+    if raw_sub_category not in ENERGY_SUB_CATEGORIES:
+        return 0.0, []
+
+    if any(term in query for term in STRONG_ENERGY_CONTEXT_TERMS):
+        context = "strong_energy"
+        preferences = {"功能饮料": 2.0, "咖啡": 1.0, "茶饮": 0.5}
+    elif any(term in query for term in EARLY_ENERGY_CONTEXT_TERMS):
+        context = "early_energy"
+        preferences = {"咖啡": 3.0, "茶饮": 0.8, "功能饮料": -0.8}
+    else:
+        context = "general_energy"
+        preferences = {"咖啡": 1.5, "茶饮": 0.8, "功能饮料": 0.5}
+
+    score = preferences.get(raw_sub_category, 0.0)
+    if score == 0.0:
+        return 0.0, []
+    return score, [f"purpose_priority:{context}:{raw_sub_category}:{score:g}"]
 
 
 def _graph_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
@@ -914,6 +1104,9 @@ def _no_result_clarification(intent: QueryIntent) -> str:
     effects = intent.facets.get("effect", [])
     if effects:
         constraints.append(f"功效：{'、'.join(effects)}")
+    sub_categories = intent.facets.get("sub_category", [])
+    if sub_categories:
+        constraints.append(f"品类：{'、'.join(sub_categories)}")
     use_cases = intent.facets.get("use_case", [])
     if use_cases:
         constraints.append(f"场景：{'、'.join(use_cases)}")
@@ -922,11 +1115,25 @@ def _no_result_clarification(intent: QueryIntent) -> str:
 
     if constraints:
         joined = "；".join(constraints)
+        options = _relaxation_options(intent)
         return (
             f"当前商品池里没有同时满足「{joined}」的商品。"
-            "你想优先放宽哪一项：预算、排除条件，还是先只看其中一个功效/场景？"
+            f"你想优先放宽哪一项：{options}？"
         )
-    return "当前商品池里没有足够匹配的商品。你想优先补充预算、肤质，还是主要功效？"
+    return _clarification_question(intent.category_candidates, intent.facets)
+
+
+def _relaxation_options(intent: QueryIntent) -> str:
+    primary_category = intent.category_candidates[0] if intent.category_candidates else _category_from_facets(intent.facets)
+    if primary_category == "food":
+        return "预算、品类方向，还是含糖/便携/口味要求"
+    if primary_category == "digital":
+        return "预算、性能/续航要求，还是使用场景"
+    if primary_category == "apparel":
+        return "预算、尺码/材质，还是使用场景"
+    if primary_category == "beauty":
+        return "预算、排除条件，还是先只看其中一个功效/场景"
+    return "预算、品类方向，还是需要避开的条件"
 
 
 def _vector_scores(

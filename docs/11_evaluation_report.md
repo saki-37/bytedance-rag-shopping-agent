@@ -1,15 +1,15 @@
 # 评测记录
 
 日期：2026-05-26
-更新：2026-06-04
+更新：2026-06-06
 
 用途：沉淀当前可复跑的评测证据，后续每次改检索、prompt 或生成约束后更新。
 
 ## 当前结论
 
-当前版本完成四层评测，并已在 25 条美妆增强数据和 5 条服饰运动样例上复跑。需要特别区分：部分早期通过项是 retrieval-only 或 mock generation，它们证明检索、规则和展示稳定；真实 API generation 需要单独看 2026-06-04 三轮全量回归。
+当前版本完成四层评测，并已在 100 条官方商品统一索引上复跑。数据层现在是 25 条美妆 deep enriched、5 条服饰 deep enriched、70 条全品类 thin enriched。需要特别区分：部分早期通过项是 retrieval-only 或 mock generation，它们证明检索、规则和展示稳定；真实 API generation 需要单独看 2026-06-04 三轮全量回归。
 
-1. 检索层：8 条 golden queries、6 条美妆子类 queries 和 5 条服饰运动 V2-B queries 全部通过，Chroma 当前使用统一 `products` collection，索引 30 条 enriched 商品，并通过 metadata filter 限定类目、子类和预算。
+1. 检索层：8 条 golden queries、6 条美妆子类 queries、5 条服饰运动 queries 和 7 条全品类 thin smoke 全部通过。Chroma 当前使用统一 `products` collection，索引 100 条 enriched 商品，并通过 metadata filter 限定类目、子类和预算。
 2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠、下单承诺和无证据的绝对断言。
 3. SSE 层：真实 API golden stream 三轮 8/8 stable PASS；当前事件顺序调整为 `token/products/done`，先流式展示回答文本，再展示商品卡片。
 4. Groundedness 层：mock full generation / retrieval-only 均达到 11/11 PASS，但真实 API groundedness real generation 三轮仅 3/11 stable PASS，说明当前主要缺口在真实模型的边界表达和资料外声明控制。
@@ -122,6 +122,82 @@ server/.venv/bin/python scripts/run_subcategory_queries.py \
 - `build_index.py` 现在索引所有 enriched 商品到统一 Chroma `products` collection，并写入 `canonical_category`、`sub_category`、`base_price` 等 metadata。
 - Query parser 增加 `apparel` 类目边界和 `sub_category` 硬约束；向量召回也带同样的 metadata filter，避免服饰 query 被美妆向量召回抢分。
 - 本轮 apparel benchmark 已加 `--require-vector`，5 条均有 vector hits。
+
+### 2026-06-06 全品类 Thin Smoke Benchmark
+
+用途：证明官方 100 条 raw 商品不只是“放在仓库里”，而是全部进入统一基础检索、商品卡片和资料内回答链路。美妆和 5 条服饰仍是 deep enriched；数码、食品和剩余服饰用 `thin_products.jsonl` 做保守结构化支持。
+
+前置命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+server/.venv/bin/python -B scripts/build_thin_enriched_catalog.py
+server/.venv/bin/python -B scripts/check_data.py
+server/.venv/bin/python -B scripts/build_index.py
+```
+
+本地结果：
+
+| Check | Result |
+| --- | --- |
+| thin enriched generation | 70 rows: apparel 20, digital 25, food 25 |
+| data validation | `OK raw_products=100 enriched_files=3` |
+| Chroma index | `Indexed 100 products ... {'apparel': 25, 'beauty': 25, 'digital': 25, 'food': 25}` |
+
+smoke 命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 all_proxy=socks5://127.0.0.1:7897 \
+  server/.venv/bin/python -B scripts/run_subcategory_queries.py \
+  --cases data/eval/all_category_queries.json \
+  --require-vector \
+  --output /private/tmp/bytedance-rag-all-category-early-energy.jsonl
+```
+
+结果：7 / 7 PASS。
+
+| ID | 结论 | 期望覆盖 | 当前召回 |
+| --- | --- | --- | --- |
+| AC-01 | PASS | 数码 / 平板电脑 | `p_digital_019`, `p_digital_011`, `p_digital_005` |
+| AC-02 | PASS | 数码 / 笔记本电脑 | `p_digital_023`, `p_digital_004`, `p_digital_022` |
+| AC-03 | PASS | 食品 / 咖啡 | `p_food_022`, `p_food_002`, `p_food_001` |
+| AC-04 | PASS | 食品 / 坚果/零食 | `p_food_010`, `p_food_009` |
+| AC-05 | PASS | 服饰 / 运动短裤 | `p_clothes_023` |
+| AC-06 | PASS | 美妆 / 防晒 | `p_beauty_023`, `p_beauty_006`, `p_beauty_010` |
+| AC-07 | PASS | 食品 / 早八提神不指定品类 | `p_food_002`, `p_food_022`, `p_food_001`；早八场景优先咖啡 |
+
+#### Failure case: AC-07 早八提神排序偏差
+
+用户在 Android 端问“早八想提神，有啥推荐的吗？”时，系统已经不会再误召回方便面等方便食品，但第一版排序仍把功能饮料和茶饮排在前 3，咖啡只出现在 `graph_hits`，没有进入最终商品卡。
+
+Trace 结论：
+
+- hard filter 本身是对的：限定在 `food`，并把 `sub_category` 收到 `咖啡 / 茶饮 / 功能饮料`。
+- 咖啡候选没有被过滤掉，而是在 rerank 阶段被功能饮料/茶饮挤出前 3。
+- 根因一：`_facet_score` 以前对 `sub_category` 做全文包含匹配，导致“咖啡因”被误计为 `sub_category_match:咖啡`，功能饮料和茶饮获得了错误的咖啡品类加分。
+- 根因二：泛提神需求没有场景排序偏置。对“早八 / 上课 / 上班 / 通勤”这类温和提神场景，用户通常预期优先看到咖啡；对“熬夜 / 长途 / 运动 / 快速补能”才更适合提高功能饮料权重。
+
+修复：
+
+- `sub_category` facet score 改为 raw `sub_category` 精确匹配，避免 `咖啡因` 误触发“咖啡品类”。
+- 增加轻量 purpose priority：早八/通勤/上课/上班优先咖啡，泛提神仍允许茶饮和功能饮料；强补能场景才优先功能饮料。
+- AC-07 benchmark 收紧为：最终候选里至少命中一款咖啡，同时仍允许茶饮/功能饮料作为补充候选。
+
+复验：
+
+- rule-only fallback 路径：7 / 7 PASS，AC-07 召回 `p_food_022`, `p_food_023`, `p_food_002`。
+- 真实代理 Planner 路径：7 / 7 PASS，AC-07 召回 `p_food_002`, `p_food_022`, `p_food_001`；trace 中保留 `metadata_filter: food + 咖啡/茶饮/功能饮料`，最终 ranking 出现 `purpose_priority:early_energy:咖啡:3`。
+
+回归结果：
+
+| Benchmark | Result | Output |
+| --- | --- | --- |
+| golden queries | 8 / 8 PASS | `/private/tmp/bytedance-rag-golden-after-all-category.jsonl` |
+| beauty subcategory queries | 6 / 6 PASS | `/private/tmp/bytedance-rag-subcategory-after-all-category.jsonl` |
+| apparel queries | 5 / 5 PASS | `/private/tmp/bytedance-rag-apparel-after-all-category.jsonl` |
+
+注意：全品类覆盖后，部分旧 benchmark 不再适合锁死单个商品。例如“日常慢跑缓震跑鞋”现在会召回多双资料明确支持“慢跑/缓震”的跑步鞋，因此 `apparel_queries.json` 已把期望从单个 `p_clothes_007` 放宽为日常缓震跑鞋候选集合。
 
 ## 多轮对话 Regression
 
@@ -602,7 +678,7 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 1. Guardrail V1 是规则校验，不是完整 groundedness judge。
 2. Evidence-aware fallback 能覆盖当前 benchmark 中的关键证据边界，但尚未对所有模型生成 claim 做细粒度证据匹配。
 3. Android 端真实 Doubao 已完成第一轮复验；自动滚动已完成一轮模拟器复验，后续录屏前仍需做一次人工检查。
-4. Chroma 当前已索引 30 条 enriched 商品，其中美妆 25 条、服饰 5 条；数码和食品仍未进入 enriched。
+4. Chroma 当前已索引 100 条 enriched 商品，其中美妆 25 条、服饰 25 条、数码 25 条、食品 25 条；数码和食品是 thin 支持，不做同等深度导购承诺。
 
 ### 2026-06-04 轻量反馈闭环 smoke test
 
