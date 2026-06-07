@@ -231,6 +231,7 @@ Android Manifest 已配置 `INTERNET` 权限和 `usesCleartextTraffic=true`，�
 ```bash
 server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 server/.venv/bin/python scripts/run_conversation_cases.py
+server/.venv/bin/python scripts/run_failure_regression_cases.py
 server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 server/.venv/bin/python scripts/run_subcategory_queries.py \
   --cases data/eval/apparel_queries.json \

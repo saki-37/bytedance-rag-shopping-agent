@@ -151,7 +151,7 @@
 | --- | --- | --- | --- |
 | 检索准确 | ✅ | golden 8、subcategory 6、apparel 5、all-category smoke 7、comparison 3、groundedness retrieval-only 11 全部 PASS | 最终提交前再按复现检查表跑一轮 |
 | 少幻觉 | ◯ | guardrail + failure case + evidence-aware fallback + groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮稳定；高风险真实 API 代表 case 已通过 AI semantic review | 生成层完整 claim-level judge 尚未实现；当前重点是把已有证据讲清楚 |
-| 多轮可用 | ◯ | conversation 6 条 PASS，上下文继承、预算放宽/收紧和商品卡指代有覆盖 | 可补更多真实多轮问法 |
+| 多轮可用 | ◯ | conversation 6 条 PASS；failure regression 9/9 PASS，覆盖 Android 实测撞到的序号指代、品牌/商品类型 follow-up、类目切换、预算收窄和早八提神问题 | 可继续把新的 Android 失败样例沉淀进回归网 |
 | 复杂约束可用 | ◯ | 预算、排除项、子类、信息不足、对比均有第一版 | 约束过紧无结果和过敏风险需要陷阱 case |
 | UI 无明显 Bug | ◯ | loading 收尾、自动滚动、卡片详情已修 | 最终录屏前需要人工复验 |
 

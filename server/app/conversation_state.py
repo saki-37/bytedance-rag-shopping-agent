@@ -500,6 +500,8 @@ def _referenced_history_product_ids(message: str, history: list) -> list[str]:
     recent_mentioned_ids = _mentioned_history_product_ids(message, _recent_history_product_ids(history))
     if recent_mentioned_ids:
         return recent_mentioned_ids
+    if _references_single_active_product(message, active_product_ids):
+        return active_product_ids
     index = _referenced_product_index(message)
     if index is None:
         return []
@@ -529,6 +531,31 @@ def _mentioned_history_product_ids(message: str, product_ids: list[str]) -> list
         if strong_match or context_match:
             matched.append(product_id)
     return matched if len(matched) == 1 else []
+
+
+def _references_single_active_product(message: str, active_product_ids: list[str]) -> bool:
+    if len(active_product_ids) != 1:
+        return False
+    normalized_message = _normalize_reference_text(message)
+    if _requests_more_or_alternative(normalized_message):
+        return False
+    return any(
+        signal in normalized_message
+        for signal in [
+            "它",
+            "这个",
+            "这款",
+            "那款",
+            "刚才",
+            "上一款",
+            "多大",
+            "多少码",
+            "尺码",
+            "怎么用",
+            "适合吗",
+            "合适吗",
+        ]
+    )
 
 
 def _requests_more_or_alternative(normalized_message: str) -> bool:

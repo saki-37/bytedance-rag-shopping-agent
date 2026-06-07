@@ -1,0 +1,299 @@
+[
+  {
+    "id": "FR-001",
+    "title": "裸数字比较：1和2 必须只绑定上一轮第 1、2 个商品",
+    "source": "Android 真实测试：比较 1 和 2 时误比较成 1 和 3",
+    "history": [
+      {
+        "role": "user",
+        "content": "有没有什么运动类的非化妆品推荐？"
+      },
+      {
+        "role": "assistant",
+        "content": "给你推荐3款符合需求的运动类非化妆品好物：1. 优衣库运动短裤。2. adidas运动长裤。3. 李宁卫衣。",
+        "product_ids": ["p_clothes_023", "p_clothes_004", "p_clothes_005"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "可以帮我比较一下1和2吗？",
+        "expect": {
+          "expected_comparison_mode": true,
+          "expected_referenced_product_ids": ["p_clothes_023", "p_clothes_004"],
+          "expected_product_ids_exact": ["p_clothes_023", "p_clothes_004"],
+          "max_products": 2,
+          "forbidden_product_ids": ["p_clothes_005"]
+        }
+      },
+      {
+        "user": "可以帮我比较一下1 和 2吗？",
+        "expect": {
+          "expected_comparison_mode": true,
+          "expected_referenced_product_ids": ["p_clothes_023", "p_clothes_004"],
+          "expected_product_ids_exact": ["p_clothes_023", "p_clothes_004"],
+          "max_products": 2,
+          "forbidden_product_ids": ["p_clothes_005"]
+        }
+      },
+      {
+        "user": "可以帮我比较一下一和二吗？",
+        "expect": {
+          "expected_comparison_mode": true,
+          "expected_referenced_product_ids": ["p_clothes_023", "p_clothes_004"],
+          "expected_product_ids_exact": ["p_clothes_023", "p_clothes_004"],
+          "max_products": 2,
+          "forbidden_product_ids": ["p_clothes_005"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-002",
+    "title": "品牌 follow-up：阿迪达斯不错应绑定上一轮长裤，不扩成全库品牌检索",
+    "source": "Android 真实测试：阿迪达斯长裤尺码追问时混入卫衣/跑鞋",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "给你推荐3款运动类非化妆品好物：1. 优衣库运动短裤。2. adidas Essentials 三条纹运动长裤。3. 李宁卫衣。",
+        "product_ids": ["p_clothes_023", "p_clothes_004", "p_clothes_005"]
+      },
+      {
+        "role": "user",
+        "content": "可以帮我比较一下1和2吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "已对比优衣库运动短裤和 adidas Essentials 三条纹运动长裤。",
+        "product_ids": ["p_clothes_023", "p_clothes_004"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "好的，我觉得阿迪达斯的不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？",
+        "expect": {
+          "expected_comparison_mode": false,
+          "expected_referenced_product_ids": ["p_clothes_004"],
+          "expected_product_ids_exact": ["p_clothes_004"],
+          "max_products": 1,
+          "forbidden_product_ids": ["p_clothes_022", "p_clothes_008"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-003",
+    "title": "商品类型 follow-up：长裤不错应绑定上一轮长裤",
+    "source": "Android 真实测试：用户不说品牌，只说长裤不错",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "给你推荐3款运动类非化妆品好物：1. 优衣库运动短裤。2. adidas Essentials 三条纹运动长裤。3. 李宁卫衣。",
+        "product_ids": ["p_clothes_023", "p_clothes_004", "p_clothes_005"]
+      },
+      {
+        "role": "user",
+        "content": "可以帮我比较一下1和2吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "已对比优衣库运动短裤和 adidas Essentials 三条纹运动长裤。",
+        "product_ids": ["p_clothes_023", "p_clothes_004"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "好的，我觉得长裤不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？",
+        "expect": {
+          "expected_comparison_mode": false,
+          "expected_referenced_product_ids": ["p_clothes_004"],
+          "expected_product_ids_exact": ["p_clothes_004"],
+          "max_products": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-004",
+    "title": "recent pool 指代：隔一轮后仍能找回前面的短裤",
+    "source": "Android 真实测试：隔一轮询问短裤尺码",
+    "history": [
+      {
+        "role": "assistant",
+        "content": "给你推荐3款运动类非化妆品好物：1. 优衣库运动短裤。2. adidas Essentials 三条纹运动长裤。3. 李宁卫衣。",
+        "product_ids": ["p_clothes_023", "p_clothes_004", "p_clothes_005"]
+      },
+      {
+        "role": "user",
+        "content": "可以帮我比较一下1和2吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "已对比优衣库运动短裤和 adidas Essentials 三条纹运动长裤。",
+        "product_ids": ["p_clothes_023", "p_clothes_004"]
+      },
+      {
+        "role": "user",
+        "content": "好的，我觉得阿迪达斯的不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？"
+      },
+      {
+        "role": "assistant",
+        "content": "这款 adidas Essentials 三条纹运动长裤建议结合尺码表，优先看 L 码。",
+        "product_ids": ["p_clothes_004"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "那前面的短裤呢？我觉得也可以买一条，大概多少码合适？",
+        "expect": {
+          "expected_comparison_mode": false,
+          "expected_referenced_product_ids": ["p_clothes_023"],
+          "expected_product_ids_exact": ["p_clothes_023"],
+          "max_products": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-005",
+    "title": "类目切换：明确非化妆品运动类时不能继续推荐美妆",
+    "source": "Android 真实测试：给妈妈买礼物时追问非化妆品运动类仍推荐化妆品",
+    "history": [
+      {
+        "role": "user",
+        "content": "我想给我妈买生日礼物，你有什么推荐吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "先给了几款美妆候选。",
+        "product_ids": ["p_beauty_018", "p_beauty_010", "p_beauty_014"]
+      },
+      {
+        "role": "user",
+        "content": "有没有什么运动类的推荐？"
+      },
+      {
+        "role": "assistant",
+        "content": "曾经错误地给了运动相关美妆候选。",
+        "product_ids": ["p_beauty_020", "p_beauty_010"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "有没有什么运动类的非化妆品推荐？",
+        "expect": {
+          "expected_category_candidates": ["apparel"],
+          "forbidden_category_candidates": ["beauty"],
+          "allowed_product_categories": ["服饰运动"],
+          "forbidden_product_categories": ["美妆护肤"],
+          "min_products": 1,
+          "retrieval_message_contains": ["类目：服饰运动"],
+          "retrieval_message_not_contains": ["类目：美妆护肤", "肤质："]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-006",
+    "title": "口语预算收窄：150 元以内无满足防晒时不能继续推荐 170/268/298",
+    "source": "Android 真实测试：夏季防晒多轮收窄预算仍返回超预算商品",
+    "history": [
+      {
+        "role": "user",
+        "content": "夏天快到了，想看看防晒!"
+      },
+      {
+        "role": "assistant",
+        "content": "给你推荐了几款夏季防晒。",
+        "product_ids": ["p_beauty_010", "p_beauty_023", "p_beauty_006"]
+      },
+      {
+        "role": "user",
+        "content": "我是油皮，主要是户外需求"
+      },
+      {
+        "role": "assistant",
+        "content": "结合油皮和户外需求，仍优先看防晒候选。",
+        "product_ids": ["p_beauty_010", "p_beauty_023", "p_beauty_006"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "我的预算可能只有150",
+        "expect": {
+          "must_clarify": true,
+          "max_products": 0,
+          "expected_budget_max": 150,
+          "expected_facets": {
+            "skin_type": ["油皮"],
+            "effect": ["防晒"],
+            "use_case": ["户外"]
+          },
+          "forbidden_product_ids": ["p_beauty_010", "p_beauty_023", "p_beauty_006"],
+          "clarification_contains": ["150元以内", "没有同时满足"],
+          "retrieval_message_contains": ["150元以内"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-007",
+    "title": "比较合适不是商品对比：尺码追问不能误触 comparison mode",
+    "source": "Android 真实测试：比较合适被当成商品对比",
+    "history": [
+      {
+        "role": "user",
+        "content": "我觉得阿迪达斯这条运动长裤不错。"
+      },
+      {
+        "role": "assistant",
+        "content": "已推荐 adidas Essentials 三条纹运动长裤。",
+        "product_ids": ["p_clothes_004"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "我妈168厘米130斤，穿多大的比较合适？",
+        "expect": {
+          "expected_comparison_mode": false,
+          "expected_referenced_product_ids": ["p_clothes_004"],
+          "expected_product_ids_exact": ["p_clothes_004"],
+          "max_products": 1
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-008",
+    "title": "早八提神不指定品类：不能跑到方便面，候选应限咖啡/茶饮/功能饮料",
+    "source": "Android 真实测试：早八提神曾推荐方便面",
+    "turns": [
+      {
+        "user": "早八想提神，有啥推荐的吗？",
+        "expect": {
+          "expected_facets": {
+            "use_case": ["提神"],
+            "sub_category": ["咖啡", "茶饮", "功能饮料"]
+          },
+          "expected_any_product_ids": ["p_food_001", "p_food_002", "p_food_022", "p_food_023"],
+          "allowed_product_sub_categories": ["咖啡", "茶饮", "功能饮料"],
+          "forbidden_product_sub_categories": ["方便食品", "坚果/零食"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-009",
+    "title": "早八便携咖啡：明确咖啡时应优先落到咖啡子类",
+    "source": "Android 真实测试：提神场景需要防止咖啡被功能饮料压过",
+    "turns": [
+      {
+        "user": "早八想提神，想要便携咖啡，不要太甜",
+        "expect": {
+          "expected_any_product_ids": ["p_food_001", "p_food_023"],
+          "allowed_product_sub_categories": ["咖啡"],
+          "forbidden_product_sub_categories": ["方便食品", "功能饮料"]
+        }
+      }
+    ]
+  }
+]
