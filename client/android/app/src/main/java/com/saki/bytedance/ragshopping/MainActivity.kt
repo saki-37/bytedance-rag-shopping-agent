@@ -2,9 +2,16 @@ package com.saki.bytedance.ragshopping
 
 import android.net.Uri
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -14,6 +21,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,7 +49,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,7 +56,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,6 +65,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -94,6 +102,11 @@ private val ErrorText = Color(0xFF9E3412)
 private const val ScrollableVariantTabThreshold = 2
 private const val LongVariantTabLabelLength = 8
 private val ScrollableVariantTabMinWidth = 96.dp
+private const val DetailSheetAnimationMillis = 200
+private val DetailSheetMaxHeight = 0.92f
+private val DetailBackdropBlurRadius = 3.dp
+private val ProductTagChipMinWidth = 56.dp
+private val DetailInfoChipMinWidth = 64.dp
 private val MessageAssistantAvatarSize = 30.dp
 private val TablerSendIcon: ImageVector = ImageVector.Builder(
     name = "TablerSend",
@@ -118,6 +131,26 @@ private val TablerSendIcon: ImageVector = ImageVector.Builder(
         lineTo(3f, 10.5f)
         arcToRelative(0.55f, 0.55f, 0f, false, true, 0f, -1f)
         lineTo(21f, 3f)
+    }
+}.build()
+private val TablerXIcon: ImageVector = ImageVector.Builder(
+    name = "TablerX",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(18f, 6f)
+        lineTo(6f, 18f)
+        moveTo(6f, 6f)
+        lineTo(18f, 18f)
     }
 }.build()
 
@@ -156,7 +189,11 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     }
 
     Surface(color = AppGreen, modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(if (selectedProduct != null) DetailBackdropBlurRadius else 0.dp),
+        ) {
             Header()
             LazyColumn(
                 state = listState,
@@ -204,7 +241,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
             )
         }
         selectedProduct?.let { product ->
-            ProductDetailDialog(product = product, assetBaseUrl = assetBaseUrl, onDismiss = { selectedProduct = null })
+            ProductDetailOverlay(product = product, assetBaseUrl = assetBaseUrl, onDismiss = { selectedProduct = null })
         }
     }
 }
@@ -1329,16 +1366,13 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
                             )
                         }
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        maxItemsInEachRow = 4,
+                    ) {
                         (listOf("同系列规格") + product.tags).take(6).forEach { tag ->
-                            Text(
-                                text = tag,
-                                modifier = Modifier
-                                    .background(WarmSurface, RoundedCornerShape(999.dp))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp),
-                                color = AccentGreenDark,
-                                style = MaterialTheme.typography.labelSmall,
-                            )
+                            ProductTagChip(tag)
                         }
                     }
                     Text(
@@ -1355,6 +1389,21 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
 private fun List<ProductVariantCard>.shouldUseScrollableVariantTabs(): Boolean {
     return size > ScrollableVariantTabThreshold ||
         any { variant -> variant.label.trim().length >= LongVariantTabLabelLength }
+}
+
+@Composable
+private fun ProductTagChip(label: String) {
+    Text(
+        text = label,
+        modifier = Modifier
+            .widthIn(min = ProductTagChipMinWidth)
+            .background(WarmSurface, RoundedCornerShape(999.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        color = AccentGreenDark,
+        maxLines = 1,
+        softWrap = false,
+        style = MaterialTheme.typography.labelSmall,
+    )
 }
 
 @Composable
@@ -1454,16 +1503,13 @@ private fun StandardProductCardView(product: ProductCard, assetBaseUrl: String, 
                     style = MaterialTheme.typography.labelMedium,
                 )
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                maxItemsInEachRow = 4,
+            ) {
                 product.tags.forEach { tag ->
-                    Text(
-                        text = tag,
-                        modifier = Modifier
-                            .background(WarmSurface, RoundedCornerShape(999.dp))
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                        color = AccentGreenDark,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
+                    ProductTagChip(tag)
                 }
             }
             Text(
@@ -1476,37 +1522,135 @@ private fun StandardProductCardView(product: ProductCard, assetBaseUrl: String, 
 }
 
 @Composable
-private fun ProductDetailDialog(product: ProductCard, assetBaseUrl: String, onDismiss: () -> Unit) {
+private fun ProductDetailOverlay(product: ProductCard, assetBaseUrl: String, onDismiss: () -> Unit) {
+    val visibilityState = remember(product.productId) {
+        MutableTransitionState(false).apply {
+            targetState = true
+        }
+    }
+
+    fun requestDismiss() {
+        visibilityState.targetState = false
+    }
+
+    LaunchedEffect(visibilityState.isIdle, visibilityState.currentState, visibilityState.targetState) {
+        if (visibilityState.isIdle && !visibilityState.currentState && !visibilityState.targetState) {
+            onDismiss()
+        }
+    }
+
+    BackHandler(enabled = visibilityState.currentState || visibilityState.targetState) {
+        requestDismiss()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AnimatedVisibility(
+            visibleState = visibilityState,
+            enter = fadeIn(animationSpec = tween(DetailSheetAnimationMillis)),
+            exit = fadeOut(animationSpec = tween(DetailSheetAnimationMillis)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x99000000))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = { requestDismiss() },
+                    ),
+            )
+        }
+        AnimatedVisibility(
+            visibleState = visibilityState,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically(
+                initialOffsetY = { fullHeight -> fullHeight },
+                animationSpec = tween(DetailSheetAnimationMillis),
+            ) + fadeIn(animationSpec = tween(DetailSheetAnimationMillis)),
+            exit = slideOutVertically(
+                targetOffsetY = { fullHeight -> fullHeight },
+                animationSpec = tween(DetailSheetAnimationMillis),
+            ) + fadeOut(animationSpec = tween(DetailSheetAnimationMillis)),
+        ) {
+            ProductDetailSheet(
+                product = product,
+                assetBaseUrl = assetBaseUrl,
+                onDismiss = { requestDismiss() },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProductDetailSheet(
+    product: ProductCard,
+    assetBaseUrl: String,
+    onDismiss: () -> Unit,
+) {
     val knowledge = remember(product.description) { product.knowledgeSections() }
     val variants = product.variants
     var selectedVariantId by remember(product.productId, variants) { mutableStateOf(variants.firstOrNull()?.variantId.orEmpty()) }
     val selectedVariant = variants.firstOrNull { it.variantId == selectedVariantId } ?: variants.firstOrNull()
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("关闭", color = AccentGreenDark, fontWeight = FontWeight.Bold)
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(DetailSheetMaxHeight)
+            .padding(start = 10.dp, top = 28.dp, end = 10.dp, bottom = 8.dp)
+            .navigationBarsPadding()
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = {},
+            ),
+        colors = CardDefaults.cardColors(containerColor = SurfaceCream),
+        shape = RoundedCornerShape(28.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 24.dp, top = 20.dp, end = 16.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text(
+                        text = product.brand,
+                        color = AccentGreenDark,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        text = selectedVariant?.label?.takeIf { it.isNotBlank() } ?: product.title,
+                        color = Ink,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(AppGreenSoft, RoundedCornerShape(999.dp))
+                        .clickable(onClick = onDismiss),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = TablerXIcon,
+                        contentDescription = "关闭",
+                        tint = Ink,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
             }
-        },
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = product.brand,
-                    color = AccentGreenDark,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Text(
-                    text = selectedVariant?.label?.takeIf { it.isNotBlank() } ?: product.title,
-                    color = Ink,
-                    style = MaterialTheme.typography.titleMedium,
-                )
-            }
-        },
-        text = {
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 DetailHeroCard(product = product, selectedVariant = selectedVariant, assetBaseUrl = assetBaseUrl)
@@ -1556,13 +1700,13 @@ private fun ProductDetailDialog(product: ProductCard, assetBaseUrl: String, onDi
                     values = listOf(knowledge.overview),
                     bullet = false,
                 )
+                Spacer(modifier = Modifier.height(12.dp))
             }
-        },
-        containerColor = SurfaceCream,
-        shape = RoundedCornerShape(28.dp),
-    )
+        }
+    }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun DetailHeroCard(product: ProductCard, selectedVariant: ProductVariantCard?, assetBaseUrl: String) {
     Card(
@@ -1583,7 +1727,11 @@ private fun DetailHeroCard(product: ProductCard, selectedVariant: ProductVariant
                     .clip(RoundedCornerShape(18.dp)),
                 fallbackText = product.brand.take(1),
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                maxItemsInEachRow = 3,
+            ) {
                 Text(
                     text = "¥${(selectedVariant?.price ?: product.price).toInt()}",
                     modifier = Modifier
@@ -1624,17 +1772,24 @@ private fun VariantSelectorCard(
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.labelLarge,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                maxItemsInEachRow = 2,
+            ) {
                 variants.forEach { variant ->
                     val selected = variant.variantId == selectedVariant?.variantId
                     Text(
                         text = variant.label.ifBlank { "默认规格" },
                         modifier = Modifier
+                            .widthIn(min = DetailInfoChipMinWidth)
                             .background(if (selected) Ink else SurfaceWhite, RoundedCornerShape(999.dp))
                             .clickable { onSelect(variant) }
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         color = if (selected) SurfaceWhite else AccentGreenDark,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        maxLines = 1,
+                        softWrap = false,
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
@@ -1766,7 +1921,11 @@ private fun DetailChipsCard(
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.labelLarge,
             )
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                maxItemsInEachRow = 3,
+            ) {
                 visibleValues.forEach { value ->
                     InfoChip(value, warm = containerColor == AppGreenSoft)
                 }
@@ -1780,9 +1939,12 @@ private fun InfoChip(label: String, warm: Boolean = false) {
     Text(
         text = label,
         modifier = Modifier
+            .widthIn(min = DetailInfoChipMinWidth)
             .background(if (warm) WarmSurface else AppGreenSoft, RoundedCornerShape(999.dp))
             .padding(horizontal = 10.dp, vertical = 5.dp),
         color = if (warm) AccentGreenDark else Ink,
+        maxLines = 1,
+        softWrap = false,
         style = MaterialTheme.typography.labelSmall,
     )
 }
