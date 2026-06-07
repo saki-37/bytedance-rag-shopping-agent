@@ -31,6 +31,7 @@
 - [商品对比表格工作流调研与方案](24_comparison_table_workflow_research.md)
 - [Runtime Trace Log 与可追溯反馈闭环](25_runtime_trace_log_plan.md)
 - [进阶路线调研顺序与取舍方案](26_advanced_route_research.md)
+- [主线验收与 Demo 收口计划](27_mainline_acceptance_and_demo_plan.md)
 
 ## 当前里程碑
 
