@@ -110,3 +110,48 @@ data/tmp/traces/trace_YYYY-MM-DD.jsonl
 - trace 记录不包含 Ark API key。
 - 对比类问题 trace 中包含 `answer_directive.target_product_ids`。
 - Android 端即使暂时不上传完整 trace，也可以在后续通过 `trace_id` 关联 feedback。
+
+## Feedback 到 Failure Case 草稿
+
+轻量反馈闭环的下一步不是直接把每条 `不准确` 当作 benchmark，而是先把它转成可人工复核的 failure-case 草稿。
+
+已新增脚本：
+
+```bash
+python3 scripts/promote_feedback_to_failure_case.py
+```
+
+默认行为：
+
+- 读取 `data/tmp/feedback/feedback_*.jsonl`。
+- 只筛选 `feedback = inaccurate` 的记录。
+- 如果记录带有 `trace_id`，尝试从 `data/tmp/traces/trace_*.jsonl` 关联 runtime trace。
+- 输出 Markdown 和 JSONL 草稿到 `data/tmp/failure_cases/`，该目录仍被 `.gitignore` 的 `data/tmp/` 覆盖，不进入 Git。
+- 每条草稿包含用户问题、助手回答、商品卡片摘要、trace 摘要、建议归因、建议进入的 benchmark suite 和人工 triage 问题。
+
+常用命令：
+
+```bash
+# 只看最近反馈是否能被解析，不写文件
+python3 scripts/promote_feedback_to_failure_case.py --since 2026-06-07 --dry-run
+
+# 生成最近一天的 failure-case 草稿
+python3 scripts/promote_feedback_to_failure_case.py --since 2026-06-07
+
+# 只生成前 5 条，方便人工复核
+python3 scripts/promote_feedback_to_failure_case.py --limit 5
+```
+
+草稿里的 `suggested_failure_types` 是保守启发式归因，不是最终判定。进入 benchmark 前仍需人工填写：
+
+- `expected_behavior`
+- `actual_issue`
+- `root_cause`
+- `decision`
+- `benchmark_case_id`
+
+这样可以把现场失败从“聊天里提过一次”推进为：
+
+```text
+用户不准确反馈 -> 有界证据快照 -> failure-case 草稿 -> 人工确认 -> benchmark / docs / 修复任务
+```

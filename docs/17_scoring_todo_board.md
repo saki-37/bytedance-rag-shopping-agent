@@ -131,11 +131,13 @@ scripts/review_benchmark_with_ai.py
 - 记录内容不是只保存当前一句，而是保存有界证据快照：当前 query、最近 8 条 history、最终回答、商品卡片、clarification、retrieval message 和 `RetrievalTrace`。
 - 已新增 `scripts/check_feedback_loop.py`，用 `/api/debug/retrieve` 构造一条带 trace 的反馈记录，验证端到端写入。
 - Android 端已接入 `有用` / `不准确` 按钮，能把当前回答、上一轮用户 query、最近对话历史和商品卡片写入 `/api/feedback`。
+- 已新增 `scripts/promote_feedback_to_failure_case.py`，可把本地 `inaccurate` 反馈自动整理成 Markdown / JSONL failure-case 草稿，供人工确认后转 benchmark。
 
 优先级判断：
 
 - 它是贴近官方“质量评测与反馈闭环”的加分项。
 - Android 端按钮已经接入；当前是轻量反馈第一版，足够支撑“用户可标记、后端可记录、失败样例可复盘”的工程证据。Android 反馈记录暂不直接携带完整 `RetrievalTrace`，带 trace 的复盘证据仍通过 debug smoke test 构造。
+- 自动转草稿脚本不直接改 benchmark，避免把误触反馈或信息不足样例污染评测集；它只负责生成 triage 输入。
 
 ### P3：暂不作为主线
 
