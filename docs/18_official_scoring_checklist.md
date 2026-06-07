@@ -105,7 +105,7 @@
 | 一定不会闷痘 | 数据没有确定证据 | 不通过 |
 | 不含酒精 | 资料未说明 | 不通过 |
 
-短期只建议做 3-5 个高风险样例，不做完整大评测系统；它的价值是让“反幻觉”从整段观感变成逐条证据核对。
+短期只建议做 3-5 个高风险样例，不做完整大评测系统；它的价值是让“反幻觉”从整段观感变成逐条证据核对。当前已新增第一版样例集 `data/eval/claim_audit_samples.json`，覆盖 SKU 价格、SPF/补涂边界、敏感肌绝对安全、成分不存在和库存/优惠/下单承诺；可用 `python3 scripts/render_claim_audit_report.py --strict` 渲染为 `data/tmp/evals/claim_audit_report.md` 和 JSONL 明细。
 
 ## 多品类数据覆盖口径
 

@@ -1,0 +1,191 @@
+{
+  "schema_version": "1.0",
+  "purpose": "Small hand-audited claim-level samples for groundedness evidence. This is a scoped evidence ledger, not a full automatic judge.",
+  "verdicts": {
+    "supported": "The product data directly supports the claim.",
+    "unsupported": "The claim is absent from, contradicted by, or stronger than the product data.",
+    "needs_boundary": "Part of the claim is supported, but the wording needs a safety, evidence, or scope boundary."
+  },
+  "samples": [
+    {
+      "id": "CLAIM-01",
+      "title": "同系列 SKU 价格必须按规格说",
+      "risk": "price_or_sku",
+      "question": "200元以内通勤防晒推荐",
+      "product_ids": [
+        "p_beauty_006"
+      ],
+      "claims": [
+        {
+          "claim": "巴黎欧莱雅 30ml 水感轻肌款售价 170 元，40ml 清爽型售价 190 元。",
+          "expected_verdict": "supported",
+          "safe_wording": "推荐时应写成同系列两个规格/款式：30ml 水感轻肌款 170 元，40ml 清爽型 190 元。",
+          "judge_note": "两个 SKU 来自同一 parent product，但价格和规格不同，不能在回答或卡片中混成一个价格。",
+          "evidence": [
+            {
+              "source": "raw.skus",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_006.json",
+              "product_id": "p_beauty_006",
+              "quote": "s_p_beauty_006_1: 30ml 水感轻肌款 / price 170; s_p_beauty_006_2: 40ml 清爽型 / price 190"
+            }
+          ]
+        },
+        {
+          "claim": "巴黎欧莱雅 30ml 水感轻肌款和 40ml 清爽型都只卖 170 元。",
+          "expected_verdict": "unsupported",
+          "safe_wording": "30ml 是 170 元，40ml 是 190 元；预算 180 元以内时只能展示 30ml。",
+          "judge_note": "40ml SKU 的价格是 190 元，回答成 170 元会造成预算和购买决策错误。",
+          "evidence": [
+            {
+              "source": "raw.skus",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_006.json",
+              "product_id": "p_beauty_006",
+              "quote": "40ml 清爽型 price 190"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLAIM-02",
+      "title": "防晒指数可以直接引用，但不能扩写成全天无需补涂",
+      "risk": "spf_or_usage_boundary",
+      "question": "通勤防晒推荐",
+      "product_ids": [
+        "p_beauty_006"
+      ],
+      "claims": [
+        {
+          "claim": "巴黎欧莱雅这款防晒标注 SPF50+ PA++++，日常通勤和 1-2 小时短时间户外足够，但长时间户外需要补涂。",
+          "expected_verdict": "supported",
+          "safe_wording": "可以引用 SPF50+ PA++++，并保留补涂边界。",
+          "judge_note": "SPF/PA 和使用边界都有官方 FAQ 证据。",
+          "evidence": [
+            {
+              "source": "raw.rag_knowledge.official_faq",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_006.json",
+              "product_id": "p_beauty_006",
+              "quote": "SPF50+ PA++++；日常通勤、1-2小时短时间户外足够；长时间户外建议每2-3小时补涂。"
+            }
+          ]
+        },
+        {
+          "claim": "巴黎欧莱雅 SPF50+ PA++++，所以全天户外都不用补涂。",
+          "expected_verdict": "unsupported",
+          "safe_wording": "SPF50+ PA++++ 适合日常通勤；长时间户外仍需按资料建议补涂。",
+          "judge_note": "官方 FAQ 明确长时间户外需要 2-3 小时补涂，不能反向扩写。",
+          "evidence": [
+            {
+              "source": "raw.rag_knowledge.official_faq",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_006.json",
+              "product_id": "p_beauty_006",
+              "quote": "长时间户外建议每2-3小时补涂一次。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLAIM-03",
+      "title": "无添加声明需要保留敏感肌边界",
+      "risk": "ingredient_or_sensitive_skin",
+      "question": "敏感肌能不能用巴黎欧莱雅防晒",
+      "product_ids": [
+        "p_beauty_006"
+      ],
+      "claims": [
+        {
+          "claim": "巴黎欧莱雅这款防晒不含酒精、香精、parabens，所以敏感肌一定不会过敏。",
+          "expected_verdict": "needs_boundary",
+          "safe_wording": "资料写到不含酒精、香精、parabens，相对温和；但敏感肌初次使用仍需先做耳后或手臂测试，不能保证一定不过敏。",
+          "judge_note": "无添加信息有证据，但“一定不会过敏”是结果型绝对承诺，应降级为边界提醒。",
+          "evidence": [
+            {
+              "source": "raw.rag_knowledge.official_faq",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_006.json",
+              "product_id": "p_beauty_006",
+              "quote": "不含酒精、香精、parabens；敏感肌初次使用前建议先在耳后或手臂内侧测试。"
+            },
+            {
+              "source": "raw.rag_knowledge.user_reviews",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_006.json",
+              "product_id": "p_beauty_006",
+              "quote": "用户评价中有人提到敏感肌使用后泛红发痒。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLAIM-04",
+      "title": "敏感肌绝对安全不能从安热沙资料推出",
+      "risk": "absolute_safety",
+      "question": "敏感肌能不能用安热沙防晒",
+      "product_ids": [
+        "p_beauty_010"
+      ],
+      "claims": [
+        {
+          "claim": "安热沙金灿倍护防晒敏感肌放心用，不会过敏。",
+          "expected_verdict": "unsupported",
+          "safe_wording": "安热沙防水防汗、户外防晒证据较强；但资料提示部分敏感肌可能对酒精等成分敏感，敏感肌应先局部测试，不适就停用。",
+          "judge_note": "这类绝对安全承诺是高风险幻觉：资料不仅没有保证，还给出敏感肌测试和不适停用边界。",
+          "evidence": [
+            {
+              "source": "raw.rag_knowledge.official_faq",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_010.json",
+              "product_id": "p_beauty_010",
+              "quote": "部分敏感肌可能对某些成分（如酒精）敏感，建议先做局部测试；如有不适，立即停止使用。"
+            },
+            {
+              "source": "raw.rag_knowledge.user_reviews",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_010.json",
+              "product_id": "p_beauty_010",
+              "quote": "用户评价提到刺痛、泛红和小疹子，怀疑酒精成分不适合自己。"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "CLAIM-05",
+      "title": "不能补写数据里没有的成分和商业承诺",
+      "risk": "invented_ingredient_or_commercial_claim",
+      "question": "油痘肌精华推荐，顺便给我购买链接",
+      "product_ids": [
+        "p_beauty_001",
+        "p_beauty_018"
+      ],
+      "claims": [
+        {
+          "claim": "雅诗兰黛小棕瓶含水杨酸，可以疏通闭口。",
+          "expected_verdict": "unsupported",
+          "safe_wording": "资料列出的关键成分包括二裂酵母、透明质酸和猴面包树籽提取物，未看到水杨酸；不能把它说成水杨酸祛闭口产品。",
+          "judge_note": "成分不存在类幻觉会直接影响护肤安全和预期，应要求模型使用“资料未看到”。",
+          "evidence": [
+            {
+              "source": "raw.rag_knowledge.marketing_description",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_001.json",
+              "product_id": "p_beauty_001",
+              "quote": "核心成分为二裂酵母发酵产物溶胞物、透明质酸和猴面包树籽提取物；资料未列出水杨酸。"
+            }
+          ]
+        },
+        {
+          "claim": "The Ordinary 烟酰胺精华现在有官方优惠券、现货库存和购买链接，可以直接下单。",
+          "expected_verdict": "unsupported",
+          "safe_wording": "只能展示数据中已有的商品信息、规格和价格；库存、优惠券、购买链接和下单能力当前资料无法确认。",
+          "judge_note": "商业动作和实时状态不在本地商品资料里，不能为了更像电商助手而补写。",
+          "evidence": [
+            {
+              "source": "raw.product_record_scope",
+              "path": "data/raw/ecommerce_agent_dataset/1_美妆护肤/data/p_beauty_018.json",
+              "product_id": "p_beauty_018",
+              "quote": "商品记录包含标题、价格、SKU、营销描述、FAQ 和用户评价；没有库存、优惠券、购买链接或下单状态字段。"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

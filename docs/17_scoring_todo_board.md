@@ -48,6 +48,7 @@
 | P0-3 | 加固真实生成层 guardrail / repair | 减少真实 Doubao 的资料外承诺和绝对安全说法 | 第一刀已完成：`unsupported_result_absence_claims` 拦截 `不会堵塞/不会长闭口/不会残留/不会过敏/绝对温和`；`GRD-L03` 真实 API PASS；AI review PASS；全量 groundedness mock 11/11 作为安全网 | `server/app/guardrails.py`、`server/app/llm.py` |
 | P0-4 | 真实 API 回归 + AI 复核 | 证明修复后不是只在单个真实 case 或 mock 里好看 | 已完成第一轮：`GRD-05/08/L01` 真实 API + AI review；`GRD-L01` 暴露的 150 元预算边界 bug 已修复并复验 PASS | `scripts/run_*`、`scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
 | P0-5 | AI review / 评测口径对齐 | 约束继承应进入内部 trace，不要求机械显示给用户 | 已完成：AI review prompt 明确内部 trace 不必用户可见；`GRD-L01` trace-aware review 复跑 PASS, score=5, risk=low | `scripts/review_benchmark_with_ai.py`、`docs/11_evaluation_report.md` |
+| P0-6 | Claim-level judge 样例 | 把高风险回答拆成逐条事实主张，展示每条如何回到数据源 | 已完成第一版：5 个高风险样例、8 条 claim、Markdown/JSONL 报告渲染脚本；定位为人工标注证据集，不做完整自动 judge | `data/eval/claim_audit_samples.json`、`scripts/render_claim_audit_report.py` |
 | P1-0 | 全品类薄支持 | 满足官方 50-100 条数据口径，同时避免全品类深度标注扩张 | 已完成：70 条 thin enriched + 100 条 Chroma index + 全品类 smoke 7/7 PASS；“早八提神不指定品类”已记录 failure case 并修复：不召回方便食品，且早八场景优先咖啡；golden/subcategory/apparel 回归 PASS | `scripts/build_thin_enriched_catalog.py`、`data/enriched/thin_products.jsonl`、`data/eval/all_category_queries.json`、`server/app/retrieval.py` |
 | P1-1 | Android 反馈按钮 | 把后端反馈闭环接到真实 demo 体验里 | 已完成：回答下方可点 `有用/不准确`，并写入 feedback JSONL | `client/android/...`、`server/app/feedback.py` |
 | P1-2 | Demo / 答辩材料收口 | 降低评委理解成本，确保能讲清架构链路和关键代码 | 第一版已完成：`docs/22_defense_cheatsheet.md` 收口项目介绍、架构链路、可靠性证据、关键代码入口和边界说明 | `docs/12_demo_script.md`、`docs/14_submission_package.md`、`docs/20_reproducibility_and_dependencies.md`、`docs/22_defense_cheatsheet.md` |
@@ -64,7 +65,7 @@
 当前下一步分两种情况：
 
 - 如果马上提交：做 **最终复验与提交前检查**，按 `docs/20_reproducibility_and_dependencies.md` 和 `docs/14_submission_package.md` 跑真实 API、Android、secret scan 和录屏安全检查。
-- 如果还有 5-7 天：P1-0 已完成；优先做真实 Android 端体验复验和最终复现检查。如果继续补技术深度，再选 1-2 条高风险 case 做 claim-level judge 样例。
+- 如果还有 5-7 天：P1-0 / P0-6 已完成；优先做真实 Android 端体验复验和最终复现检查。如果继续补技术深度，只做小范围真实 API 复验或失败样例沉淀，不继续扩完整 judge 系统。
 
 ### P0：提交材料收口
 
