@@ -620,6 +620,13 @@ def _comparison_indexes(message: str) -> list[int]:
         (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
     ]
     indexes = [index for pattern, index in markers if re.search(pattern, normalized)]
+    if _has_numbered_comparison_context(normalized):
+        bare_markers = [
+            (r"(?<!\d)[1一](?!\d)", 0),
+            (r"(?<!\d)[2二](?!\d)", 1),
+            (r"(?<!\d)[3三](?!\d)", 2),
+        ]
+        indexes.extend(index for pattern, index in bare_markers if re.search(pattern, normalized))
     if indexes and any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
         indexes.insert(0, 0)
     return list(dict.fromkeys(indexes))
@@ -650,9 +657,10 @@ def _references_first_two_products(message: str) -> bool:
 
 
 def _references_all_previous_products(message: str) -> bool:
-    if not any(term in message for term in ["对比", "比较", "怎么选", "哪个更", "哪款更", "区别"]):
+    normalized_message = re.sub(r"比较(合适|适合|舒服|稳妥|好|划算|便宜|贵|大|小)", "", message)
+    if not any(term in normalized_message for term in ["对比", "比较", "怎么选", "哪个更", "哪款更", "区别"]):
         return False
-    return any(term in message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])
+    return any(term in normalized_message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])
 
 
 def _append_planner_additions(rule_message: str, additions: list[str], current_message: str) -> str:
@@ -722,6 +730,10 @@ def _referenced_product_index(message: str) -> int | None:
         if marker in message:
             return index
     return None
+
+
+def _has_numbered_comparison_context(message: str) -> bool:
+    return any(term in message for term in ["比较", "对比", "1和", "1 和", "一和", "一 和", "和2", "和 2", "和二", "和 二"])
 
 
 def _budget_value_mentioned(value: float, message: str) -> bool:

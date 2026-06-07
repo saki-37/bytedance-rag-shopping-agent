@@ -431,6 +431,7 @@ def _extract_soft_preferences(query: str) -> list[str]:
 
 
 def _is_comparison_query(query: str) -> bool:
+    query = re.sub(r"比较(合适|适合|舒服|稳妥|好|划算|便宜|贵|大|小)", "", query)
     return any(term in query for term in COMPARISON_TERMS)
 
 
@@ -669,6 +670,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
 
     scored.sort(key=lambda pair: (pair[0], -_min_purchase_price(pair[1]["raw"])), reverse=True)
     selected_scored = _select_ranked_scored(scored, limit=limit, intent=intent)
+    selected_scored = _order_referenced_scored(selected_scored, intent)
     selected = [item for _, item, _ in selected_scored]
     final_hits = [
         RetrievalHit(product_id=item["raw"]["product_id"], score=round(score, 3), reasons=reasons)
@@ -1235,6 +1237,27 @@ def _select_ranked_scored(
         if len(selected) >= limit:
             break
     return selected[:limit]
+
+
+def _order_referenced_scored(
+    selected_scored: list[tuple[float, dict, list[str]]],
+    intent: QueryIntent,
+) -> list[tuple[float, dict, list[str]]]:
+    if not intent.referenced_product_ids:
+        return selected_scored
+
+    order = {
+        product_id: index
+        for index, product_id in enumerate(intent.referenced_product_ids)
+    }
+    indexed = list(enumerate(selected_scored))
+    indexed.sort(
+        key=lambda entry: (
+            order.get(str(entry[1][1]["raw"].get("product_id", "")), len(order)),
+            entry[0],
+        )
+    )
+    return [pair for _, pair in indexed]
 
 
 def _graph_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:

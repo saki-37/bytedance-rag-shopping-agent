@@ -1,8 +1,11 @@
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 
 from app.models import ChatRequest, QueryIntent
-from app.retrieval import category_exclusions, parse_query_intent
+from app.data_loader import load_raw_products
+from app.retrieval import FACET_LEXICON, category_exclusions, parse_query_intent
 
 
 CATEGORY_LABELS = {
@@ -83,6 +86,7 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
     ]
     current_message = request.message.strip()
     current_intent = parse_query_intent(current_message)
+    referenced_product_ids = _referenced_history_product_ids(current_message, request.history)
     if not previous_user_messages:
         return RetrievalMessageBuildResult(
             message=current_message,
@@ -94,7 +98,7 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
             },
         )
 
-    if not _is_follow_up(current_message, current_intent):
+    if not referenced_product_ids and not _is_follow_up(current_message, current_intent):
         return RetrievalMessageBuildResult(
             message=current_message,
             applied=False,
@@ -109,7 +113,6 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
     for message in previous_user_messages[-4:]:
         _merge_message(state, message, source="history")
     _merge_message(state, current_message, source="current")
-    referenced_product_ids = _referenced_history_product_ids(current_message, request.history)
     if referenced_product_ids:
         state.referenced_product_ids = referenced_product_ids
         state.actions.append(f"current:reference_products={','.join(referenced_product_ids)}")
@@ -481,22 +484,134 @@ def _append_unique(target: list[str], values: list[str]) -> None:
 
 
 def _referenced_history_product_ids(message: str, history: list) -> list[str]:
-    product_ids = _latest_history_product_ids(history)
-    if not product_ids:
+    active_product_ids = _latest_history_product_ids(history)
+    if not active_product_ids:
         return []
     if _references_first_two_products(message):
-        return product_ids[:2]
+        return active_product_ids[:2]
     indexes = _referenced_product_indexes(message)
     if indexes:
-        return [product_ids[index] for index in indexes if index < len(product_ids)]
+        return [active_product_ids[index] for index in indexes if index < len(active_product_ids)]
     if _references_all_previous_products(message):
-        return product_ids
+        return active_product_ids
+    mentioned_ids = _mentioned_history_product_ids(message, active_product_ids)
+    if mentioned_ids:
+        return mentioned_ids
+    recent_mentioned_ids = _mentioned_history_product_ids(message, _recent_history_product_ids(history))
+    if recent_mentioned_ids:
+        return recent_mentioned_ids
     index = _referenced_product_index(message)
     if index is None:
         return []
-    if index >= len(product_ids):
+    if index >= len(active_product_ids):
         return []
-    return [product_ids[index]]
+    return [active_product_ids[index]]
+
+
+def _mentioned_history_product_ids(message: str, product_ids: list[str]) -> list[str]:
+    normalized_message = _normalize_reference_text(message)
+    if not normalized_message:
+        return []
+    if _requests_more_or_alternative(normalized_message):
+        return []
+
+    products = _raw_products_by_id()
+    matched: list[str] = []
+    for product_id in product_ids:
+        raw = products.get(product_id)
+        if not raw:
+            continue
+        strong_aliases, context_aliases = _history_product_aliases(raw)
+        strong_match = any(alias and alias in normalized_message for alias in strong_aliases)
+        context_match = _has_product_reference_signal(message) and any(
+            alias and alias in normalized_message for alias in context_aliases
+        )
+        if strong_match or context_match:
+            matched.append(product_id)
+    return matched if len(matched) == 1 else []
+
+
+def _requests_more_or_alternative(normalized_message: str) -> bool:
+    return any(term in normalized_message for term in ["别的", "其他", "更多", "还有没有", "换一", "换个"])
+
+
+def _has_product_reference_signal(message: str) -> bool:
+    normalized = message.strip()
+    signals = [
+        "前面",
+        "之前",
+        "刚才",
+        "刚刚",
+        "上面",
+        "那个",
+        "那条",
+        "那件",
+        "那双",
+        "这条",
+        "这件",
+        "这双",
+        "这款",
+        "不错",
+        "喜欢",
+        "倾向",
+        "也可以买",
+        "也想",
+        "也看",
+        "呢",
+        "多大",
+        "多少码",
+        "尺码",
+        "合适",
+    ]
+    return any(signal in normalized for signal in signals)
+
+
+@lru_cache(maxsize=1)
+def _raw_products_by_id() -> dict[str, dict]:
+    data_root = Path(__file__).resolve().parents[2] / "data" / "raw"
+    raw_root = data_root / "ecommerce_agent_dataset"
+    if not raw_root.exists():
+        raw_root = data_root
+    if not raw_root.exists():
+        return {}
+    return load_raw_products(raw_root)
+
+
+def _history_product_aliases(raw: dict) -> tuple[list[str], list[str]]:
+    brand = str(raw.get("brand", "")).strip()
+    title = str(raw.get("title", "")).strip()
+    sub_category = str(raw.get("sub_category", "")).strip()
+    strong_aliases = {
+        _normalize_reference_text(brand),
+        _normalize_reference_text(title),
+    }
+    context_aliases = {_normalize_reference_text(sub_category)}
+    sub_category_aliases = FACET_LEXICON.get("sub_category", {}).get(sub_category, [])
+    context_aliases.update(_normalize_reference_text(alias) for alias in sub_category_aliases)
+    if brand == "阿迪达斯":
+        strong_aliases.add("adidas")
+    if brand == "安热沙":
+        strong_aliases.add("安耐晒")
+    if brand and title.startswith(brand):
+        short_title = title[len(brand) : len(brand) + 8]
+        strong_aliases.add(_normalize_reference_text(short_title))
+    for token in re.findall(r"[A-Za-z][A-Za-z0-9-]{2,}", title):
+        strong_aliases.add(_normalize_reference_text(token))
+    strong = [
+        alias
+        for alias in strong_aliases
+        if len(alias) >= 3 and alias not in {"运动", "服饰", "商品", "推荐", "合适"}
+    ]
+    context = [
+        alias
+        for alias in context_aliases
+        if len(alias) >= 2 and alias not in {"运动", "服饰", "商品", "推荐", "合适", "裤", "鞋", "衣"}
+    ]
+    return strong, context
+
+
+def _normalize_reference_text(value: str) -> str:
+    return re.sub(r"\s+", "", value).lower()
 
 
 def _latest_history_product_ids(history: list) -> list[str]:
@@ -507,6 +622,21 @@ def _latest_history_product_ids(history: list) -> list[str]:
         if product_ids:
             return product_ids
     return []
+
+
+def _recent_history_product_ids(history: list, max_assistant_turns: int = 6) -> list[str]:
+    product_ids: list[str] = []
+    assistant_turns = 0
+    for item in reversed(history):
+        if item.role != "assistant":
+            continue
+        assistant_turns += 1
+        for product_id in item.product_ids:
+            if product_id and product_id not in product_ids:
+                product_ids.append(product_id)
+        if assistant_turns >= max_assistant_turns:
+            break
+    return product_ids
 
 
 def _referenced_product_index(message: str) -> int | None:
@@ -532,9 +662,20 @@ def _referenced_product_indexes(message: str) -> list[int]:
         (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
     ]
     indexes = [index for pattern, index in markers if re.search(pattern, normalized)]
+    if _has_numbered_comparison_context(normalized):
+        bare_markers = [
+            (r"(?<!\d)[1一](?!\d)", 0),
+            (r"(?<!\d)[2二](?!\d)", 1),
+            (r"(?<!\d)[3三](?!\d)", 2),
+        ]
+        indexes.extend(index for pattern, index in bare_markers if re.search(pattern, normalized))
     if indexes and any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
         indexes.insert(0, 0)
     return list(dict.fromkeys(indexes))
+
+
+def _has_numbered_comparison_context(message: str) -> bool:
+    return any(term in message for term in ["比较", "对比", "1和", "1 和", "一和", "一 和", "和2", "和 2", "和二", "和 二"])
 
 
 def _references_first_two_products(message: str) -> bool:
@@ -542,6 +683,7 @@ def _references_first_two_products(message: str) -> bool:
 
 
 def _references_all_previous_products(message: str) -> bool:
-    if not any(term in message for term in ["对比", "比较", "怎么选", "哪个更", "哪款更", "区别"]):
+    normalized_message = re.sub(r"比较(合适|适合|舒服|稳妥|好|划算|便宜|贵|大|小)", "", message)
+    if not any(term in normalized_message for term in ["对比", "比较", "怎么选", "哪个更", "哪款更", "区别"]):
         return False
-    return any(term in message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])
+    return any(term in normalized_message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])

@@ -258,6 +258,7 @@ def _build_answer_directive(
 
 
 def _is_comparison_request(message: str, retrieval_trace: dict) -> bool:
+    normalized_message = re.sub(r"比较(合适|适合|舒服|稳妥|好|划算|便宜|贵|大|小)", "", message)
     planner_plan = (
         retrieval_trace.get("planner_trace", {})
         .get("validated_plan", {})
@@ -268,7 +269,7 @@ def _is_comparison_request(message: str, retrieval_trace: dict) -> bool:
     constraint_trace = retrieval_trace.get("constraint_trace", {})
     if constraint_trace.get("effective", {}).get("comparison_mode"):
         return True
-    return any(term in message for term in ["对比", "比较", "怎么选", "选哪个", "哪个更", "哪款更", "更适合", "二选一", "区别"])
+    return any(term in normalized_message for term in ["对比", "比较", "怎么选", "选哪个", "哪个更", "哪款更", "更适合", "二选一", "区别"])
 
 
 def _comparison_target_product_ids(
@@ -328,9 +329,20 @@ def _comparison_indexes(message: str) -> list[int]:
         (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
     ]
     indexes = [index for pattern, index in markers if re.search(pattern, message)]
+    if _has_numbered_comparison_context(message):
+        bare_markers = [
+            (r"(?<!\d)[1一](?!\d)", 0),
+            (r"(?<!\d)[2二](?!\d)", 1),
+            (r"(?<!\d)[3三](?!\d)", 2),
+        ]
+        indexes.extend(index for pattern, index in bare_markers if re.search(pattern, message))
     if indexes and any(term in message for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
         indexes.insert(0, 0)
     return list(dict.fromkeys(indexes))
+
+
+def _has_numbered_comparison_context(message: str) -> bool:
+    return any(term in message for term in ["比较", "对比", "1和", "1 和", "一和", "一 和", "和2", "和 2", "和二", "和 二"])
 
 
 def _comparison_focus_dimensions(message: str, retrieval_trace: dict) -> list[str]:

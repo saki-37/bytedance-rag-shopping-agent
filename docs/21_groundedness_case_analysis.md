@@ -33,6 +33,50 @@
 - 后续 runner 需要形成两层判定：第一层是确定性结构检查，第二层是语义/证据核验。
 - 所有 benchmark 在机器初筛结束后，都应再通过 `scripts/review_benchmark_with_ai.py` 做一次 AI-assisted semantic review，用于识别 false fail、false pass、资料外承诺和需要人工复核的边界项。
 
+## 2026-06-07 Android 真实体验反馈：品牌 follow-up 被扩成全库品牌检索
+
+Trace：`f32e19af-1947-450f-986c-e697ad634311`
+
+用户路径：
+
+1. 系统先推荐运动类非化妆品：优衣库运动短裤、阿迪达斯运动长裤、李宁卫衣。
+2. 用户要求“比较一下 1 和 2”，系统对比优衣库短裤和阿迪达斯长裤。
+3. 用户继续说：“我觉得阿迪达斯的不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？”
+
+错误表现：
+
+- 期望：沿用上一轮对比里的阿迪达斯长裤 `p_clothes_004`，回答尺码建议。
+- 实际：检索阶段把“阿迪达斯”扩成全库品牌匹配，候选变成 `p_clothes_004` 运动长裤、`p_clothes_022` 阿迪达斯卫衣、`p_clothes_008` 阿迪达斯跑鞋。
+- 同时，“穿多大的比较合适”里的“比较”被误判成商品对比意图，导致回答重新进入对比表模式。
+
+根因：
+
+- `referenced_product_ids` 没有优先解析“上一轮可见商品中的品牌/商品名指代”。
+- `_apply_catalog_product_references` 在没有明确历史指代时，会把品牌词作为全库 hard reference 扩展。
+- `comparison_mode` 的触发词过宽，把“比较合适”当成“比较商品”。
+
+修复策略：
+
+- 在 conversation rule 层增加基于上一轮商品 metadata 的品牌/商品名 follow-up 解析：如果当前文本提到的品牌或商品别名只命中上一轮可见商品中的唯一一个，则直接写入 `指代商品ID`。
+- 收紧 comparison trigger：排除“比较合适 / 比较适合 / 比较舒服 / 比较大 / 比较小”等程度副词用法。
+- 回归测试加入 `check_history_brand_followup_parser`：该路径必须解析为 `p_clothes_004`，不能带出卫衣或跑鞋，且 `comparison_mode=False`。
+
+后续补强：
+
+- 用户也会用商品类型做跨轮指代，例如“长裤不错”“前面的短裤呢”。这类表达不一定包含品牌，但仍应先从对话商品上下文中解析，而不是直接退回全库子类检索。
+- 第一版实现维护两个临时层级：`active_product_ids` 使用最近一条 assistant 商品卡，`recent_product_pool` 使用最近 6 条 assistant 商品卡去重。
+- 解析顺序：编号指代只看 active set；品牌/标题强匹配优先 active set，再看 recent pool；短裤/长裤/卫衣/鞋子等类型词必须带有“前面/刚才/那条/不错/尺码/多少码”等上下文信号，才允许在 recent pool 中唯一绑定。
+- 如果 recent pool 中唯一命中，则写入 `指代商品ID`；如果命中多个，则暂不绑定，避免把旧商品误当当前意图。
+- 回归测试加入 `check_recent_product_type_followup_parser`：`长裤不错` 应绑定 `p_clothes_004`；隔一轮后的 `前面的短裤呢` 应绑定 `p_clothes_023`。
+
+追加反馈：
+
+- 用户在最新 Android trace 中说“可以帮我比较一下1和2吗？”，上一轮可见商品顺序是 `p_clothes_023`、`p_clothes_004`、`p_clothes_005`，但系统实际比较了 `p_clothes_023` 和 `p_clothes_005`，并把 3 个商品卡都带到了后续展示。
+- 根因是规则层只识别“第1款 / 1款 / 第一款”，没有识别比较语境里的裸数字“1和2 / 1 和 2 / 一和二”。当 Planner 返回空 plan 时，`referenced_product_ids` 为空，检索就退回普通排序，导致第 3 个商品混入。
+- 同时，显式指代商品即使被正确筛出，检索阶段仍会按内部 score 重排，可能导致回答和卡片顺序不再等于用户看到的 1、2、3 顺序。
+- 修复策略：在 comparison 语境下解析裸数字 pair；显式 `referenced_product_ids` 存在时，最终商品卡和 `final_ranking` 按引用顺序输出，非引用候选只作为尾部补充。
+- 回归测试加入 `check_numeric_comparison_pair_parser`：`1和2 / 1 和 2 / 一和二` 必须绑定 `p_clothes_023` 和 `p_clothes_004`，不得带出 `p_clothes_005`，且最终卡片顺序必须保持为 1、2。
+
 ## 总览
 
 | Case | 难度 | 目标能力 | 真实 API 三轮 | 主要结论 | 优先级 |

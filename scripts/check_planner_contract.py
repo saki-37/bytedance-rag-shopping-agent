@@ -13,14 +13,19 @@ sys.path.insert(0, str(ROOT / "server"))
 
 from app.config import Settings  # noqa: E402
 from app.conversation_state import build_retrieval_message  # noqa: E402
+from app.data_loader import load_enriched_products, load_raw_products  # noqa: E402
 from app.models import ChatMessage, ChatRequest  # noqa: E402
 from app.planner import RetrievalPlan, _append_planner_additions, _validate_plan, build_planned_retrieval_message  # noqa: E402
-from app.retrieval import parse_query_intent  # noqa: E402
+from app.retrieval import parse_query_intent, retrieve  # noqa: E402
 
 
 def main() -> None:
     check_budget_parser()
+    check_comparison_phrase_parser()
     check_category_switch_parser()
+    check_numeric_comparison_pair_parser()
+    check_history_brand_followup_parser()
+    check_recent_product_type_followup_parser()
     check_planner_category_patch()
     check_planner_validator()
     asyncio.run(check_planner_fallback())
@@ -38,6 +43,13 @@ def check_budget_parser() -> None:
     for query, expected in cases.items():
         actual = parse_query_intent(query).universal_constraints.budget_max
         assert actual == expected, (query, actual, expected)
+
+
+def check_comparison_phrase_parser() -> None:
+    assert not parse_query_intent("穿多大的比较合适？").comparison_mode
+    assert not parse_query_intent("这个尺码会不会比较大？").comparison_mode
+    assert parse_query_intent("可以帮我比较一下1和2吗？").comparison_mode
+    assert parse_query_intent("这两款有什么区别？").comparison_mode
 
 
 def check_category_switch_parser() -> None:
@@ -64,6 +76,126 @@ def check_category_switch_parser() -> None:
     assert "- 肤质：" not in rule_build.message, rule_build.message
     merged_intent = parse_query_intent(rule_build.message)
     assert merged_intent.category_candidates == ["apparel"], merged_intent.category_candidates
+
+
+def check_numeric_comparison_pair_parser() -> None:
+    settings = Settings(mock_llm=True)
+    products = load_enriched_products(settings.enriched_data_dir, load_raw_products(settings.raw_data_dir))
+    history = [
+        ChatMessage(role="user", content="有没有什么运动类的非化妆品推荐？"),
+        ChatMessage(
+            role="assistant",
+            content=(
+                "给你推荐3款符合你需求的500元以内运动类非化妆品好物：\n"
+                "1. 优衣库 男装 DRY 速干运动短裤。\n"
+                "2. adidas Essentials 三条纹 男子针织运动长裤。\n"
+                "3. 李宁 运动生活系列 男子连帽套头卫衣。"
+            ),
+            product_ids=["p_clothes_023", "p_clothes_004", "p_clothes_005"],
+        )
+    ]
+    for message in ["可以帮我比较一下1和2吗？", "可以帮我比较一下1 和 2吗？", "可以帮我比较一下一和二吗？"]:
+        request = ChatRequest(message=message, history=history)
+        rule_build = build_retrieval_message(request)
+        intent = parse_query_intent(rule_build.message)
+        assert intent.referenced_product_ids == ["p_clothes_023", "p_clothes_004"], (message, rule_build.message)
+        assert "p_clothes_005" not in intent.referenced_product_ids, (message, intent.referenced_product_ids)
+        assert intent.comparison_mode
+        result = retrieve(rule_build.message, products)
+        assert [card.product_id for card in result.cards] == ["p_clothes_023", "p_clothes_004"], (
+            message,
+            [card.product_id for card in result.cards],
+        )
+
+
+def check_history_brand_followup_parser() -> None:
+    request = ChatRequest(
+        message="好的，我觉得阿迪达斯的不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？",
+        history=[
+            ChatMessage(
+                role="assistant",
+                content=(
+                    "给你推荐3款500元以内的运动类非化妆品好物：\n"
+                    "1. 优衣库 男装 DRY 速干运动短裤。\n"
+                    "2. adidas Essentials 三条纹 男子针织运动长裤。\n"
+                    "3. 李宁 运动生活系列 男子连帽套头卫衣。"
+                ),
+                product_ids=["p_clothes_023", "p_clothes_004", "p_clothes_005"],
+            ),
+            ChatMessage(role="user", content="可以帮我比较一下1和2吗？"),
+            ChatMessage(
+                role="assistant",
+                content=(
+                    "| 商品名称 | 价格 | 选择建议 |\n"
+                    "| --- | --- | --- |\n"
+                    "| 优衣库 男装 DRY 速干运动短裤 | ¥149起 | 适合夏季短时间运动 |\n"
+                    "| adidas Essentials 三条纹 男子针织运动长裤 | ¥299起 | 适合通勤和春秋运动 |"
+                ),
+                product_ids=["p_clothes_023", "p_clothes_004"],
+            ),
+        ],
+    )
+    rule_build = build_retrieval_message(request)
+    assert "p_clothes_004" in rule_build.message, rule_build.message
+    assert "p_clothes_022" not in rule_build.message, rule_build.message
+    intent = parse_query_intent(rule_build.message)
+    assert intent.referenced_product_ids == ["p_clothes_004"], intent.referenced_product_ids
+    assert not intent.comparison_mode
+
+
+def check_recent_product_type_followup_parser() -> None:
+    history = [
+        ChatMessage(
+            role="assistant",
+            content=(
+                "给你推荐3款500元以内的运动类非化妆品好物：\n"
+                "1. 优衣库 男装 DRY 速干运动短裤。\n"
+                "2. adidas Essentials 三条纹 男子针织运动长裤。\n"
+                "3. 李宁 运动生活系列 男子连帽套头卫衣。"
+            ),
+            product_ids=["p_clothes_023", "p_clothes_004", "p_clothes_005"],
+        ),
+        ChatMessage(role="user", content="可以帮我比较一下1和2吗？"),
+        ChatMessage(
+            role="assistant",
+            content=(
+                "| 商品名称 | 价格 | 选择建议 |\n"
+                "| --- | --- | --- |\n"
+                "| 优衣库 男装 DRY 速干运动短裤 | ¥149起 | 适合夏季短时间运动 |\n"
+                "| adidas Essentials 三条纹 男子针织运动长裤 | ¥299起 | 适合通勤和春秋运动 |"
+            ),
+            product_ids=["p_clothes_023", "p_clothes_004"],
+        ),
+    ]
+
+    long_pants_request = ChatRequest(
+        message="好的，我觉得长裤不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？",
+        history=history,
+    )
+    long_build = build_retrieval_message(long_pants_request)
+    long_intent = parse_query_intent(long_build.message)
+    assert long_intent.referenced_product_ids == ["p_clothes_004"], long_build.message
+    assert not long_intent.comparison_mode
+
+    shorts_request = ChatRequest(
+        message="那前面的短裤呢？我觉得也可以买一条，大概多少码合适？",
+        history=[
+            *history,
+            ChatMessage(
+                role="user",
+                content="好的，我觉得阿迪达斯的不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？",
+            ),
+            ChatMessage(
+                role="assistant",
+                content="这款adidas Essentials 三条纹运动长裤，建议选L码。",
+                product_ids=["p_clothes_004"],
+            ),
+        ],
+    )
+    shorts_build = build_retrieval_message(shorts_request)
+    shorts_intent = parse_query_intent(shorts_build.message)
+    assert shorts_intent.referenced_product_ids == ["p_clothes_023"], shorts_build.message
+    assert not shorts_intent.comparison_mode
 
 
 def check_planner_category_patch() -> None:
