@@ -1237,34 +1237,41 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
             .background(Ink, RoundedCornerShape(24.dp))
             .padding(4.dp),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(
-                        if (useScrollableVariantTabs) {
-                            Modifier.horizontalScroll(variantTabScrollState)
-                        } else {
-                            Modifier
-                        },
-                    ),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.Bottom,
+                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)),
             ) {
-                variants.forEach { variant ->
-                    VariantCardTab(
-                        variant = variant,
-                        selected = variant.variantId == selectedVariant.variantId,
-                        modifier = if (useScrollableVariantTabs) {
-                            Modifier.widthIn(min = ScrollableVariantTabMinWidth)
-                        } else {
-                            Modifier.weight(1f)
-                        },
-                        onClick = { selectedVariantId = variant.variantId },
-                    )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (useScrollableVariantTabs) {
+                                Modifier.horizontalScroll(variantTabScrollState)
+                            } else {
+                                Modifier
+                            },
+                        ),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    variants.forEach { variant ->
+                        VariantCardTab(
+                            variant = variant,
+                            selected = variant.variantId == selectedVariant.variantId,
+                            modifier = if (useScrollableVariantTabs) {
+                                Modifier.widthIn(min = ScrollableVariantTabMinWidth)
+                            } else {
+                                Modifier.weight(1f)
+                            },
+                            onClick = { selectedVariantId = variant.variantId },
+                        )
+                    }
                 }
             }
             Card(
