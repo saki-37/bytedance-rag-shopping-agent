@@ -39,7 +39,7 @@ async def stream_answer(
     guardrail_user_context = _compose_guardrail_user_context(user_message, history)
     if settings.mock_llm or not settings.ark_api_key or not settings.ark_model:
         logger.info("Streaming mock LLM response")
-        async for token in _stream_text(_mock_answer(guardrail_user_context, cards, answer_directive)):
+        async for token in _stream_text(_mock_answer(user_message, cards, answer_directive)):
             yield token
         return
 
@@ -199,7 +199,7 @@ def _mock_answer(
     answer_directive: AnswerDirective | None = None,
 ) -> str:
     if answer_directive and answer_directive.mode == "compare" and len(cards) >= 2:
-        return _mock_comparison_table(cards, answer_directive)
+        return _mock_comparison_table(cards, answer_directive, user_message)
     if "护肤品" in user_message and not any(word in user_message for word in ["油皮", "干皮", "敏感", "预算", "防晒", "修护"]):
         return "我可以先帮你缩小范围：你更在意肤质适配、预算，还是防晒/修护/控油这类具体功效？"
     return build_safe_answer(cards, user_message=user_message)
@@ -247,7 +247,7 @@ def _format_answer_directive(answer_directive: AnswerDirective | None) -> str:
     )
 
 
-def _mock_comparison_table(cards: list[ProductCard], answer_directive: AnswerDirective) -> str:
+def _mock_comparison_table(cards: list[ProductCard], answer_directive: AnswerDirective, user_message: str) -> str:
     target_order = {product_id: index for index, product_id in enumerate(answer_directive.target_product_ids)}
     ordered_cards = sorted(cards, key=lambda card: target_order.get(card.product_id, len(target_order)))[:3]
     rows = [
@@ -269,7 +269,35 @@ def _mock_comparison_table(cards: list[ProductCard], answer_directive: AnswerDir
         advice = f"保守选择：如果你更想稳妥，可以优先看 {first.brand}，但仍建议结合肤质和补涂场景确认。"
     else:
         advice = "保守选择：当前资料不足以给出明确排序，建议先确认对比商品。"
-    return "\n".join(["### 商品对比", *rows, "", advice])
+    boundary_notes = _mock_comparison_boundary_notes(cards, user_message)
+    return "\n".join(["### 商品对比", *rows, "", advice, *boundary_notes])
+
+
+def _mock_comparison_boundary_notes(cards: list[ProductCard], user_message: str) -> list[str]:
+    evidence = " ".join(
+        " ".join(
+            [
+                card.title,
+                card.brand,
+                card.reason,
+                card.description,
+                " ".join(card.tags),
+                " ".join(card.target_users),
+                " ".join(card.use_cases),
+                " ".join(card.selling_points),
+                " ".join(card.cautions),
+                " ".join(card.suitable_for),
+                " ".join(card.avoid_for),
+            ]
+        )
+        for card in cards
+    )
+    notes: list[str] = []
+    if any(term in user_message for term in ["发酵", "不耐受", "过敏"]) and "发酵" in evidence:
+        notes.append("风险边界：资料涉及发酵相关成分；如果你对发酵类成分不耐受，不建议直接上脸，先做局部测试。")
+    if any(term in user_message for term in ["孕妇", "孕期", "怀孕", "不过敏", "保证"]):
+        notes.append("安全边界：当前资料不能确认孕期适用性，也不能保证不过敏。")
+    return notes
 
 
 def _card_price_label(card: ProductCard) -> str:

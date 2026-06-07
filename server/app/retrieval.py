@@ -128,6 +128,11 @@ BEAUTY_TERMS = [
 ]
 APPAREL_TERMS = [
     "服饰",
+    "运动类",
+    "运动用品",
+    "健身",
+    "训练",
+    "瑜伽",
     "衣服",
     "短袖",
     "t恤",
@@ -202,10 +207,20 @@ CATEGORY_TO_RAW = {
     "digital": "数码电子",
     "food": "食品饮料",
 }
+RAW_TO_CATEGORY = {raw: category for category, raw in CATEGORY_TO_RAW.items()}
+CATEGORY_NEGATION_PATTERNS = {
+    "beauty": [
+        r"(?:非|不是|不要|不看|别看|排除|避开|先不看|不想要|不太想要|不考虑).{0,6}(?:美妆|护肤|护肤品|化妆品)",
+        r"(?:美妆|护肤|护肤品|化妆品).{0,10}(?:不要|不看|排除|避开|除外|以外|之外|不想要|不太想要|不考虑|不太行)",
+    ],
+}
 ENERGY_PURPOSE_TERMS = ["提神", "醒脑", "清醒", "犯困", "困了", "很困", "犯迷糊"]
 ENERGY_SUB_CATEGORIES = ["咖啡", "茶饮", "功能饮料"]
 EARLY_ENERGY_CONTEXT_TERMS = ["早八", "早课", "早上", "上午", "上课", "上班", "通勤", "工位", "办公室"]
 STRONG_ENERGY_CONTEXT_TERMS = ["熬夜", "通宵", "长途", "开车", "运动", "健身", "训练", "快速补能", "能量饮料", "功能饮料"]
+CASUAL_RUNNING_CONTEXT_TERMS = ["偶尔慢跑", "慢跑", "走路", "近郊", "压马路", "日常跑", "入门跑"]
+LIGHT_HIKING_CONTEXT_TERMS = ["徒步", "近郊", "郊野", "周末", "走路", "登山", "户外"]
+PERFORMANCE_RUNNING_TERMS = ["竞速", "碳板", "马拉松", "全马", "破3", "进阶跑者", "冲速度"]
 FOOD_SUB_CATEGORIES = {
     "咖啡",
     "茶饮",
@@ -285,7 +300,15 @@ def parse_query_intent(query: str) -> QueryIntent:
     exclude_terms = [] if _relaxes_exclusions(query) else _extract_exclude_terms(query)
     soft_preferences = _extract_soft_preferences(query)
     comparison_mode = _is_comparison_query(query)
-    category_candidates = _extract_category_candidates(query, facets, exclude_terms)
+    structured_categories = _structured_category_candidates(query)
+    excluded_categories = set(category_exclusions(query))
+    if structured_categories is None:
+        category_candidates = _extract_category_candidates(query, facets, exclude_terms)
+    else:
+        category_candidates = [
+            category for category in structured_categories
+            if category not in excluded_categories
+        ]
     hard_constraints: list[str] = []
     if budget is not None:
         hard_constraints.append(f"budget_max <= {budget:g}")
@@ -417,15 +440,40 @@ def _extract_category_candidates(
     exclude_terms: list[str],
 ) -> list[str]:
     candidates: list[str] = []
-    if _looks_like_beauty_query(query, facets) or exclude_terms:
+    excluded_categories = set(category_exclusions(query))
+    if "beauty" not in excluded_categories and (_looks_like_beauty_query(query, facets) or exclude_terms):
         candidates.append("beauty")
-    if _looks_like_apparel_query(query):
+    if "apparel" not in excluded_categories and _looks_like_apparel_query(query):
         candidates.append("apparel")
-    if _looks_like_digital_query(query):
+    if "digital" not in excluded_categories and _looks_like_digital_query(query):
         candidates.append("digital")
-    if _looks_like_food_query(query):
+    if "food" not in excluded_categories and _looks_like_food_query(query):
         candidates.append("food")
     return candidates
+
+
+def _structured_category_candidates(query: str) -> list[str] | None:
+    matches = re.findall(r"(?m)^-\s*类目：([^\n]+)$", query)
+    if not matches:
+        return None
+    categories: list[str] = []
+    for raw_value in re.split(r"[、,，\s]+", matches[-1]):
+        value = raw_value.strip()
+        if not value:
+            continue
+        if value in CATEGORY_TO_RAW:
+            categories.append(value)
+        elif value in RAW_TO_CATEGORY:
+            categories.append(RAW_TO_CATEGORY[value])
+    return list(dict.fromkeys(categories))
+
+
+def category_exclusions(query: str) -> list[str]:
+    excluded: list[str] = []
+    for category, patterns in CATEGORY_NEGATION_PATTERNS.items():
+        if any(re.search(pattern, query) for pattern in patterns):
+            excluded.append(category)
+    return excluded
 
 
 def _looks_like_beauty_query(query: str, facets: dict[str, list[str]]) -> bool:
@@ -541,6 +589,12 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
                 FilteredProduct(product_id=raw["product_id"], reason=f"missing required effect: {missing_effect}")
             )
             continue
+        missing_skin_type = _missing_required_skin_type(intent, item)
+        if not is_referenced_product and missing_skin_type is not None:
+            hard_filtered_out.append(
+                FilteredProduct(product_id=raw["product_id"], reason=f"missing required skin_type: {missing_skin_type}")
+            )
+            continue
         text = product_search_text(item).lower()
         score = 0.0
         reasons: list[str] = []
@@ -614,10 +668,11 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         )
 
     scored.sort(key=lambda pair: (pair[0], -_min_purchase_price(pair[1]["raw"])), reverse=True)
-    selected = [item for _, item, _ in scored[:limit]]
+    selected_scored = _select_ranked_scored(scored, limit=limit, intent=intent)
+    selected = [item for _, item, _ in selected_scored]
     final_hits = [
         RetrievalHit(product_id=item["raw"]["product_id"], score=round(score, 3), reasons=reasons)
-        for score, item, reasons in scored[:limit]
+        for score, item, reasons in selected_scored
     ]
 
     cards = [_to_card(item, query, budget=budget) for item in selected]
@@ -898,6 +953,63 @@ def _missing_required_effect(intent: QueryIntent, item: dict) -> str | None:
     return ",".join(required_effects)
 
 
+def _missing_required_skin_type(intent: QueryIntent, item: dict) -> str | None:
+    required_skin_types = intent.facets.get("skin_type", [])
+    if not required_skin_types or intent.comparison_mode or intent.referenced_product_ids:
+        return None
+    if item["raw"].get("category") != "美妆护肤":
+        return None
+    if any(_has_positive_skin_type_evidence(skin_type, item) for skin_type in required_skin_types):
+        return None
+    return ",".join(required_skin_types)
+
+
+def _has_positive_skin_type_evidence(skin_type: str, item: dict) -> bool:
+    aliases = _skin_type_aliases(skin_type)
+    structured_text = _positive_structured_text(item)
+    if any(alias in structured_text for alias in aliases):
+        return True
+
+    official_text = _official_positive_text(item)
+    positive_words = "适合|适用|友好|可用|推荐|选择|专为|福音"
+    for alias in aliases:
+        if re.search(rf"({positive_words})[^。；，,.]{{0,18}}{re.escape(alias)}", official_text):
+            return True
+        if re.search(rf"{re.escape(alias)}[^。；，,.]{{0,18}}({positive_words})", official_text):
+            return True
+    return False
+
+
+def _skin_type_aliases(skin_type: str) -> list[str]:
+    alias_map = {
+        "敏感肌": ["敏感肌", "易敏肌"],
+        "油皮": ["油皮"],
+        "混油皮": ["混油皮", "混合皮", "混合偏油"],
+        "干皮": ["干皮", "干性肌"],
+    }
+    return alias_map.get(skin_type, [skin_type])
+
+
+def _positive_structured_text(item: dict) -> str:
+    attrs = item.get("attributes", {})
+    beauty = item.get("beauty_attributes", {})
+    values: list[str] = []
+    for field_name in ["tags", "target_users", "suitable_for"]:
+        values.extend(_string_list(attrs.get(field_name, [])))
+    values.extend(_string_list(beauty.get("skin_types", [])))
+    return " ".join(values)
+
+
+def _official_positive_text(item: dict) -> str:
+    raw = item["raw"]
+    knowledge = raw.get("rag_knowledge", {})
+    parts = [str(knowledge.get("marketing_description", ""))]
+    for faq in knowledge.get("official_faq", []):
+        if isinstance(faq, dict):
+            parts.append(str(faq.get("answer", "")))
+    return " ".join(parts)
+
+
 def _matches_specific_effect(effect: str, item: dict) -> bool:
     raw = item["raw"]
     sub_category = str(raw.get("sub_category", ""))
@@ -1014,6 +1126,10 @@ def _facet_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:
 
 
 def _purpose_priority_score(intent: QueryIntent, item: dict, query: str) -> tuple[float, list[str]]:
+    apparel_score = _apparel_purpose_priority_score(intent, item, query)
+    if apparel_score[0]:
+        return apparel_score
+
     has_energy_intent = "提神" in intent.facets.get("use_case", []) or any(
         term in query for term in ENERGY_PURPOSE_TERMS
     )
@@ -1038,6 +1154,87 @@ def _purpose_priority_score(intent: QueryIntent, item: dict, query: str) -> tupl
     if score == 0.0:
         return 0.0, []
     return score, [f"purpose_priority:{context}:{raw_sub_category}:{score:g}"]
+
+
+def _apparel_purpose_priority_score(intent: QueryIntent, item: dict, query: str) -> tuple[float, list[str]]:
+    raw = item["raw"]
+    raw_sub_category = str(raw.get("sub_category", ""))
+    raw_category = str(raw.get("category", ""))
+    if raw_category != "服饰运动" and "apparel" not in intent.category_candidates:
+        return 0.0, []
+
+    text = product_search_text(item)
+    score = 0.0
+    reasons: list[str] = []
+
+    if raw_sub_category == "跑步鞋" and any(term in query for term in CASUAL_RUNNING_CONTEXT_TERMS):
+        if any(term in text for term in ["入门跑者", "日常慢跑", "3-10公里", "小区夜跑"]):
+            score += 10.0
+            reasons.append("purpose_priority:casual_running:daily_training")
+        elif any(term in text for term in ["慢跑爱好者", "日常通勤", "通勤", "压街"]):
+            score += 2.5
+            reasons.append("purpose_priority:casual_running:general")
+        if any(term in text for term in PERFORMANCE_RUNNING_TERMS):
+            score -= 6.0
+            reasons.append("purpose_penalty:casual_running:performance_shoe")
+
+    if raw_sub_category == "徒步鞋" and any(term in query for term in LIGHT_HIKING_CONTEXT_TERMS):
+        if any(term in text for term in ["近郊", "单日10-20公里", "轻装徒步", "郊野绿道", "城市雨天步行"]):
+            score += 8.0
+            reasons.append("purpose_priority:light_hiking:single_day")
+        elif any(term in text for term in ["徒步", "登山", "户外"]):
+            score += 2.0
+            reasons.append("purpose_priority:light_hiking:general")
+        if "硬核户外" in text:
+            score -= 2.0
+            reasons.append("purpose_penalty:light_hiking:hardcore")
+
+    if not score:
+        return 0.0, []
+    return score, reasons
+
+
+def _select_ranked_scored(
+    scored: list[tuple[float, dict, list[str]]],
+    *,
+    limit: int,
+    intent: QueryIntent,
+) -> list[tuple[float, dict, list[str]]]:
+    if not intent.comparison_mode or intent.referenced_product_ids:
+        return scored[:limit]
+
+    required_sub_categories = list(dict.fromkeys(intent.facets.get("sub_category", [])))
+    if len(required_sub_categories) < 2:
+        return scored[:limit]
+
+    selected: list[tuple[float, dict, list[str]]] = []
+    selected_ids: set[str] = set()
+    for sub_category in required_sub_categories:
+        match = next(
+            (
+                entry
+                for entry in scored
+                if entry[1]["raw"].get("sub_category") == sub_category
+                and entry[1]["raw"].get("product_id") not in selected_ids
+            ),
+            None,
+        )
+        if match is None:
+            continue
+        selected.append(match)
+        selected_ids.add(str(match[1]["raw"].get("product_id")))
+        if len(selected) >= limit:
+            return selected[:limit]
+
+    for entry in scored:
+        product_id = str(entry[1]["raw"].get("product_id"))
+        if product_id in selected_ids:
+            continue
+        selected.append(entry)
+        selected_ids.add(product_id)
+        if len(selected) >= limit:
+            break
+    return selected[:limit]
 
 
 def _graph_score(intent: QueryIntent, item: dict) -> tuple[float, list[str]]:

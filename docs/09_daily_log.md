@@ -83,3 +83,14 @@
 - 更新 `docs/11_evaluation_report.md`、`docs/17_scoring_todo_board.md` 和 `docs/18_official_scoring_checklist.md`，把下一步主线收敛为“先修真实生成层稳定性”，而不是继续扩 benchmark 数量。
 - 调整测试默认口径：代码和 `.env.example` 默认 `MOCK_LLM=false`；后续生成质量评测默认按真实 API generation 理解，mock / retrieval-only 只作为显式离线或结构检查。
 - 新增 `docs/21_groundedness_case_analysis.md`，逐条分析 11 个 groundedness case 的真实 API 三轮表现，区分稳定通过、硬字符串误判、真实边界表达缺失和资料外承诺风险。
+
+## 2026-06-07
+
+- 完成当前主线收口回归，重点处理多轮状态、对比排序、SKU 回答和 groundedness mock 边界。
+- 修复上一轮“对比/怎么选”意图污染下一轮普通约束补充的问题：`comparison_mode` 改为只按当前轮生效；预算、肤质、场景和排除条件仍按多轮状态继承。
+- 普通美妆推荐新增肤质正向证据过滤：用户明确说油皮/敏感肌等肤质时，候选商品需要来自结构化字段或官方资料的正向适配证据，避免只因便宜 SKU、通勤词或用户评论噪声混入。
+- 跑步鞋/徒步鞋对比增加用途优先级和子类覆盖选择：近郊走路、偶尔慢跑优先日常慢跑鞋与轻装徒步鞋，同时保留比较场景下的多子类结果。
+- SKU 同系列 safe answer 补充“资料中可支持的匹配点”，规格/价格之外会显式展示油皮、通勤、SPF 等本轮证据。
+- mock 对比回答补充发酵不耐受、孕期/不过敏等安全边界；mock 生成改为使用当前轮 user message，避免历史消息污染当前轮。
+- 回归结果：Python compile PASS；conversation 7/7 PASS；comparison 3/3 PASS；groundedness mock full generation 11/11 PASS；generation guardrails PASS；planner contract PASS；feedback loop PASS；Android `compileDebugKotlin` PASS；`git diff --check` PASS。
+- 文档更新：`docs/06_progress_tracker.md`、`docs/11_evaluation_report.md`、`docs/09_daily_log.md`、`docs/00_index.md` 已同步 2026-06-07 主线收口状态，并明确真实 API groundedness 仍需单独复验。

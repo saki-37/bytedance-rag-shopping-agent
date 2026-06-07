@@ -1,7 +1,7 @@
 # 进度对照表
 
 日期：2026-05-21  
-更新：2026-06-06
+更新：2026-06-07
 用途：把当前实现状态对照课题最终要求，避免只围绕局部 UI 问题推进。
 
 ## 当前一句话状态
@@ -16,6 +16,8 @@
 
 2026-06-06 已补上 Always-light Planner 第一版：每轮先尝试用 Doubao 生成结构化 `RetrievalPlan`，再由本地 validator 合并到 rule-only 检索状态；Planner 失败、超时或 JSON 不合法时回退 rule-only。`planner_trace` 已进入 `RetrievalTrace`，可记录是否调用、原始 plan、校验后 plan、fallback reason 和 latency。20 秒 timeout 下，targeted real API probe 修正判定后为 15/15 PASS，口语预算 150/100、商品指代、排除继承和泛需求追问均可解释；主要问题从“能否理解”转为“每轮真实调用延迟偏高，Android 体验需要继续观察”。
 
+2026-06-07 完成主线收口回归：修正多轮里“上一轮对比意图污染下一轮约束补充”的问题，`comparison_mode` 改为当前轮生效；普通推荐下的美妆肤质条件改为要求商品有正向肤质适配证据，避免只有便宜 SKU 或评论噪声的商品混入；同系列 SKU 安全兜底回答会显式展示匹配点；跑步鞋/徒步鞋对比增加用途优先级和子类覆盖选择。离线回归已完成：conversation 7/7、comparison 3/3、groundedness mock 11/11、generation guardrails、planner contract、feedback loop、Android `compileDebugKotlin` 和 `git diff --check` 均通过。
+
 ## 对照课题必做最小闭环
 
 | 模块 | 课题要求 | 当前状态 | 说明 |
@@ -26,7 +28,7 @@
 | 商品卡片 | 回复中包含商品卡片 | 已完成第一版 | 展示图片、品牌、商品名、价格、标签、推荐理由 |
 | 卡片详情 | 可点击商品卡片，跳转落地页或模拟详情页 | 已完成第一版 | 点击商品卡片打开详情弹窗，详情字段来自数据源 |
 | 后端服务 | Python / Go / Node / 任一后端 | 已完成第一版 | FastAPI 服务已跑通 |
-| 流式 API | SSE 或 WebSocket | 已完成 | `POST /api/chat/stream` 返回 `status/token/products/done/error`；商品卡片在回答文本结束后展示 |
+| 流式 API | SSE 或 WebSocket | 已完成 | `POST /api/chat/stream` 返回 `status/products/token/done/error`；推荐型回答先发结构化商品卡，再随 token 流式插入到对应文本段落 |
 | 向量数据库 | 集成向量数据库 | 已完成 V1 | Chroma 索引已可构建，运行时 trace 能看到 vector hits；索引产物仅本地保留 |
 | RAG 基本链路 | 检索商品并基于资料回答 | 已完成 V1 | 结构化硬过滤 + 关键词/facet/Chroma 召回 + 轻量 graph-aware rerank + 可解释 trace |
 | 模型调用 | 调用大模型生成导购回复 | 已完成第一版 | OpenAI-compatible Doubao 已通过代理复验；真实调用失败时会走安全兜底 |
@@ -149,7 +151,7 @@
 
 ## 当前最应该做的下一步
 
-文档状态收口、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、Always-light Planner 第一版、targeted Planner probe 和 **100 条全品类薄支持** 已经完成。下一步优先在 **真实 Android 端体验复验**、**真实生成层边界表达**、**claim-level judge 样例** 和 **最终复现检查** 之间选择，其中 Android 真实体验复验和最终复现检查优先级最高。
+文档状态收口、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、Always-light Planner 第一版、targeted Planner probe、**100 条全品类薄支持** 和 2026-06-07 主线离线回归收口已经完成。下一步优先在 **真实 Android 端体验复验**、**真实 API groundedness 再复验**、**claim-level judge 样例** 和 **最终复现检查** 之间选择，其中 Android 真实体验复验和最终复现检查优先级最高。
 
 原因：
 

@@ -14,7 +14,7 @@ data class ChatUiState(
     val messages: List<ChatMessage> = listOf(
         ChatMessage(
             role = Role.Assistant,
-            content = "你好，我可以先帮你做美妆护肤导购。你可以告诉我肤质、预算、使用场景或想避开的成分。",
+            content = "你好，我是你的导购小助手。你可以告诉我想买什么、预算、使用场景和不想踩的雷；我会先查商品资料，再帮你筛选、对比和解释推荐依据。",
         )
     ),
     val isLoading: Boolean = false,

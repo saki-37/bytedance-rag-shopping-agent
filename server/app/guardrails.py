@@ -17,7 +17,7 @@ FORBIDDEN_COMMERCIAL_CLAIMS = [
 ]
 
 PRICE_PATTERN = re.compile(r"(?:[¥￥]\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*元)")
-ABSENCE_CLAIM_TERMS = ["酒精", "刺激", "香精", "致痘", "拔干"]
+ABSENCE_CLAIM_TERMS = ["酒精", "刺激", "香精", "香料", "致痘", "拔干"]
 ABSENCE_PREFIXES = ["不含", "无", "没有", "不会有", "不会", "不添加", "不含有"]
 RESULT_ABSENCE_CLAIM_TERMS = ["堵塞", "闭口", "残留", "闷痘", "过敏"]
 RESULT_BOUNDARY_TERMS = [
@@ -102,6 +102,7 @@ def build_safe_answer(cards: list[ProductCard], user_message: str | None = None)
         card = cards[0]
         if card.variants:
             lines = [f"我先按同系列规格帮你比较：{_card_name(card)}。"]
+            lines.append(f"资料中可支持的匹配点：{_supported_points(card)}。")
             for index, variant in enumerate(card.variants[:3], start=1):
                 lines.append(f"{index}. {variant.label}，数据源价格 ¥{variant.price:g}。{variant.reason}")
             if card.cautions:
@@ -222,8 +223,8 @@ def _build_evidence_notes(cards: list[ProductCard], user_message: str) -> list[s
     if _contains_any(user_message, ["孕妇", "孕期", "怀孕", "不过敏", "保证"]):
         notes.append("安全边界：孕妇/孕期适用性当前资料不能确认；也不能保证不过敏，建议先做局部测试或24小时测试。")
 
-    if _contains_any(user_message, ["酒精", "香精", "防腐剂", "刺激"]):
-        supported_absence = _supported_absence_terms(evidence, ["酒精", "香精", "防腐剂"])
+    if _contains_any(user_message, ["酒精", "香精", "香料", "防腐剂", "刺激"]):
+        supported_absence = _supported_absence_terms(evidence, ["香料", "酒精", "香精", "防腐剂"])
         if supported_absence:
             if "FANCL" in evidence or "芳珂" in evidence:
                 notes.append(f"无添加证据：商品资料明确写到{'、'.join(supported_absence)}，但敏感肌仍建议先做局部测试。")
@@ -245,6 +246,9 @@ def _build_evidence_notes(cards: list[ProductCard], user_message: str) -> list[s
     if _contains_any(user_message, ["用户评价", "有人说", "有人这么说", "小红书", "评论", "孕期"]):
         notes.append("来源边界：用户评价只能当体验线索，不能等同于官方成分或安全承诺。")
 
+    if _contains_any(user_message, ["毛孔", "堵塞", "闭口"]):
+        if "纳米级卸妆分子" in evidence or "纳米分子" in evidence:
+            notes.append("资料边界：商品资料提到纳米级卸妆分子可以包裹彩妆和污垢；涉及堵塞或闭口时仍不能保证你使用后一定不堵塞。")
     if "堵塞" in user_message:
         notes.append("来源边界：如果资料里出现“不堵塞”等说法，也只能作为用户反馈，不能保证你使用后一定不堵塞。")
 

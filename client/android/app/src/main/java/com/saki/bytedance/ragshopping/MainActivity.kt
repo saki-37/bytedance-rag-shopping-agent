@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -64,6 +66,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
@@ -85,6 +88,7 @@ private val ErrorText = Color(0xFF9E3412)
 private const val ScrollableVariantTabThreshold = 5
 private val ScrollableVariantTabMinWidth = 72.dp
 private val ScrollableVariantTabMaxWidth = 118.dp
+private val MessageAssistantAvatarSize = 30.dp
 private val TablerSendIcon: ImageVector = ImageVector.Builder(
     name = "TablerSend",
     defaultWidth = 24.dp,
@@ -113,14 +117,13 @@ private val TablerSendIcon: ImageVector = ImageVector.Builder(
 
 private val DemoPrompts = listOf(
     "油皮通勤防晒" to "我是油皮，想要200元以内通勤防晒",
-    "敏感肌修护" to "敏感肌，最近屏障不稳定，想找修护面霜，不要酒精味太重或者刺激感强的产品",
+    "学生平板" to "预算5000以内，适合学生做笔记和看网课的平板",
+    "早八咖啡" to "早八想提神，想要便携咖啡，不要太甜",
+    "慢跑鞋" to "日常慢跑鞋，想要缓震舒服",
+    "T 恤对比" to "AIRism和DRY-EX两件T恤哪个更适合夏天通勤和运动？",
+    "下午茶零食" to "办公室下午茶零食，预算100以内，最好独立小包装",
+    "敏感修护" to "敏感肌，最近屏障不稳定，想找修护面霜，不要酒精味太重或者刺激感强的产品",
     "信息不足追问" to "我想买护肤品，你推荐什么？",
-    "洁面" to "预算100以内，混合肌日常温和洁面，洗后不要太拔干",
-    "眼霜" to "眼周干燥卡粉，有没有350元以内的保湿眼霜",
-    "蜜粉" to "油皮夏天想要150元以内控油定妆蜜粉",
-    "唇釉" to "学生党想要150元以内日常通勤唇釉，滋润一点",
-    "眉笔" to "新手想要100元以内自然防晕染眉笔",
-    "卸妆" to "敏感肌想要200元以内温和卸妆，不要酒精",
 )
 
 class MainActivity : ComponentActivity() {
@@ -206,17 +209,17 @@ private fun Header() {
         modifier = Modifier
             .fillMaxWidth()
             .background(AppGreen)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
-            text = "RAG 美妆导购",
+            text = "RAG 智能导购",
             color = Ink,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.headlineSmall,
         )
         Text(
-            text = "肤质、预算、场景和排除条件都可以直接说",
+            text = "美妆、服饰、数码和食品生活都能问，预算、场景和避雷点可以直接说",
             color = AccentGreenDark,
             style = MaterialTheme.typography.bodyMedium,
         )
@@ -246,45 +249,87 @@ private fun MessageBubble(
         else -> Ink
     }
     val border = if (message.role == Role.User) null else BorderStroke(1.dp, BorderGreen)
-
-    Column(horizontalAlignment = alignment, modifier = Modifier.fillMaxWidth()) {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = background),
-            shape = RoundedCornerShape(22.dp),
-            border = border,
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            modifier = Modifier.fillMaxWidth(if (message.role == Role.User) 0.86f else 1f),
-        ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (isThinking) {
-                    ThinkingIndicator()
-                } else if (message.content.isNotBlank()) {
-                    if (message.role == Role.Assistant && message.products.isNotEmpty()) {
-                        AssistantMessageContent(
-                            content = message.content,
-                            products = message.products,
-                            isStreaming = isStreaming,
-                            assetBaseUrl = assetBaseUrl,
-                            onProductClick = onProductClick,
-                        )
+    val cardContent: @Composable () -> Unit = {
+        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (isThinking) {
+                ThinkingIndicator()
+            } else if (message.content.isNotBlank()) {
+                if (message.role == Role.Assistant && message.products.isNotEmpty()) {
+                    AssistantMessageContent(
+                        content = message.content,
+                        products = message.products,
+                        isStreaming = isStreaming,
+                        assetBaseUrl = assetBaseUrl,
+                        onProductClick = onProductClick,
+                    )
+                } else {
+                    if (message.role == Role.Assistant) {
+                        MarkdownText(markdown = message.content, color = textColor)
                     } else {
-                        if (message.role == Role.Assistant) {
-                            MarkdownText(markdown = message.content, color = textColor)
-                        } else {
-                            Text(
-                                text = message.content,
-                                color = textColor,
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                        }
+                        Text(
+                            text = message.content,
+                            color = textColor,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                 }
-                if (message.role == Role.Assistant && message.content.isNotBlank() && showFeedback) {
-                    FeedbackControls(message = message, onFeedback = onFeedback)
-                }
+            }
+            if (message.role == Role.Assistant && message.content.isNotBlank() && showFeedback) {
+                FeedbackControls(message = message, onFeedback = onFeedback)
             }
         }
     }
+
+    Column(horizontalAlignment = alignment, modifier = Modifier.fillMaxWidth()) {
+        if (message.role == Role.Assistant) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                GuideAssistantImage(
+                    modifier = Modifier
+                        .size(MessageAssistantAvatarSize)
+                        .padding(top = 2.dp),
+                    cornerRadius = 10.dp,
+                )
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = background),
+                    shape = RoundedCornerShape(22.dp),
+                    border = border,
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    cardContent()
+                }
+            }
+        } else {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = background),
+                shape = RoundedCornerShape(22.dp),
+                border = border,
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                modifier = Modifier.fillMaxWidth(if (message.role == Role.User) 0.86f else 1f),
+            ) {
+                cardContent()
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuideAssistantImage(
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp,
+) {
+    Image(
+        painter = painterResource(id = R.drawable.guide_assistant),
+        contentDescription = "导购小助手",
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(Ink),
+    )
 }
 
 @Composable

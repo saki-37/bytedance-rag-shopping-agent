@@ -1,7 +1,7 @@
 # 评测记录
 
 日期：2026-05-26
-更新：2026-06-06
+更新：2026-06-07
 
 用途：沉淀当前可复跑的评测证据，后续每次改检索、prompt 或生成约束后更新。
 
@@ -11,8 +11,8 @@
 
 1. 检索层：8 条 golden queries、6 条美妆子类 queries、5 条服饰运动 queries 和 7 条全品类 thin smoke 全部通过。Chroma 当前使用统一 `products` collection，索引 100 条 enriched 商品，并通过 metadata filter 限定类目、子类和预算。
 2. 生成层：规则 guardrail 能拦截未授权价格、库存、优惠、下单承诺和无证据的绝对断言。
-3. SSE 层：真实 API golden stream 三轮 8/8 stable PASS；当前事件顺序调整为 `token/products/done`，先流式展示回答文本，再展示商品卡片。
-4. Groundedness 层：mock full generation / retrieval-only 均达到 11/11 PASS，但真实 API groundedness real generation 三轮仅 3/11 stable PASS，说明当前主要缺口在真实模型的边界表达和资料外声明控制。
+3. SSE 层：真实 API golden stream 三轮 8/8 stable PASS；当前推荐型事件顺序为 `products -> token... -> done`，先给 Android 结构化商品卡片，再在 token 流式过程中插入到对应文本段落。
+4. Groundedness 层：2026-06-07 离线 mock full generation 达到 11/11 PASS；历史真实 API groundedness real generation 三轮仍是 3/11 stable PASS，说明真实模型边界表达仍需单独复验，不能把 mock PASS 等同于真实 API 生成质量。
 5. Android 层：真实 Doubao 主线回复、商品卡片、图片、详情弹窗、信息不足追问已完成模拟器复验；新增子类抽样在 `MOCK_LLM=true` 下完成，重点验证检索、卡片和布局。
 
 ## 测试口径说明
@@ -198,6 +198,63 @@ Trace 结论：
 | apparel queries | 5 / 5 PASS | `/private/tmp/bytedance-rag-apparel-after-all-category.jsonl` |
 
 注意：全品类覆盖后，部分旧 benchmark 不再适合锁死单个商品。例如“日常慢跑缓震跑鞋”现在会召回多双资料明确支持“慢跑/缓震”的跑步鞋，因此 `apparel_queries.json` 已把期望从单个 `p_clothes_007` 放宽为日常缓震跑鞋候选集合。
+
+### 2026-06-07 主线收口回归
+
+用途：在 SKU 同系列展示、对比表格、runtime trace、Planner 和全品类薄支持之后，收口当前主线的多轮状态、排序和 groundedness 边界。
+
+本轮修正：
+
+- `comparison_mode` 只按当前轮生效，避免上一轮“怎么选/对比”污染下一轮普通约束补充。
+- 普通推荐下，如果用户明确提出美妆肤质条件，候选商品必须有结构化字段或官方资料里的正向肤质适配证据；用户评价里的负面/旁支词不再算作正向适配。
+- 跑步鞋/徒步鞋对比增加用途优先级：近郊走路、偶尔慢跑时优先日常慢跑鞋和轻装徒步鞋，同时保持比较结果覆盖不同子类。
+- SKU 同系列安全兜底回答补充“资料中可支持的匹配点”，避免只列规格价格而漏掉油皮、通勤等本轮条件。
+- mock 对比回答增加过敏、孕期等风险边界，离线评测不再因为历史用户消息污染当前轮。
+
+复跑命令：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+
+server/.venv/bin/python -m py_compile \
+  server/app/conversation_state.py \
+  server/app/main.py \
+  server/app/llm.py \
+  server/app/guardrails.py \
+  server/app/retrieval.py
+
+env PLANNER_TIMEOUT_SECONDS=0.1 server/.venv/bin/python scripts/run_conversation_cases.py
+env PLANNER_TIMEOUT_SECONDS=0.1 server/.venv/bin/python scripts/run_comparison_queries.py
+env PLANNER_TIMEOUT_SECONDS=0.1 server/.venv/bin/python scripts/run_groundedness_cases.py --mock-llm
+env PLANNER_TIMEOUT_SECONDS=0.1 server/.venv/bin/python scripts/check_generation_guardrails.py
+env PLANNER_TIMEOUT_SECONDS=0.1 server/.venv/bin/python scripts/check_planner_contract.py
+env PLANNER_TIMEOUT_SECONDS=0.1 server/.venv/bin/python scripts/check_feedback_loop.py
+./gradlew :client:android:app:compileDebugKotlin
+git diff --check
+```
+
+本地结果：
+
+| Suite | Result | 说明 |
+| --- | --- | --- |
+| Python compile | PASS | `conversation_state/main/llm/guardrails/retrieval` 通过 |
+| conversation cases | 7 / 7 PASS | 覆盖预算更新、排除继承、商品指代和口语预算收窄 |
+| comparison queries | 3 / 3 PASS | 防晒、T 恤、跑步鞋/徒步鞋均通过 |
+| groundedness mock full generation | 11 / 11 PASS | 离线 safe answer / mock generation 通过全部 11 条 |
+| generation guardrails | PASS | 商业承诺、价格和无证据断言校验通过 |
+| planner contract | PASS | 包含口语预算和类目切换解析 |
+| feedback loop | PASS | `record_id=572e1977-aa74-4dc6-b241-e6c77d5352b0` |
+| Android Kotlin compile | PASS | `:client:android:app:compileDebugKotlin` 通过 |
+| diff check | PASS | 无 whitespace error |
+
+代表性修复 case：
+
+- `GRD-L01` 第二轮“我是油皮，预算200以内，主要上班通勤”现在只返回 `p_beauty_006`，不再把上一轮泛防晒候选里的安热沙带入答案。
+- `CMP-03` “跑步鞋和徒步鞋我该买哪个？我周末近郊走路，也偶尔慢跑”现在返回 `p_clothes_007`、`p_clothes_014` 和补充候选 `p_clothes_010`，trace 中可看到 `purpose_priority:casual_running` / `purpose_priority:light_hiking`。
+
+边界：
+
+- 本节是离线 / mock generation 收口，不代表真实 API groundedness 已经 11/11。真实 Doubao 输出仍需按真实 API generation 口径单独复验。
 
 ## 多轮对话 Regression
 

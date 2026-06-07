@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass, field
 
 from app.models import ChatRequest, QueryIntent
-from app.retrieval import parse_query_intent
+from app.retrieval import category_exclusions, parse_query_intent
 
 
 CATEGORY_LABELS = {
@@ -161,6 +161,7 @@ def _merge_message(state: RuleConversationState, message: str, source: str) -> N
     intent = parse_query_intent(message)
     state.applied_messages.append(message)
     subcategory_shift = bool(intent.facets.get("sub_category")) and _looks_like_subcategory_switch(message)
+    excluded_categories = category_exclusions(message)
 
     if _relaxes_budget_without_value(message, intent):
         state.budget_max = None
@@ -178,10 +179,24 @@ def _merge_message(state: RuleConversationState, message: str, source: str) -> N
         _append_unique(state.exclude_terms, intent.exclude_terms)
         state.actions.append(f"{source}:keep_exclusions={','.join(intent.exclude_terms)}")
 
+    if excluded_categories:
+        before = list(state.category_candidates)
+        state.category_candidates = [
+            category for category in state.category_candidates
+            if category not in excluded_categories
+        ]
+        removed = [category for category in before if category in excluded_categories]
+        if removed:
+            state.actions.append(f"{source}:exclude_category={','.join(removed)}")
+        if "beauty" in excluded_categories:
+            _clear_beauty_specific_facets(state, source)
+
     if intent.category_candidates:
-        if _should_replace_category(state.category_candidates, intent.category_candidates, message):
+        if excluded_categories or _should_replace_category(state.category_candidates, intent.category_candidates, message):
             state.category_candidates = list(intent.category_candidates)
             state.actions.append(f"{source}:replace_category={','.join(intent.category_candidates)}")
+            if "beauty" not in state.category_candidates:
+                _clear_beauty_specific_facets(state, source)
         else:
             _append_unique(state.category_candidates, intent.category_candidates)
             state.actions.append(f"{source}:merge_category={','.join(intent.category_candidates)}")
@@ -200,7 +215,10 @@ def _merge_message(state: RuleConversationState, message: str, source: str) -> N
 
     if intent.soft_preferences:
         _append_unique(state.soft_preferences, intent.soft_preferences)
-    state.comparison_mode = state.comparison_mode or intent.comparison_mode
+    if source == "current":
+        state.comparison_mode = intent.comparison_mode
+        if intent.comparison_mode:
+            state.actions.append(f"{source}:comparison_mode")
 
 
 def _relaxes_budget_without_value(message: str, intent: QueryIntent) -> bool:
@@ -233,12 +251,37 @@ def _relaxes_exclusions_without_new_terms(message: str, intent: QueryIntent) -> 
     )
 
 
+def _clear_beauty_specific_facets(state: RuleConversationState, source: str) -> None:
+    removed: list[str] = []
+    for facet_name in ["skin_type"]:
+        if state.facets.pop(facet_name, None):
+            removed.append(facet_name)
+    if removed:
+        state.actions.append(f"{source}:clear_beauty_facets={','.join(removed)}")
+
+
 def _should_replace_category(existing: list[str], incoming: list[str], message: str) -> bool:
     if not existing:
         return True
     if set(existing) == set(incoming):
         return False
-    return any(term in message for term in ["换成", "换到", "改看", "重新看", "另一个品类"])
+    return any(term in message for term in [
+        "换成",
+        "换到",
+        "改看",
+        "重新看",
+        "另一个品类",
+        "其他品类",
+        "别的品类",
+        "运动类",
+        "运动用品",
+        "非化妆品",
+        "非美妆",
+        "非护肤",
+        "不是化妆品",
+        "不要化妆品",
+        "不看化妆品",
+    ])
 
 
 def _looks_like_subcategory_switch(message: str) -> bool:
@@ -355,6 +398,8 @@ def _constraints_from_actions(actions: list[str]) -> dict[str, object]:
             _merge_constraint_values(constraints, "exclude_terms", body.removeprefix("keep_exclusions="))
         elif body.startswith("reference_products="):
             _merge_constraint_values(constraints, "referenced_product_ids", body.removeprefix("reference_products="))
+        elif body == "comparison_mode":
+            constraints["comparison_mode"] = True
         elif body.startswith(("replace_category=", "merge_category=")):
             values = body.split("=", 1)[1]
             _merge_constraint_values(constraints, "category_candidates", values)

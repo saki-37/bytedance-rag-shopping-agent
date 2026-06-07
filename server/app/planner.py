@@ -11,15 +11,35 @@ from pydantic import BaseModel, Field, ValidationError
 from app.config import Settings
 from app.conversation_state import RetrievalMessageBuildResult, build_retrieval_message
 from app.models import ChatMessage, ChatRequest
-from app.retrieval import EXCLUDE_TERMS, FACET_LEXICON, parse_query_intent
+from app.retrieval import CATEGORY_TO_RAW, EXCLUDE_TERMS, FACET_LEXICON, category_exclusions, parse_query_intent
 
 
 logger = logging.getLogger(__name__)
+
+CATEGORY_SIGNAL_ALIASES = {
+    "beauty": ["美妆", "护肤", "护肤品", "化妆品", "彩妆"],
+    "apparel": ["服饰", "运动类", "运动用品", "健身", "训练", "瑜伽", "跑步", "徒步", "运动鞋", "运动服"],
+    "digital": ["数码", "电子", "手机", "电脑", "平板", "耳机", "拍照", "续航"],
+    "food": ["食品", "饮料", "零食", "咖啡", "茶饮", "减脂", "控糖", "低糖", "无糖", "提神"],
+}
 
 
 class PlannerBudgetUpdate(BaseModel):
     type: Literal["keep", "set", "relax", "unknown"] = "keep"
     value: float | None = None
+
+
+class PlannerCategoryPatch(BaseModel):
+    mode: Literal["keep", "replace", "add", "exclude", "unknown"] = "keep"
+    include: list[str] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
+    reason_type: Literal[
+        "none",
+        "explicit_exclusion",
+        "category_switch",
+        "gift_broadening",
+        "unclear",
+    ] = "none"
 
 
 class PlannerComparisonPlan(BaseModel):
@@ -52,6 +72,7 @@ class RetrievalPlan(BaseModel):
     ] = "new_search"
     rewrite_query: str = ""
     budget_update: PlannerBudgetUpdate = Field(default_factory=PlannerBudgetUpdate)
+    category_patch: PlannerCategoryPatch = Field(default_factory=PlannerCategoryPatch)
     facets_patch: dict[str, list[str]] = Field(default_factory=dict)
     exclude_terms_patch: list[str] = Field(default_factory=list)
     referenced_product_policy: Literal[
@@ -183,6 +204,12 @@ def _planner_user_prompt(request: ChatRequest, rule_build: RetrievalMessageBuild
         "turn_type": "new_search | refine_search | product_followup | compare | clarify | reset | chitchat",
         "rewrite_query": "string, 不要加入用户没说过的商品事实",
         "budget_update": {"type": "keep | set | relax | unknown", "value": "number or null"},
+        "category_patch": {
+            "mode": "keep | replace | add | exclude | unknown",
+            "include": list(CATEGORY_TO_RAW.keys()),
+            "exclude": list(CATEGORY_TO_RAW.keys()),
+            "reason_type": "none | explicit_exclusion | category_switch | gift_broadening | unclear",
+        },
         "facets_patch": allowed_facets,
         "exclude_terms_patch": EXCLUDE_TERMS,
         "referenced_product_policy": "none | previous_top_product | mentioned_product_ids | unknown",
@@ -206,6 +233,8 @@ def _planner_user_prompt(request: ChatRequest, rule_build: RetrievalMessageBuild
         "校验规则：\n"
         "- budget_update.type=set 时，value 必须是用户当前轮明确给出的预算数字；例如“预算可能只有150”应输出 150。\n"
         "- 用户说“先不看预算/不限预算/放宽预算”但没给数字时，budget_update.type=relax。\n"
+        "- 用户说“非/不是/不要/不看/不太想要/除了/换个别的”某类目时，必须用 category_patch 表达排除或替换；例如“非化妆品运动类”应 exclude beauty，并 include apparel。\n"
+        "- category_patch.include/exclude 只能使用 beauty/apparel/digital/food；不要发明类目。\n"
         "- facets_patch 只能使用 schema 中列出的枚举值；不要因为“夏天”直接推断“户外”。\n"
         "- exclude_terms_patch 只能使用用户明确说要避开的词。\n"
         "- referenced_product_policy 只能用于“它/这款/第一款/刚才那款”等指代；不能捏造商品 ID。\n"
@@ -246,6 +275,7 @@ def _validate_plan(
         "turn_type": plan.turn_type,
         "rewrite_query": _clean_text(plan.rewrite_query, limit=180),
         "budget_update": {"type": "keep", "value": None},
+        "category_patch": {"mode": "keep", "include": [], "exclude": [], "reason_type": "none"},
         "facets_patch": {},
         "exclude_terms_patch": [],
         "referenced_product_ids": [],
@@ -261,6 +291,10 @@ def _validate_plan(
         additions.append(budget_line)
         budget = plan.budget_update.value if plan.budget_update.type == "set" else None
         validated["budget_update"] = {"type": plan.budget_update.type, "value": budget}
+
+    category_lines, category_patch = _validate_category_patch(plan, request, validation_errors)
+    additions.extend(category_lines)
+    validated["category_patch"] = category_patch
 
     facet_lines, facets = _validate_facets(plan, request, validation_errors)
     additions.extend(facet_lines)
@@ -307,6 +341,131 @@ def _validate_budget_update(
             return "- 预算：不限制"
         validation_errors.append("budget_update.relax_without_user_signal")
     return None
+
+
+def _validate_category_patch(
+    plan: RetrievalPlan,
+    request: ChatRequest,
+    validation_errors: list[str],
+) -> tuple[list[str], dict[str, object]]:
+    patch = plan.category_patch
+    validated: dict[str, object] = {
+        "mode": patch.mode,
+        "include": [],
+        "exclude": [],
+        "reason_type": patch.reason_type,
+    }
+    if patch.mode in {"keep", "unknown"}:
+        return [], validated
+
+    current_text = request.message
+    accepted_include = _accepted_categories(
+        patch.include,
+        validation_errors=validation_errors,
+        error_prefix="category_patch.include",
+    )
+    accepted_exclude = _accepted_categories(
+        patch.exclude,
+        validation_errors=validation_errors,
+        error_prefix="category_patch.exclude",
+    )
+
+    if patch.mode in {"replace", "add"}:
+        accepted_include = [
+            category for category in accepted_include
+            if _category_include_signaled(category, current_text)
+        ]
+        rejected_include = [
+            category for category in patch.include
+            if category in CATEGORY_TO_RAW and category not in accepted_include
+        ]
+        validation_errors.extend(
+            f"category_include_without_current_signal:{category}"
+            for category in rejected_include
+        )
+    else:
+        accepted_include = []
+
+    if patch.mode in {"replace", "exclude"}:
+        accepted_exclude = [
+            category for category in accepted_exclude
+            if _category_exclusion_signaled(category, current_text)
+        ]
+        rejected_exclude = [
+            category for category in patch.exclude
+            if category in CATEGORY_TO_RAW and category not in accepted_exclude
+        ]
+        validation_errors.extend(
+            f"category_exclude_without_current_signal:{category}"
+            for category in rejected_exclude
+        )
+    else:
+        accepted_exclude = []
+
+    lines: list[str] = []
+    if accepted_include:
+        lines.append(f"- 类目：{'、'.join(CATEGORY_TO_RAW[category] for category in accepted_include)}")
+    if accepted_exclude:
+        lines.append(f"- 排除类目：不要{'、'.join(CATEGORY_TO_RAW[category] for category in accepted_exclude)}")
+
+    if not lines:
+        return [], validated
+
+    validated["include"] = accepted_include
+    validated["exclude"] = accepted_exclude
+    return lines, validated
+
+
+def _accepted_categories(
+    categories: list[str],
+    *,
+    validation_errors: list[str],
+    error_prefix: str,
+) -> list[str]:
+    accepted: list[str] = []
+    for raw_category in categories:
+        category = str(raw_category).strip()
+        if category not in CATEGORY_TO_RAW:
+            validation_errors.append(f"{error_prefix}.unknown:{category}")
+            continue
+        accepted.append(category)
+    return list(dict.fromkeys(accepted))
+
+
+def _category_include_signaled(category: str, current_text: str) -> bool:
+    aliases = CATEGORY_SIGNAL_ALIASES.get(category, [])
+    lowered = current_text.lower()
+    return any(alias.lower() in lowered for alias in aliases)
+
+
+def _category_exclusion_signaled(category: str, current_text: str) -> bool:
+    if category in category_exclusions(current_text):
+        return True
+    aliases = CATEGORY_SIGNAL_ALIASES.get(category, [])
+    negative_terms = [
+        "非",
+        "不是",
+        "不要",
+        "不看",
+        "别看",
+        "排除",
+        "避开",
+        "不想要",
+        "不太想要",
+        "不考虑",
+        "不太行",
+        "除外",
+        "之外",
+        "以外",
+    ]
+    for alias in aliases:
+        alias_pattern = re.escape(alias)
+        negative_pattern = "|".join(re.escape(term) for term in negative_terms)
+        if re.search(rf"(?:{negative_pattern}).{{0,12}}{alias_pattern}", current_text):
+            return True
+        if re.search(rf"{alias_pattern}.{{0,12}}(?:{negative_pattern})", current_text):
+            return True
+    return False
 
 
 def _validate_facets(
