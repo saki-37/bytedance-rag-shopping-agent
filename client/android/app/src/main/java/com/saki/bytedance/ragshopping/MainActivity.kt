@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -90,9 +91,9 @@ private val MutedText = Color(0xFF5F6A4E)
 private val WarmSurface = Color(0xFFFFF1D5)
 private val ErrorSurface = Color(0xFFFFEAE0)
 private val ErrorText = Color(0xFF9E3412)
-private const val ScrollableVariantTabThreshold = 5
-private val ScrollableVariantTabMinWidth = 72.dp
-private val ScrollableVariantTabMaxWidth = 118.dp
+private const val ScrollableVariantTabThreshold = 2
+private const val LongVariantTabLabelLength = 8
+private val ScrollableVariantTabMinWidth = 96.dp
 private val MessageAssistantAvatarSize = 30.dp
 private val TablerSendIcon: ImageVector = ImageVector.Builder(
     name = "TablerSend",
@@ -1230,7 +1231,7 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
     val variants = product.variants
     var selectedVariantId by remember(product.productId, variants) { mutableStateOf(variants.first().variantId) }
     val selectedVariant = variants.firstOrNull { it.variantId == selectedVariantId } ?: variants.first()
-    val useScrollableVariantTabs = variants.size > ScrollableVariantTabThreshold
+    val useScrollableVariantTabs = variants.shouldUseScrollableVariantTabs()
     val variantTabScrollState = rememberScrollState()
 
     Box(
@@ -1258,10 +1259,7 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
                         variant = variant,
                         selected = variant.variantId == selectedVariant.variantId,
                         modifier = if (useScrollableVariantTabs) {
-                            Modifier.widthIn(
-                                min = ScrollableVariantTabMinWidth,
-                                max = ScrollableVariantTabMaxWidth,
-                            )
+                            Modifier.widthIn(min = ScrollableVariantTabMinWidth)
                         } else {
                             Modifier.weight(1f)
                         },
@@ -1347,6 +1345,11 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
     }
 }
 
+private fun List<ProductVariantCard>.shouldUseScrollableVariantTabs(): Boolean {
+    return size > ScrollableVariantTabThreshold ||
+        any { variant -> variant.label.trim().length >= LongVariantTabLabelLength }
+}
+
 @Composable
 private fun VariantCardTab(
     variant: ProductVariantCard,
@@ -1368,7 +1371,7 @@ private fun VariantCardTab(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxHeight()
                 .padding(horizontal = 10.dp, vertical = 5.dp),
             verticalArrangement = Arrangement.Center,
         ) {
