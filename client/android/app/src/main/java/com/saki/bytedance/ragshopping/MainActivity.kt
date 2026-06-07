@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -81,6 +82,9 @@ private val MutedText = Color(0xFF5F6A4E)
 private val WarmSurface = Color(0xFFFFF1D5)
 private val ErrorSurface = Color(0xFFFFEAE0)
 private val ErrorText = Color(0xFF9E3412)
+private const val ScrollableVariantTabThreshold = 5
+private val ScrollableVariantTabMinWidth = 72.dp
+private val ScrollableVariantTabMaxWidth = 118.dp
 private val TablerSendIcon: ImageVector = ImageVector.Builder(
     name = "TablerSend",
     defaultWidth = 24.dp,
@@ -384,6 +388,12 @@ private fun MarkdownListItem(block: MarkdownBlock.ListItem, color: Color) {
 
 @Composable
 private fun MarkdownTable(block: MarkdownBlock.Table, color: Color) {
+    val comparisonTable = remember(block) { block.toProductComparisonTableOrNull() }
+    if (comparisonTable != null) {
+        MarkdownComparisonTable(table = comparisonTable, color = color)
+        return
+    }
+
     val columnCount = maxOf(
         block.headers.size,
         block.rows.maxOfOrNull { it.size } ?: 0,
@@ -410,6 +420,78 @@ private fun MarkdownTable(block: MarkdownBlock.Table, color: Color) {
                 rowIndex = index,
             )
         }
+    }
+}
+
+@Composable
+private fun MarkdownComparisonTable(table: ProductComparisonTable, color: Color) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(SurfaceWhite),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(AppGreenSoft),
+        ) {
+            ComparisonTableCell(
+                text = "对比项",
+                color = AccentGreenDark,
+                isStrong = true,
+                modifier = Modifier.width(68.dp),
+            )
+            table.productNames.forEach { productName ->
+                ComparisonTableCell(
+                    text = productName,
+                    color = AccentGreenDark,
+                    isStrong = true,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        table.dimensions.forEachIndexed { index, dimension ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(if (index % 2 == 0) SurfaceWhite else WarmSurface),
+            ) {
+                ComparisonTableCell(
+                    text = dimension.label,
+                    color = AccentGreenDark,
+                    isStrong = true,
+                    modifier = Modifier.width(68.dp),
+                )
+                dimension.values.forEach { value ->
+                    ComparisonTableCell(
+                        text = value,
+                        color = color,
+                        isStrong = false,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComparisonTableCell(
+    text: String,
+    color: Color,
+    isStrong: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier.padding(horizontal = 7.dp, vertical = 8.dp),
+    ) {
+        Text(
+            text = parseInlineMarkdown(text),
+            color = color,
+            fontWeight = if (isStrong) FontWeight.Bold else FontWeight.Normal,
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 
@@ -459,10 +541,22 @@ private sealed class MarkdownBlock {
     data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownBlock()
 }
 
+private data class ProductComparisonTable(
+    val productNames: List<String>,
+    val dimensions: List<ProductComparisonDimension>,
+)
+
+private data class ProductComparisonDimension(
+    val label: String,
+    val values: List<String>,
+)
+
 private val MarkdownHeadingRegex = Regex("""^\s*(#{1,6})\s+(.+)$""")
 private val MarkdownOrderedListRegex = Regex("""^\s*(\d+)[.)]\s+(.+)$""")
 private val MarkdownUnorderedListRegex = Regex("""^\s*[-*•]\s+(.+)$""")
 private val MarkdownBoldRegex = Regex("""(\*\*[^*]+\*\*|__[^_]+__)""")
+private val InternalProductIdInParenthesesRegex = Regex("""\s*[\(（]\s*`?(?:p|s)_[A-Za-z0-9_]+`?\s*[\)）]""")
+private val StandaloneInternalProductIdRegex = Regex("""\s+`?(?:p|s)_[A-Za-z0-9_]+`?""")
 
 private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     val lines = markdown
@@ -528,6 +622,75 @@ private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     }
 
     return blocks
+}
+
+private fun MarkdownBlock.Table.toProductComparisonTableOrNull(): ProductComparisonTable? {
+    if (headers.size < 3) return null
+    val productHeader = headers.firstOrNull()?.trim().orEmpty()
+    if (isProductComparisonHeader(productHeader)) {
+        if (rows.size !in 2..3) return null
+
+        val productNames = rows
+            .map { row -> cleanComparisonProductName(row.firstOrNull()?.trim().orEmpty()) }
+            .filter { it.isNotBlank() }
+        if (productNames.size != rows.size) return null
+
+        val dimensions = headers.drop(1).mapIndexedNotNull { dimensionIndex, header ->
+            val label = header.trim()
+            if (label.isBlank()) return@mapIndexedNotNull null
+            ProductComparisonDimension(
+                label = label,
+                values = rows.map { row ->
+                    row.getOrNull(dimensionIndex + 1)
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "资料未明确"
+                },
+            )
+        }
+        if (dimensions.isEmpty()) return null
+
+        return ProductComparisonTable(productNames = productNames, dimensions = dimensions)
+    }
+
+    if (!isDimensionComparisonHeader(productHeader)) return null
+    val productNames = headers.drop(1).map { cleanComparisonProductName(it.trim()) }
+    if (productNames.size !in 2..3 || productNames.any { it.isBlank() }) return null
+
+    val dimensions = rows.mapNotNull { row ->
+        val label = row.firstOrNull()?.trim().orEmpty()
+        if (label.isBlank()) return@mapNotNull null
+        ProductComparisonDimension(
+            label = label,
+            values = productNames.mapIndexed { productIndex, _ ->
+                row.getOrNull(productIndex + 1)
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                    ?: "资料未明确"
+            },
+        )
+    }
+    if (dimensions.isEmpty()) return null
+
+    return ProductComparisonTable(productNames = productNames, dimensions = dimensions)
+}
+
+private fun isProductComparisonHeader(header: String): Boolean {
+    return listOf("商品", "产品", "款式", "SKU", "sku").any { token -> header.contains(token) }
+}
+
+private fun isDimensionComparisonHeader(header: String): Boolean {
+    return listOf("对比项", "维度", "比较项", "项目").any { token -> header.contains(token) }
+}
+
+private fun cleanComparisonProductName(name: String): String {
+    val cleaned = name
+        .replace(InternalProductIdInParenthesesRegex, "")
+        .replace(StandaloneInternalProductIdRegex, "")
+        .trim()
+        .trim('｜', '|', '-', '—', ':', '：')
+        .trim()
+    return cleaned.ifBlank { name }
 }
 
 private fun shouldMergeIntoParagraph(line: String): Boolean {
@@ -603,6 +766,14 @@ private fun buildAssistantContentBlocks(
     val textBlocks = splitAssistantText(content, isStreaming)
     if (products.isEmpty()) {
         return textBlocks.map { AssistantContentBlock(text = it.text) }
+    }
+    if (containsMarkdownTable(content)) {
+        return listOf(
+            AssistantContentBlock(
+                text = content.trim(),
+                products = if (isStreaming) emptyList() else products,
+            )
+        )
     }
 
     val occupiedWeakMatchBlocks = mutableSetOf<Int>()
@@ -709,6 +880,17 @@ private fun splitAssistantText(content: String, isStreaming: Boolean): List<Assi
                 )
             }
         }
+    }
+}
+
+private fun containsMarkdownTable(content: String): Boolean {
+    val lines = content
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .split("\n")
+        .map { it.trim() }
+    return lines.windowed(size = 2).any { (current, next) ->
+        isMarkdownTableRow(current) && isMarkdownTableSeparator(next)
     }
 }
 
@@ -900,6 +1082,8 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
     val variants = product.variants
     var selectedVariantId by remember(product.productId, variants) { mutableStateOf(variants.first().variantId) }
     val selectedVariant = variants.firstOrNull { it.variantId == selectedVariantId } ?: variants.first()
+    val useScrollableVariantTabs = variants.size > ScrollableVariantTabThreshold
+    val variantTabScrollState = rememberScrollState()
 
     Box(
         modifier = Modifier
@@ -909,7 +1093,15 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (useScrollableVariantTabs) {
+                            Modifier.horizontalScroll(variantTabScrollState)
+                        } else {
+                            Modifier
+                        },
+                    ),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
@@ -917,7 +1109,14 @@ private fun VariantStackProductCardView(product: ProductCard, assetBaseUrl: Stri
                     VariantCardTab(
                         variant = variant,
                         selected = variant.variantId == selectedVariant.variantId,
-                        modifier = Modifier.weight(1f),
+                        modifier = if (useScrollableVariantTabs) {
+                            Modifier.widthIn(
+                                min = ScrollableVariantTabMinWidth,
+                                max = ScrollableVariantTabMaxWidth,
+                            )
+                        } else {
+                            Modifier.weight(1f)
+                        },
                         onClick = { selectedVariantId = variant.variantId },
                     )
                 }
