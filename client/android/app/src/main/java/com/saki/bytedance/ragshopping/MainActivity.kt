@@ -4,6 +4,11 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -213,7 +218,7 @@ private fun Header() {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
-            text = "RAG 智能导购",
+            text = "RAG智能导购",
             color = Ink,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.headlineSmall,
@@ -1062,6 +1067,104 @@ private fun ThinkingIndicator() {
 }
 
 @Composable
+private fun LoadingStatusCard(statusText: String) {
+    val statusUi = remember(statusText) { statusText.toWorkStatusUi() }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(statusUi.containerColor, RoundedCornerShape(16.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        GuideAssistantImage(
+            modifier = Modifier.size(28.dp),
+            cornerRadius = 9.dp,
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = statusUi.title,
+                    color = AccentGreenDark,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                LoadingDots(color = statusUi.accentColor)
+            }
+            Text(
+                text = statusUi.subtitle,
+                color = MutedText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LoadingDots(color: Color) {
+    val transition = rememberInfiniteTransition(label = "loading-dots")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+        ),
+        label = "loading-dots-phase",
+    )
+    val activeIndex = ((phase * 3).toInt()).coerceIn(0, 2)
+
+    Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(3) { index ->
+            val active = index == activeIndex
+            Box(
+                modifier = Modifier
+                    .size(if (active) 6.dp else 5.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(color.copy(alpha = if (active) 1f else 0.32f)),
+            )
+        }
+    }
+}
+
+private data class WorkStatusUi(
+    val title: String,
+    val subtitle: String,
+    val containerColor: Color,
+    val accentColor: Color,
+)
+
+private fun String.toWorkStatusUi(): WorkStatusUi {
+    return when {
+        contains("检索") -> WorkStatusUi(
+            title = "逛商品库中",
+            subtitle = "正在捞候选、看预算和避雷点",
+            containerColor = AppGreenSoft,
+            accentColor = AccentGreenDark,
+        )
+        contains("生成") -> WorkStatusUi(
+            title = "整理推荐中",
+            subtitle = "正在把匹配点、对比和风险说清楚",
+            containerColor = WarmSurface,
+            accentColor = AccentGreen,
+        )
+        else -> WorkStatusUi(
+            title = this,
+            subtitle = "小助手正在处理这一步",
+            containerColor = AppGreenSoft,
+            accentColor = AccentGreenDark,
+        )
+    }
+}
+
+@Composable
 private fun FeedbackControls(message: ChatMessage, onFeedback: (String, FeedbackType) -> Unit) {
     when {
         message.feedback != null -> {
@@ -1727,15 +1830,7 @@ private fun InputBar(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (statusText != null) {
-                Text(
-                    text = statusText,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppGreenSoft, RoundedCornerShape(14.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    color = AccentGreenDark,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                LoadingStatusCard(statusText = statusText)
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DemoPrompts.forEach { (label, prompt) ->
