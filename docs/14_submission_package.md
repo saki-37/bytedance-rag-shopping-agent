@@ -48,8 +48,8 @@
 | --- | --- | --- |
 | 基础功能完整性 | Android -> FastAPI -> RAG -> Doubao -> SSE -> 商品卡片 | 第一版真实模型端到端闭环已跑通 |
 | 工程质量 | monorepo、API 契约、架构文档、安全配置、评测脚本、依赖复现说明 | README 已作为提交入口；`docs/` 可支撑复盘和答辩 |
-| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only、真实 API golden stream 三轮、guardrail、真实 groundedness failure cases、三层 trace、结果型绝对承诺拦截、`GRD-L03/05/08/L01` 真实 API + AI review | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框；下一步把证据整理成答辩可讲版本 |
-| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、Android 可见轻量反馈闭环、移动端流式体验 | 下一阶段优先做最终复验与提交材料收口；claim-level judge 属于可选增强 |
+| 效果与可靠性 | golden、subcategory、apparel、comparison、conversation、groundedness full mock / retrieval-only、真实 API golden stream 三轮、guardrail、真实 groundedness failure cases、三层 trace、结果型绝对承诺拦截、claim-level audit 样例、`GRD-L03/05/08/L01` 真实 API + AI review | 当前主打“约束感知 + 可解释 trace + 反编造回归”，不是单纯聊天框；下一步把证据整理成答辩可讲版本 |
+| 加分项深度 | 可解释 RAG、反幻觉、多商品对比、轻量 graph-aware、多品类样例、Android 可见轻量反馈闭环、移动端流式体验、claim-level audit 样例 | 下一阶段优先做最终复验与提交材料收口；完整自动化 claim-level judge 平台仍是可选增强 |
 
 ## Demo 讲解顺序
 
@@ -172,7 +172,7 @@ git diff --check
 1. 图片输入、语音输入、购物车和下单。
 2. 全品类导购主线。
 3. 完整重型 GraphRAG / Neo4j 图数据库。
-4. 完整自动化 claim-level groundedness judge。
+4. 完整自动化 claim-level groundedness judge 平台化；当前已有人工标注样例和报告脚本。
 5. 完整自动反馈归因和自动转 benchmark。
 
 这些不是当前版本的失败点，而是下一阶段路线。当前版本主打的是：

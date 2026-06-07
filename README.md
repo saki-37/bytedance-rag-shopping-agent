@@ -14,6 +14,7 @@
 - Doubao / Ark OpenAI-compatible API 接入；默认评测口径使用真实 API，只有显式开启 `MOCK_LLM=true` 或缺少 Key/模型名时才走 mock / safe fallback。
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
 - 轻量反馈闭环：Android 端可在回答下方点击 `有用` / `不准确`；后端记录最近上下文、回答、商品卡片等有界快照，debug 脚本可额外带上检索 trace。
+- Claim-level audit 样例：已沉淀 5 个高风险人工标注样例、8 条 claim，可渲染 Markdown / JSONL 报告，展示商品事实如何逐条回到数据源。
 - 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
 - Golden queries、conversation cases、真实 API 三轮回归和 Android 模拟器复验证据已整理在文档中。
 
@@ -25,6 +26,7 @@
 - 提交材料清单：[docs/14_submission_package.md](docs/14_submission_package.md)
 - 依赖版本与复现说明：[docs/20_reproducibility_and_dependencies.md](docs/20_reproducibility_and_dependencies.md)
 - 答辩口袋稿：[docs/22_defense_cheatsheet.md](docs/22_defense_cheatsheet.md)
+- Claim-level audit 样例：[data/eval/claim_audit_samples.json](data/eval/claim_audit_samples.json)、[scripts/render_claim_audit_report.py](scripts/render_claim_audit_report.py)
 - 文档总入口：[docs/00_index.md](docs/00_index.md)
 
 本地原始录屏位于 `demo/录屏v1.mov`；当前已导出 60 秒手机屏版本 `demo/录屏v1_submission_phone_60s.mp4`，更适合作为平台附件上传。录屏文件属于生成媒体，已被 `.gitignore` 忽略，不进入 Git。
@@ -234,7 +236,7 @@ python3 scripts/scan_secrets.py --all
 - 图片输入、语音、购物车、下单不在当前版本。
 - Evidence-aware fallback 已有第一版：兜底回答会引用商品资料、官方 FAQ、用户评价和“资料未说明/不能保证”边界。
 - 轻量用户反馈闭环已有 Android 可见第一版：回答下方可点 `有用` / `不准确`，反馈 JSONL 写入 `data/tmp/feedback/`，该目录被 `.gitignore` 忽略。
-- 更细的 claim-level groundedness judge 是下一阶段增强项。
+- 更细的 claim-level groundedness 已有第一版人工标注样例和报告脚本；完整自动化 judge 平台仍是下一阶段增强项。
 - Guardrail / fallback 是规则版，不是完整 groundedness judge。
 
 ## Recommended Reading Order
