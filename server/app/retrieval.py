@@ -133,7 +133,10 @@ APPAREL_TERMS = [
     "健身",
     "训练",
     "瑜伽",
+    "穿搭",
+    "搭配",
     "衣服",
+    "衣物",
     "短袖",
     "t恤",
     "T恤",
@@ -450,7 +453,21 @@ def _extract_category_candidates(
         candidates.append("digital")
     if "food" not in excluded_categories and _looks_like_food_query(query):
         candidates.append("food")
-    return candidates
+    return list(dict.fromkeys(candidates))
+
+
+def _is_scene_bundle_query(query: str) -> bool:
+    return _planned_recommendation_mode(query) == "scene_bundle"
+
+
+def _planned_recommendation_mode(query: str) -> str | None:
+    matches = re.findall(r"(?m)^-\s*推荐模式：([^\n]+)$", query)
+    if not matches:
+        return None
+    label = matches[-1].strip()
+    if "场景组合" in label:
+        return "scene_bundle"
+    return label or None
 
 
 def _structured_category_candidates(query: str) -> list[str] | None:
@@ -669,7 +686,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         )
 
     scored.sort(key=lambda pair: (pair[0], -_min_purchase_price(pair[1]["raw"])), reverse=True)
-    selected_scored = _select_ranked_scored(scored, limit=limit, intent=intent)
+    selected_scored = _select_ranked_scored(scored, limit=limit, intent=intent, query=query)
     selected_scored = _order_referenced_scored(selected_scored, intent)
     selected = [item for _, item, _ in selected_scored]
     final_hits = [
@@ -940,6 +957,10 @@ def _missing_required_effect(intent: QueryIntent, item: dict) -> str | None:
     required_effects = intent.facets.get("effect", [])
     if not required_effects:
         return None
+    if item["raw"].get("category") != "美妆护肤" and "防晒" in required_effects:
+        required_effects = [effect for effect in required_effects if effect != "防晒"]
+        if not required_effects:
+            return None
     specific_effects = [
         effect
         for effect in required_effects
@@ -1201,7 +1222,13 @@ def _select_ranked_scored(
     *,
     limit: int,
     intent: QueryIntent,
+    query: str,
 ) -> list[tuple[float, dict, list[str]]]:
+    if _is_scene_bundle_query(query) and not intent.referenced_product_ids:
+        selected = _select_scene_bundle_scored(scored, limit=limit, intent=intent)
+        if selected:
+            return selected
+
     if not intent.comparison_mode or intent.referenced_product_ids:
         return scored[:limit]
 
@@ -1237,6 +1264,79 @@ def _select_ranked_scored(
         if len(selected) >= limit:
             break
     return selected[:limit]
+
+
+def _select_scene_bundle_scored(
+    scored: list[tuple[float, dict, list[str]]],
+    *,
+    limit: int,
+    intent: QueryIntent,
+) -> list[tuple[float, dict, list[str]]]:
+    selected: list[tuple[float, dict, list[str]]] = []
+    selected_ids: set[str] = set()
+    selected_sub_categories: set[str] = set()
+
+    for category in intent.category_candidates:
+        match = _first_unselected(
+            scored,
+            selected_ids,
+            lambda entry, expected=category: _canonical_category(entry[1]) == expected,
+        )
+        if match is None:
+            continue
+        _append_selected_scored(match, selected, selected_ids, selected_sub_categories)
+        if len(selected) >= limit:
+            return selected[:limit]
+
+    for entry in scored:
+        product_id = str(entry[1]["raw"].get("product_id"))
+        sub_category = str(entry[1]["raw"].get("sub_category", ""))
+        if product_id in selected_ids or sub_category in selected_sub_categories:
+            continue
+        _append_selected_scored(entry, selected, selected_ids, selected_sub_categories)
+        if len(selected) >= limit:
+            return selected[:limit]
+
+    for entry in scored:
+        product_id = str(entry[1]["raw"].get("product_id"))
+        if product_id in selected_ids:
+            continue
+        _append_selected_scored(entry, selected, selected_ids, selected_sub_categories)
+        if len(selected) >= limit:
+            break
+    return selected[:limit]
+
+
+def _first_unselected(
+    scored: list[tuple[float, dict, list[str]]],
+    selected_ids: set[str],
+    predicate,
+) -> tuple[float, dict, list[str]] | None:
+    for entry in scored:
+        product_id = str(entry[1]["raw"].get("product_id"))
+        if product_id in selected_ids:
+            continue
+        if predicate(entry):
+            return entry
+    return None
+
+
+def _append_selected_scored(
+    entry: tuple[float, dict, list[str]],
+    selected: list[tuple[float, dict, list[str]]],
+    selected_ids: set[str],
+    selected_sub_categories: set[str],
+) -> None:
+    selected.append(entry)
+    selected_ids.add(str(entry[1]["raw"].get("product_id")))
+    selected_sub_categories.add(str(entry[1]["raw"].get("sub_category", "")))
+
+
+def _canonical_category(item: dict) -> str:
+    return str(
+        item.get("canonical_category")
+        or CATEGORY_TO_CANONICAL.get(str(item["raw"].get("category", "")), "unknown")
+    )
 
 
 def _order_referenced_scored(

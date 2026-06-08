@@ -84,6 +84,16 @@ CASES: dict[str, dict[str, Any]] = {
         "history": [],
         "expect": {"needs_clarification": True, "allow_no_valid_delta": True},
     },
+    "scene_bundle_sanya": {
+        "title": "场景组合：三亚度假从防晒到穿搭",
+        "message": "下周去三亚度假，帮我搭配一套从防晒到穿搭的方案",
+        "history": [],
+        "expect": {
+            "recommendation_mode": "scene_bundle",
+            "search_slot_categories": ["beauty", "apparel"],
+            "search_slot_sub_categories_any": ["防晒", "短袖T恤", "速干T恤", "帽子", "运动短裤", "背包"],
+        },
+    },
 }
 
 
@@ -191,6 +201,27 @@ def evaluate(expectation: dict[str, Any], trace: dict[str, Any]) -> list[str]:
     expected_refs = expectation.get("referenced_product_ids")
     if expected_refs is not None and validated.get("referenced_product_ids") != expected_refs:
         failures.append(f"referenced_product_ids expected={expected_refs} got={validated.get('referenced_product_ids')}")
+    expected_mode = expectation.get("recommendation_mode")
+    if expected_mode is not None and validated.get("recommendation_mode") != expected_mode:
+        failures.append(f"recommendation_mode expected={expected_mode} got={validated.get('recommendation_mode')}")
+    expected_slot_categories = expectation.get("search_slot_categories")
+    if expected_slot_categories is not None:
+        slots = validated.get("search_slots") or []
+        actual_categories = [slot.get("category") for slot in slots if isinstance(slot, dict)]
+        missing = [category for category in expected_slot_categories if category not in actual_categories]
+        if missing:
+            failures.append(f"search_slot_categories missing={missing} got={actual_categories}")
+    expected_any_sub_categories = expectation.get("search_slot_sub_categories_any")
+    if expected_any_sub_categories:
+        slots = validated.get("search_slots") or []
+        actual_sub_categories: list[str] = []
+        for slot in slots:
+            if isinstance(slot, dict):
+                actual_sub_categories.extend(str(item) for item in slot.get("sub_categories", []))
+        if not set(expected_any_sub_categories).intersection(actual_sub_categories):
+            failures.append(
+                f"search_slot_sub_categories_any expected_any={expected_any_sub_categories} got={actual_sub_categories}"
+            )
     return failures
 
 

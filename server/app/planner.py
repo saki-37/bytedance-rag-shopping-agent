@@ -17,8 +17,8 @@ from app.retrieval import CATEGORY_TO_RAW, EXCLUDE_TERMS, FACET_LEXICON, categor
 logger = logging.getLogger(__name__)
 
 CATEGORY_SIGNAL_ALIASES = {
-    "beauty": ["美妆", "护肤", "护肤品", "化妆品", "彩妆"],
-    "apparel": ["服饰", "运动类", "运动用品", "健身", "训练", "瑜伽", "跑步", "徒步", "运动鞋", "运动服"],
+    "beauty": ["美妆", "护肤", "护肤品", "化妆品", "彩妆", "防晒"],
+    "apparel": ["服饰", "运动类", "运动用品", "健身", "训练", "瑜伽", "跑步", "徒步", "运动鞋", "运动服", "穿搭", "衣服", "帽子", "短裤", "背包"],
     "digital": ["数码", "电子", "手机", "电脑", "平板", "耳机", "拍照", "续航"],
     "food": ["食品", "饮料", "零食", "咖啡", "茶饮", "减脂", "控糖", "低糖", "无糖", "提神"],
 }
@@ -38,6 +38,7 @@ class PlannerCategoryPatch(BaseModel):
         "explicit_exclusion",
         "category_switch",
         "gift_broadening",
+        "scene_bundle",
         "unclear",
     ] = "none"
 
@@ -60,6 +61,14 @@ class PlannerComparisonPlan(BaseModel):
     clarification_question: str | None = None
 
 
+class PlannerSearchSlot(BaseModel):
+    label: str = ""
+    category: Literal["beauty", "apparel", "digital", "food", "unknown"] = "unknown"
+    sub_categories: list[str] = Field(default_factory=list)
+    effects: list[str] = Field(default_factory=list)
+    use_cases: list[str] = Field(default_factory=list)
+
+
 class RetrievalPlan(BaseModel):
     turn_type: Literal[
         "new_search",
@@ -70,10 +79,19 @@ class RetrievalPlan(BaseModel):
         "reset",
         "chitchat",
     ] = "new_search"
+    recommendation_mode: Literal[
+        "single_category",
+        "scene_bundle",
+        "comparison",
+        "followup",
+        "clarify",
+        "unknown",
+    ] = "unknown"
     rewrite_query: str = ""
     budget_update: PlannerBudgetUpdate = Field(default_factory=PlannerBudgetUpdate)
     category_patch: PlannerCategoryPatch = Field(default_factory=PlannerCategoryPatch)
     facets_patch: dict[str, list[str]] = Field(default_factory=dict)
+    search_slots: list[PlannerSearchSlot] = Field(default_factory=list)
     exclude_terms_patch: list[str] = Field(default_factory=list)
     referenced_product_policy: Literal[
         "none",
@@ -173,7 +191,7 @@ async def _collect_plan_payload(
                 },
             ],
             temperature=0.0,
-            max_tokens=650,
+            max_tokens=900,
         )
         content = response.choices[0].message.content or ""
         return _loads_json_object(content)
@@ -202,15 +220,25 @@ def _planner_user_prompt(request: ChatRequest, rule_build: RetrievalMessageBuild
     }
     schema = {
         "turn_type": "new_search | refine_search | product_followup | compare | clarify | reset | chitchat",
+        "recommendation_mode": "single_category | scene_bundle | comparison | followup | clarify | unknown",
         "rewrite_query": "string, 不要加入用户没说过的商品事实",
         "budget_update": {"type": "keep | set | relax | unknown", "value": "number or null"},
         "category_patch": {
             "mode": "keep | replace | add | exclude | unknown",
             "include": list(CATEGORY_TO_RAW.keys()),
             "exclude": list(CATEGORY_TO_RAW.keys()),
-            "reason_type": "none | explicit_exclusion | category_switch | gift_broadening | unclear",
+            "reason_type": "none | explicit_exclusion | category_switch | gift_broadening | scene_bundle | unclear",
         },
         "facets_patch": allowed_facets,
+        "search_slots": [
+            {
+                "label": "short label, e.g. 防晒防护 / 海边穿搭 / 路上补给",
+                "category": "beauty | apparel | digital | food | unknown",
+                "sub_categories": allowed_facets["sub_category"],
+                "effects": allowed_facets["effect"],
+                "use_cases": allowed_facets["use_case"],
+            }
+        ],
         "exclude_terms_patch": EXCLUDE_TERMS,
         "referenced_product_policy": "none | previous_top_product | mentioned_product_ids | unknown",
         "comparison_plan": {
@@ -236,6 +264,10 @@ def _planner_user_prompt(request: ChatRequest, rule_build: RetrievalMessageBuild
         "- 用户说“非/不是/不要/不看/不太想要/除了/换个别的”某类目时，必须用 category_patch 表达排除或替换；例如“非化妆品运动类”应 exclude beauty，并 include apparel。\n"
         "- category_patch.include/exclude 只能使用 beauty/apparel/digital/food；不要发明类目。\n"
         "- facets_patch 只能使用 schema 中列出的枚举值；不要因为“夏天”直接推断“户外”。\n"
+        "- recommendation_mode 用来判断推荐形态：用户只问某个明确品类/功效时用 single_category；用户要“一套/方案/清单/组合/从A到B/某场景下搭配多个东西”时用 scene_bundle；对比时用 comparison。\n"
+        "- scene_bundle 时必须填写 search_slots；每个 slot 表示一个检索意图槽，不是商品事实。slot.category 和 slot 的枚举字段必须来自 schema。\n"
+        "- 例如“下周去三亚度假，帮我搭配一套从防晒到穿搭的方案”应是 scene_bundle，search_slots 至少包含：防晒防护 beauty/sub_category=防晒/effect=防晒/use_case=户外，以及海边穿搭 apparel/sub_category 可含 短袖T恤、速干T恤、帽子、运动短裤、背包/use_case=户外。\n"
+        "- 不要把同一个场景方案压成单一品类；如果用户明确说“只看防晒/只要护肤品/只比较两款防晒”，才保持单品类。\n"
         "- exclude_terms_patch 只能使用用户明确说要避开的词。\n"
         "- referenced_product_policy 只能用于“它/这款/第一款/刚才那款”等指代；不能捏造商品 ID。\n"
         "- 如果用户要求对比/怎么选/哪个更适合，turn_type=compare，并填写 comparison_plan。\n"
@@ -273,10 +305,12 @@ def _validate_plan(
     additions: list[str] = []
     validated: dict[str, object] = {
         "turn_type": plan.turn_type,
+        "recommendation_mode": "unknown",
         "rewrite_query": _clean_text(plan.rewrite_query, limit=180),
         "budget_update": {"type": "keep", "value": None},
         "category_patch": {"mode": "keep", "include": [], "exclude": [], "reason_type": "none"},
         "facets_patch": {},
+        "search_slots": [],
         "exclude_terms_patch": [],
         "referenced_product_ids": [],
         "referenced_product_policy": plan.referenced_product_policy,
@@ -285,6 +319,11 @@ def _validate_plan(
         "clarification_question": _clean_text(plan.clarification_question or "", limit=80) or None,
         "confidence": max(0.0, min(float(plan.confidence), 1.0)),
     }
+
+    mode_lines, recommendation_mode, search_slots = _validate_recommendation_plan(plan, request, validation_errors)
+    additions.extend(mode_lines)
+    validated["recommendation_mode"] = recommendation_mode
+    validated["search_slots"] = search_slots
 
     budget_line = _validate_budget_update(plan, request, rule_build, validation_errors)
     if budget_line:
@@ -316,6 +355,105 @@ def _validate_plan(
     validated["comparison_plan"] = comparison_plan
 
     return validated, additions, validation_errors
+
+
+def _validate_recommendation_plan(
+    plan: RetrievalPlan,
+    request: ChatRequest,
+    validation_errors: list[str],
+) -> tuple[list[str], str, list[dict[str, object]]]:
+    mode = plan.recommendation_mode
+    if mode == "unknown":
+        return [], "unknown", []
+    if mode == "comparison":
+        return ["- 推荐模式：对比"] if plan.turn_type == "compare" else [], mode, []
+    if mode in {"single_category", "followup", "clarify"}:
+        return [], mode, []
+    if mode != "scene_bundle":
+        return [], mode, []
+
+    slots: list[dict[str, object]] = []
+    categories: list[str] = []
+    sub_categories: list[str] = []
+    effects: list[str] = []
+    use_cases: list[str] = []
+    for raw_slot in plan.search_slots[:6]:
+        category = raw_slot.category
+        if category == "unknown":
+            validation_errors.append("search_slot.unknown_category")
+            continue
+        if category not in CATEGORY_TO_RAW:
+            validation_errors.append(f"search_slot.invalid_category:{category}")
+            continue
+        slot_sub_categories = _accepted_slot_facet_values("sub_category", raw_slot.sub_categories, validation_errors)
+        slot_effects = _accepted_slot_facet_values("effect", raw_slot.effects, validation_errors)
+        slot_use_cases = _accepted_slot_facet_values("use_case", raw_slot.use_cases, validation_errors)
+        if not (slot_sub_categories or slot_effects or slot_use_cases):
+            validation_errors.append(f"search_slot.empty:{category}")
+            continue
+        label = _clean_text(raw_slot.label, limit=20) or CATEGORY_TO_RAW[category]
+        slot = {
+            "label": label,
+            "category": category,
+            "sub_categories": slot_sub_categories,
+            "effects": slot_effects,
+            "use_cases": slot_use_cases,
+        }
+        slots.append(slot)
+        categories.append(category)
+        sub_categories.extend(slot_sub_categories)
+        effects.extend(slot_effects)
+        use_cases.extend(slot_use_cases)
+
+    if not slots:
+        validation_errors.append("scene_bundle_without_valid_search_slots")
+        return [], "unknown", []
+
+    categories = list(dict.fromkeys(categories))
+    sub_categories = list(dict.fromkeys(sub_categories))
+    effects = list(dict.fromkeys(effects))
+    use_cases = list(dict.fromkeys(use_cases))
+
+    lines = ["- 推荐模式：场景组合"]
+    if categories:
+        lines.append(f"- 类目：{'、'.join(CATEGORY_TO_RAW[category] for category in categories)}")
+    if sub_categories:
+        lines.append(f"- 子类：{'、'.join(sub_categories)}")
+    if effects:
+        lines.append(f"- 功效：{'、'.join(effects)}")
+    if use_cases:
+        lines.append(f"- 场景：{'、'.join(use_cases)}")
+    for slot in slots:
+        parts = [
+            str(slot["label"]),
+            f"类目={CATEGORY_TO_RAW[str(slot['category'])]}",
+        ]
+        if slot["sub_categories"]:
+            parts.append(f"子类={','.join(slot['sub_categories'])}")
+        if slot["effects"]:
+            parts.append(f"功效={','.join(slot['effects'])}")
+        if slot["use_cases"]:
+            parts.append(f"场景={','.join(slot['use_cases'])}")
+        lines.append(f"- 搜索槽：{' | '.join(parts)}")
+    return lines, "scene_bundle", slots
+
+
+def _accepted_slot_facet_values(
+    facet_name: str,
+    values: list[str],
+    validation_errors: list[str],
+) -> list[str]:
+    allowed = FACET_LEXICON.get(facet_name, {})
+    accepted: list[str] = []
+    for raw_value in values:
+        value = str(raw_value).strip()
+        if not value:
+            continue
+        if value not in allowed:
+            validation_errors.append(f"search_slot.unknown_facet_value:{facet_name}={value}")
+            continue
+        accepted.append(value)
+    return list(dict.fromkeys(accepted))
 
 
 def _validate_budget_update(
@@ -474,6 +612,7 @@ def _validate_facets(
     validation_errors: list[str],
 ) -> tuple[list[str], dict[str, list[str]]]:
     combined_user_text = _combined_user_text(request)
+    slot_values = _search_slot_values_by_facet(plan.search_slots) if plan.recommendation_mode == "scene_bundle" else {}
     lines: list[str] = []
     validated: dict[str, list[str]] = {}
     label_by_facet = {
@@ -494,7 +633,7 @@ def _validate_facets(
                 validation_errors.append(f"unknown_facet_value:{facet_name}={value}")
                 continue
             aliases = allowed[value]
-            if not any(alias.lower() in combined_user_text.lower() for alias in aliases):
+            if value not in slot_values.get(facet_name, []) and not any(alias.lower() in combined_user_text.lower() for alias in aliases):
                 validation_errors.append(f"facet_without_user_signal:{facet_name}={value}")
                 continue
             accepted.append(value)
@@ -503,6 +642,15 @@ def _validate_facets(
             validated[facet_name] = accepted
             lines.append(f"- {label_by_facet.get(facet_name, facet_name)}：{'、'.join(accepted)}")
     return lines, validated
+
+
+def _search_slot_values_by_facet(slots: list[PlannerSearchSlot]) -> dict[str, list[str]]:
+    values: dict[str, list[str]] = {"sub_category": [], "effect": [], "use_case": []}
+    for slot in slots:
+        values["sub_category"].extend(_accepted_slot_facet_values("sub_category", slot.sub_categories, []))
+        values["effect"].extend(_accepted_slot_facet_values("effect", slot.effects, []))
+        values["use_case"].extend(_accepted_slot_facet_values("use_case", slot.use_cases, []))
+    return {key: list(dict.fromkeys(items)) for key, items in values.items()}
 
 
 def _validate_excludes(

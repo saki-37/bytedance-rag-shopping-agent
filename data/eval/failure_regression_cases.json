@@ -389,5 +389,39 @@
         }
       }
     ]
+  },
+  {
+    "id": "FR-012",
+    "title": "场景化组合推荐：三亚度假方案不能只召回美妆防晒",
+    "source": "Android 真实 API 复测：用户要求从防晒到穿搭的一套三亚度假方案，曾被 Planner 收窄成 beauty/防晒，最终只推荐防晒商品",
+    "turns": [
+      {
+        "user": "下周去三亚度假，帮我搭配一套从防晒到穿搭的方案",
+        "planner_additions": [
+          "- 推荐模式：场景组合",
+          "- 类目：美妆护肤、服饰运动",
+          "- 子类：防晒、短袖T恤、速干T恤、帽子、运动短裤、背包",
+          "- 功效：防晒",
+          "- 场景：户外",
+          "- 搜索槽：防晒防护 | 类目=美妆护肤 | 子类=防晒 | 功效=防晒 | 场景=户外",
+          "- 搜索槽：海边穿搭 | 类目=服饰运动 | 子类=短袖T恤,速干T恤,帽子,运动短裤,背包 | 场景=户外"
+        ],
+        "expect": {
+          "min_products": 3,
+          "min_distinct_product_categories": 2,
+          "expected_category_candidates": ["beauty", "apparel"],
+          "expected_facets": {
+            "effect": ["防晒"],
+            "use_case": ["户外"],
+            "sub_category": ["防晒", "短袖T恤"]
+          },
+          "allowed_product_categories": ["美妆护肤", "服饰运动"],
+          "expected_product_categories_present": ["美妆护肤", "服饰运动"],
+          "expected_product_sub_categories_present": ["防晒"],
+          "forbidden_product_categories": ["食品饮料", "数码电子"],
+          "retrieval_message_contains": ["三亚度假", "防晒", "穿搭", "推荐模式：场景组合"]
+        }
+      }
+    ]
   }
 ]

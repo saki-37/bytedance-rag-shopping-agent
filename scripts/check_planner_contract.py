@@ -27,6 +27,7 @@ def main() -> None:
     check_history_brand_followup_parser()
     check_recent_product_type_followup_parser()
     check_planner_category_patch()
+    check_planner_scene_bundle_plan()
     check_planner_validator()
     asyncio.run(check_planner_fallback())
     print("Planner contract checks passed")
@@ -238,6 +239,55 @@ def check_planner_category_patch() -> None:
     assert "- 排除类目：不要美妆护肤" in additions
     merged = _append_planner_additions(rule_build.message, additions, request.message)
     assert parse_query_intent(merged).category_candidates == ["apparel"], merged
+
+
+def check_planner_scene_bundle_plan() -> None:
+    request = ChatRequest(
+        message="下周去三亚度假，帮我搭配一套从防晒到穿搭的方案",
+        history=[],
+    )
+    rule_build = build_retrieval_message(request)
+    plan = RetrievalPlan.model_validate(
+        {
+            "turn_type": "new_search",
+            "recommendation_mode": "scene_bundle",
+            "rewrite_query": "三亚度假 防晒 穿搭 方案",
+            "budget_update": {"type": "keep", "value": None},
+            "category_patch": {"mode": "keep", "include": [], "exclude": [], "reason_type": "none"},
+            "facets_patch": {},
+            "search_slots": [
+                {
+                    "label": "防晒防护",
+                    "category": "beauty",
+                    "sub_categories": ["防晒"],
+                    "effects": ["防晒"],
+                    "use_cases": ["户外"],
+                },
+                {
+                    "label": "海边穿搭",
+                    "category": "apparel",
+                    "sub_categories": ["短袖T恤", "速干T恤", "帽子", "运动短裤", "背包"],
+                    "effects": [],
+                    "use_cases": ["户外"],
+                },
+            ],
+            "exclude_terms_patch": [],
+            "referenced_product_policy": "none",
+            "needs_clarification": False,
+            "clarification_question": None,
+            "confidence": 0.92,
+        }
+    )
+    validated, additions, errors = _validate_plan(plan, request, rule_build)
+    assert not errors, errors
+    assert validated["recommendation_mode"] == "scene_bundle"
+    assert "- 推荐模式：场景组合" in additions
+    assert "- 类目：美妆护肤、服饰运动" in additions
+    merged = _append_planner_additions(rule_build.message, additions, request.message)
+    intent = parse_query_intent(merged)
+    assert intent.category_candidates == ["beauty", "apparel"], merged
+    assert "防晒" in intent.facets.get("sub_category", []), merged
+    assert "帽子" in intent.facets.get("sub_category", []), merged
 
 
 def check_planner_validator() -> None:

@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 
 from app.config import Settings  # noqa: E402
-from app.conversation_state import build_retrieval_message  # noqa: E402
+from app.conversation_state import RetrievalMessageBuildResult, build_retrieval_message  # noqa: E402
 from app.data_loader import load_enriched_products, load_raw_products  # noqa: E402
 from app.models import ChatMessage, ChatRequest  # noqa: E402
 from app.retrieval import retrieve  # noqa: E402
@@ -74,6 +74,11 @@ def run_case(case: dict[str, Any], products: list[dict[str, Any]], settings: Set
             history=turn_history,
         )
         retrieval_build = build_retrieval_message(request)
+        retrieval_build = with_planner_additions(
+            retrieval_build,
+            turn.get("planner_additions") or case.get("planner_additions") or [],
+            request.message,
+        )
         result = retrieve(retrieval_build.message, products, index_dir=settings.index_dir)
         record = build_turn_record(turn_index, turn, retrieval_build, result)
         turn_records.append(record)
@@ -95,6 +100,31 @@ def run_case(case: dict[str, Any], products: list[dict[str, Any]], settings: Set
         "passed": all(turn["passed"] for turn in turn_records),
         "turns": turn_records,
     }
+
+
+def with_planner_additions(
+    retrieval_build: RetrievalMessageBuildResult,
+    additions: list[str],
+    current_message: str,
+) -> RetrievalMessageBuildResult:
+    if not additions:
+        return retrieval_build
+    return RetrievalMessageBuildResult(
+        message="\n".join(
+            [
+                retrieval_build.message,
+                "LLM Planner补充：",
+                *[str(item) for item in additions],
+                "本轮原文：",
+                current_message,
+            ]
+        ),
+        applied=True,
+        trace={
+            **retrieval_build.trace,
+            "test_planner_additions": additions,
+        },
+    )
 
 
 def build_turn_record(
@@ -165,6 +195,11 @@ def evaluate_turn(expectation: dict[str, Any], debug: dict[str, Any]) -> list[st
         failures.append(f"expected_min_products={expectation['min_products']} got={len(products)}")
     if "max_products" in expectation and len(products) > expectation["max_products"]:
         failures.append(f"expected_max_products={expectation['max_products']} got={len(products)}")
+    if "min_distinct_product_categories" in expectation:
+        expected = expectation["min_distinct_product_categories"]
+        actual = len(set(categories))
+        if actual < expected:
+            failures.append(f"expected_min_distinct_product_categories={expected} got={actual} categories={categories}")
 
     expected_exact = expectation.get("expected_product_ids_exact", [])
     if expected_exact and product_ids != expected_exact:
@@ -229,6 +264,8 @@ def evaluate_turn(expectation: dict[str, Any], debug: dict[str, Any]) -> list[st
     check_forbidden("product_categories", categories, expectation.get("forbidden_product_categories", []), failures)
     check_allowed("product_sub_categories", sub_categories, expectation.get("allowed_product_sub_categories", []), failures)
     check_forbidden("product_sub_categories", sub_categories, expectation.get("forbidden_product_sub_categories", []), failures)
+    check_present("product_categories", categories, expectation.get("expected_product_categories_present", []), failures)
+    check_present("product_sub_categories", sub_categories, expectation.get("expected_product_sub_categories_present", []), failures)
 
     for text in expectation.get("clarification_contains", []):
         if text not in clarification:
@@ -257,6 +294,14 @@ def check_forbidden(label: str, actual_values: list[str], forbidden_values: list
     present = sorted(set(actual_values).intersection(forbidden_values))
     if present:
         failures.append(f"forbidden_{label}_present={present}")
+
+
+def check_present(label: str, actual_values: list[str], expected_values: list[str], failures: list[str]) -> None:
+    if not expected_values:
+        return
+    missing = [value for value in expected_values if value not in actual_values]
+    if missing:
+        failures.append(f"missing_{label}={missing} actual={actual_values}")
 
 
 def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:

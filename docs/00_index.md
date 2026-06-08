@@ -33,6 +33,8 @@
 - [进阶路线调研顺序与取舍方案](26_advanced_route_research.md)
 - [主线验收与 Demo 收口计划](27_mainline_acceptance_and_demo_plan.md)
 - [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md)
+- [2026-06-08 评分表进度快照](29_scoring_progress_snapshot_20260608.md)
+- [场景化组合推荐 Planner 实现记录](30_scene_bundle_planner_implementation.md)
 
 ## 当前里程碑
 
@@ -53,3 +55,4 @@
 13. 2026-06-07 主线收口完成：多轮比较意图污染、肤质正向证据过滤、跑步鞋/徒步鞋用途排序、SKU 回答匹配点和 groundedness mock 边界已修；conversation 7/7、comparison 3/3、groundedness mock 11/11、Android Kotlin 编译和反馈闭环均通过。
 14. Claim-level judge 样例已落地：5 个高风险人工标注样例、8 条 claim，可渲染 Markdown/JSONL 报告，用于展示“逐条事实主张如何回到数据源”。
 15. LLM provider 切换文档已补齐：正式评测默认 Ark / Doubao，演示可临时用命令行覆盖到 Yunwu，并记录 `gpt-5.4-mini`、`gemini-3.5-flash`、`claude-sonnet-4-6` 和 `gpt-4o-mini` 候选。
+16. 场景化组合推荐 Planner 第一版已落地：Planner 输出 `scene_bundle + search_slots`，retrieval 按结构化计划跨类目选品；三亚度假 case 已有真实 API Planner probe 和 `FR-012` 回归。
