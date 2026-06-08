@@ -155,6 +155,20 @@ class HealthResponse(BaseModel):
     llm_model: str | None = None
 
 
+class AsrTranscribeResponse(BaseModel):
+    ok: bool
+    text: str = ""
+    raw_text: str | None = None
+    profile: str = "bilingual"
+    language: str = "unknown"
+    duration_ms: int | None = None
+    asr_trace_id: str
+    segments: list[dict[str, object]] = Field(default_factory=list)
+    punctuation_applied: bool = False
+    punctuation_model: str | None = None
+    error: str | None = None
+
+
 class FeedbackRequest(BaseModel):
     feedback: Literal["helpful", "inaccurate"]
     message: str = Field(min_length=1)

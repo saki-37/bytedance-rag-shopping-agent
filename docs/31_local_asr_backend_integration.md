@@ -56,11 +56,14 @@ Content-Type: multipart/form-data
 {
   "ok": true,
   "text": "我想找一款适合油皮通勤的防晒，预算两百以内。",
+  "raw_text": "我想找一款适合油皮通勤的防晒预算两百以内",
   "profile": "bilingual",
   "language": "mixed",
   "duration_ms": 5230,
   "asr_trace_id": "asr_20260608_160000_xxxx",
   "segments": [],
+  "punctuation_applied": true,
+  "punctuation_model": "ct-punc-c",
   "error": null
 }
 ```
@@ -71,11 +74,14 @@ Content-Type: multipart/form-data
 {
   "ok": false,
   "text": "",
+  "raw_text": null,
   "profile": "bilingual",
   "language": "unknown",
   "duration_ms": null,
   "asr_trace_id": "asr_20260608_160000_xxxx",
   "segments": [],
+  "punctuation_applied": false,
+  "punctuation_model": null,
   "error": "ASR service busy"
 }
 ```
@@ -199,7 +205,7 @@ adb reverse tcp:8000 tcp:8000
 默认：
 
 ```text
-bilingual = iic/SenseVoiceSmall + fsmn-vad
+bilingual = iic/SenseVoiceSmall + fsmn-vad + ct-punc-c postprocess
 ```
 
 适用：
@@ -207,11 +213,12 @@ bilingual = iic/SenseVoiceSmall + fsmn-vad
 - 中英混合。
 - 用户自然语音 query。
 - 需要自动识别语言。
+- 第一版默认使用这个 profile；ASR 先输出原始文字，再由中文标点模型恢复逗号、句号、问号。
 
 可选后续对比：
 
 ```text
-zh = paraformer-zh + fsmn-vad + ct-punc
+zh = paraformer-zh + fsmn-vad + ct-punc-c
 ```
 
 适用：
@@ -219,7 +226,7 @@ zh = paraformer-zh + fsmn-vad + ct-punc
 - 几乎全中文。
 - 更在意中文标点和普通话准确率。
 
-暂不建议第一版启用 `--speaker` / `cam++`。用户 query 不需要说话人分离，且会额外下载模型、增加推理时间。
+暂不建议第一版启用 `--speaker` / `cam++`。用户 query 不需要说话人分离，且会额外下载模型、增加推理时间。也不建议默认使用更大的 `ct-punc` 中英大模型；本地第一版中文导购场景里，`ct-punc-c` 的体积和效果更合适。
 
 ## 安全与隐私边界
 
@@ -262,6 +269,81 @@ Android：
 3. Android 加录音按钮和 multipart 上传，成功后填入输入框。
 4. 做 3 条真实口述 query 回归：中文、英文夹杂、安静/有噪声。
 5. 再决定是否需要中文专用 profile、热词、job 模式或流式 ASR。
+
+## 当前第一版实现记录
+
+已新增 sidecar 服务：
+
+```bash
+cd /Users/jia/Documents/个人工具/audio-transcription-lab
+source .venv/bin/activate
+python asr_service.py --port 8765 --keep-uploads
+```
+
+版本边界：
+
+- 当前 Git 仓库负责提交 Android 录音 UI、RAG 后端代理接口、依赖和接入文档。
+- `asr_service.py` 当前仍放在本机 `audio-transcription-lab` 目录；如果需要多人复现，应把该 sidecar 脚本纳入一个可同步仓库，或后续迁入当前 repo 的 `tools/` / `server/sidecars/` 目录。
+
+默认行为：
+
+- `bilingual` profile 使用 `SenseVoiceSmall` 做 ASR，再用 `ct-punc-c` 做中文标点恢复。
+- `zh` profile 的 FunASR 内置标点模型也使用 `ct-punc-c`，避免拉取更大的 `ct-punc` 中英大模型。
+- 首次使用标点恢复时会下载 `iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch`，模型主体约 278MB。
+- 如需临时关闭标点恢复，可启动 `python asr_service.py --port 8765 --no-punctuation`。
+- `--keep-uploads` 仅建议调试期使用；它会把 Android 上传的录音保存在 `audio-transcription-lab/outputs/service_uploads/`，方便排查“是否录到声音”。
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:8765/health
+```
+
+RAG 后端已新增代理接口：
+
+```text
+POST /api/asr/transcribe
+```
+
+本地运行需要两个进程：
+
+```bash
+# 1. ASR sidecar
+cd /Users/jia/Documents/个人工具/audio-transcription-lab
+source .venv/bin/activate
+python asr_service.py --port 8765 --keep-uploads
+
+# 2. RAG FastAPI 后端
+cd /Users/jia/Developer/bytedance-rag-shopping-agent/server
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Android 端已新增：
+
+- `RECORD_AUDIO` 权限。
+- 输入框旁麦克风按钮：点击开始录音，再次点击停止。
+- `MediaRecorder` 录制 `.m4a` / AAC 文件到 app cache。
+- 录音时显示波形条，用于确认 AVD 或真机确实有麦克风输入。
+- 停止录音后上传到 `/api/asr/transcribe`；转写成功后只填入输入框，不自动发送。
+- 网络、权限、录音、ASR 失败时显示状态文案，并保留原输入框内容。
+
+AVD 调试提醒：
+
+- Android Studio Device Manager 的 Refresh 只刷新设备列表，不会修复卡死的 emulator。
+- `adb devices -l` 应显示 `device`；如果是 `offline`，需要重启 AVD 或 ADB。
+- Emulator Extended Controls -> Microphone 里，应打开 `Virtual microphone uses host audio input`。
+- 如用 emulator 访问本机后端，保留默认 `10.0.2.2:8000` 策略；如用真机，可用 `adb reverse tcp:8000 tcp:8000`。
+
+已验证：
+
+- `asr_service.py --help` 和语法编译通过。
+- sidecar `/health` 返回 `ok: true`。
+- sidecar 未启动时，RAG 代理返回结构化 `ok: false` JSON。
+- 使用 FunASR 自带 `SenseVoiceSmall/example/zh.mp3` 通过 RAG 代理完成真实转写，返回 `开饭时间早上九点至下午五点`。
+- 使用 Android 录音样本验证 `ct-punc-c` 后处理：原始文本无标点，返回文本包含逗号、句号、问号，且 `punctuation_applied: true`。
+- Android `:client:android:app:compileDebugKotlin` 通过。
+- `git diff --check` 通过。
 
 ## 交给实现者的关键提醒
 

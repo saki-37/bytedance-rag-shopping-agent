@@ -42,6 +42,13 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
 )
 
+data class AsrTranscriptionResult(
+    val ok: Boolean,
+    val text: String,
+    val error: String?,
+    val traceId: String?,
+)
+
 enum class Role {
     User,
     Assistant,

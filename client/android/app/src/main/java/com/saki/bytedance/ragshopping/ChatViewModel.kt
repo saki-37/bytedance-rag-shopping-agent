@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.File
 
 data class ChatUiState(
     val input: String = "",
@@ -19,6 +20,8 @@ data class ChatUiState(
     ),
     val isLoading: Boolean = false,
     val statusText: String? = null,
+    val isTranscribing: Boolean = false,
+    val asrStatusText: String? = null,
 )
 
 class ChatViewModel(
@@ -28,7 +31,7 @@ class ChatViewModel(
     val state: StateFlow<ChatUiState> = _state
 
     fun updateInput(value: String) {
-        _state.update { it.copy(input = value) }
+        _state.update { it.copy(input = value, asrStatusText = null) }
     }
 
     fun send() {
@@ -105,6 +108,49 @@ class ChatViewModel(
         }
     }
 
+    fun transcribeAudio(audioFile: File) {
+        if (state.value.isLoading || state.value.isTranscribing) {
+            audioFile.delete()
+            return
+        }
+
+        _state.update {
+            it.copy(
+                isTranscribing = true,
+                asrStatusText = "正在本地转写...",
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                val result = client.transcribeAudio(audioFile)
+                _state.update { current ->
+                    if (result.ok && result.text.isNotBlank()) {
+                        current.copy(
+                            input = mergeVoiceInput(current.input, result.text),
+                            isTranscribing = false,
+                            asrStatusText = "已转写，可修改后发送",
+                        )
+                    } else {
+                        current.copy(
+                            isTranscribing = false,
+                            asrStatusText = "转写失败：${result.error ?: "没有识别到文字"}",
+                        )
+                    }
+                }
+            } catch (error: Exception) {
+                _state.update { current ->
+                    current.copy(
+                        isTranscribing = false,
+                        asrStatusText = "转写失败：${error.localizedMessage ?: "网络或 ASR 服务异常"}",
+                    )
+                }
+            } finally {
+                audioFile.delete()
+            }
+        }
+    }
+
     private fun sendMessage(message: String) {
         if (message.isEmpty() || state.value.isLoading) return
         val history = state.value.messages
@@ -116,6 +162,7 @@ class ChatViewModel(
                 input = "",
                 isLoading = true,
                 statusText = null,
+                asrStatusText = null,
                 pendingProducts = emptyList(),
                 messages = it.messages + ChatMessage(Role.User, message) + ChatMessage(Role.Assistant, ""),
             )
@@ -198,5 +245,11 @@ class ChatViewModel(
         transform: (ChatMessage) -> ChatMessage,
     ): List<ChatMessage> {
         return map { message -> if (message.id == messageId) transform(message) else message }
+    }
+
+    private fun mergeVoiceInput(existing: String, recognized: String): String {
+        val cleanText = recognized.trim()
+        if (existing.isBlank()) return cleanText
+        return "${existing.trimEnd()} $cleanText"
     }
 }

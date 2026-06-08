@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     image_base_path: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"
     feedback_dir: Path = ROOT_DIR / "data" / "tmp" / "feedback"
     trace_dir: Path = ROOT_DIR / "data" / "tmp" / "traces"
+    asr_sidecar_url: str = "http://127.0.0.1:8765/transcribe"
+    asr_upload_dir: Path = ROOT_DIR / "data" / "tmp" / "asr" / "uploads"
+    asr_max_upload_mb: int = 50
+    asr_timeout_seconds: float = 180.0
 
     @property
     def active_llm_provider(self) -> str:

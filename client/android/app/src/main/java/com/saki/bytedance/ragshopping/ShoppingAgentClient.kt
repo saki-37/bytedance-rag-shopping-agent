@@ -5,11 +5,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.ConnectionPool
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
@@ -33,6 +36,7 @@ class ShoppingAgentClient(
         .build(),
 ) {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+    private val m4aMediaType = "audio/mp4".toMediaType()
     @Volatile
     private var activeBaseUrl: String = baseUrls.firstOrNull() ?: BackendConfig.DefaultBaseUrl
 
@@ -123,6 +127,46 @@ class ShoppingAgentClient(
         }
     }
 
+    suspend fun transcribeAudio(
+        audioFile: File,
+        profile: String = "bilingual",
+    ): AsrTranscriptionResult {
+        return withContext(Dispatchers.IO) {
+            var lastError: IOException? = null
+            for (baseUrl in orderedBaseUrls()) {
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("profile", profile)
+                    .addFormDataPart("conversation_id", "android-demo")
+                    .addFormDataPart("file", audioFile.name, audioFile.asRequestBody(m4aMediaType))
+                    .build()
+                val request = Request.Builder()
+                    .url("$baseUrl/api/asr/transcribe")
+                    .header("Connection", "close")
+                    .post(requestBody)
+                    .build()
+
+                Log.d(TAG, "POST $baseUrl/api/asr/transcribe")
+                try {
+                    okHttpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            val messageText = "HTTP ${response.code}"
+                            Log.w(TAG, "$messageText $body")
+                            throw IllegalStateException(messageText)
+                        }
+                        activeBaseUrl = baseUrl
+                        return@withContext parseAsrResult(JSONObject(body))
+                    }
+                } catch (exception: IOException) {
+                    Log.w(TAG, "ASR request failed for $baseUrl", exception)
+                    lastError = exception
+                }
+            }
+            throw IllegalStateException(userFacingNetworkError(lastError))
+        }
+    }
+
     private suspend fun streamChatFromBaseUrl(
         baseUrl: String,
         payload: String,
@@ -186,6 +230,15 @@ class ShoppingAgentClient(
             "error" -> StreamEvent.Error(json.optString("message", "Unknown error"))
             else -> null
         }
+    }
+
+    private fun parseAsrResult(json: JSONObject): AsrTranscriptionResult {
+        return AsrTranscriptionResult(
+            ok = json.optBoolean("ok"),
+            text = json.optString("text"),
+            error = json.optString("error").takeIf { it.isNotBlank() && it != "null" },
+            traceId = json.optString("asr_trace_id").takeIf { it.isNotBlank() },
+        )
     }
 
     private fun List<ChatMessage>.toPayloadHistory(): JSONArray {

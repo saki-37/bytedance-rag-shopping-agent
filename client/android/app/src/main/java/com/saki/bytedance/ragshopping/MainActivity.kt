@@ -1,10 +1,17 @@
 package com.saki.bytedance.ragshopping
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
+import android.media.MediaRecorder
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.BackHandler
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -57,6 +64,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -82,10 +90,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import kotlinx.coroutines.delay
+import java.io.File
+import kotlin.math.sqrt
 
 private val AppGreen = Color(0xFFB7D65A)
 private val AppGreenSoft = Color(0xFFEAF6D5)
@@ -108,6 +119,8 @@ private val DetailBackdropBlurRadius = 3.dp
 private val ProductTagChipMinWidth = 56.dp
 private val DetailInfoChipMinWidth = 64.dp
 private val MessageAssistantAvatarSize = 30.dp
+private const val VoiceWaveformBarCount = 18
+private const val VoiceWaveformSampleMillis = 80L
 private val TablerSendIcon: ImageVector = ImageVector.Builder(
     name = "TablerSend",
     defaultWidth = 24.dp,
@@ -151,6 +164,37 @@ private val TablerXIcon: ImageVector = ImageVector.Builder(
         lineTo(6f, 18f)
         moveTo(6f, 6f)
         lineTo(18f, 18f)
+    }
+}.build()
+private val TablerMicrophoneIcon: ImageVector = ImageVector.Builder(
+    name = "TablerMicrophone",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(12f, 3f)
+        curveTo(10.3f, 3f, 9f, 4.3f, 9f, 6f)
+        verticalLineTo(11f)
+        curveTo(9f, 12.7f, 10.3f, 14f, 12f, 14f)
+        curveTo(13.7f, 14f, 15f, 12.7f, 15f, 11f)
+        verticalLineTo(6f)
+        curveTo(15f, 4.3f, 13.7f, 3f, 12f, 3f)
+        close()
+        moveTo(5f, 10f)
+        curveTo(5f, 13.9f, 8.1f, 17f, 12f, 17f)
+        curveTo(15.9f, 17f, 19f, 13.9f, 19f, 10f)
+        moveTo(12f, 17f)
+        verticalLineTo(21f)
+        moveTo(8f, 21f)
+        horizontalLineTo(16f)
     }
 }.build()
 
@@ -234,10 +278,13 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
             InputBar(
                 value = state.input,
                 isLoading = state.isLoading,
+                isTranscribing = state.isTranscribing,
                 statusText = state.statusText,
+                asrStatusText = state.asrStatusText,
                 onValueChange = viewModel::updateInput,
                 onSend = viewModel::send,
                 onQuickPrompt = viewModel::sendPrompt,
+                onAudioRecorded = viewModel::transcribeAudio,
             )
         }
         selectedProduct?.let { product ->
@@ -1147,6 +1194,63 @@ private fun LoadingStatusCard(statusText: String) {
 }
 
 @Composable
+private fun VoiceStatusCard(
+    text: String,
+    isError: Boolean,
+    waveformLevels: List<Float> = emptyList(),
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (isError) ErrorSurface else AppGreenSoft, RoundedCornerShape(16.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(9.dp),
+    ) {
+        Icon(
+            imageVector = TablerMicrophoneIcon,
+            contentDescription = null,
+            tint = if (isError) ErrorText else AccentGreenDark,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            text = text,
+            color = if (isError) ErrorText else MutedText,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.weight(1f),
+        )
+        if (waveformLevels.isNotEmpty()) {
+            VoiceWaveform(
+                levels = waveformLevels,
+                color = if (isError) ErrorText else AccentGreenDark,
+            )
+        }
+    }
+}
+
+@Composable
+private fun VoiceWaveform(levels: List<Float>, color: Color) {
+    Row(
+        modifier = Modifier.width(82.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        levels.takeLast(VoiceWaveformBarCount).forEach { level ->
+            val barHeight = (4 + 18 * level.coerceIn(0f, 1f)).dp
+            Box(
+                modifier = Modifier
+                    .width(3.dp)
+                    .height(barHeight)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(color.copy(alpha = 0.28f + 0.72f * level.coerceIn(0f, 1f))),
+            )
+        }
+    }
+}
+
+@Composable
 private fun LoadingDots(color: Color) {
     val transition = rememberInfiniteTransition(label = "loading-dots")
     val phase by transition.animateFloat(
@@ -1167,6 +1271,45 @@ private fun LoadingDots(color: Color) {
                     .size(if (active) 6.dp else 5.dp)
                     .clip(RoundedCornerShape(999.dp))
                     .background(color.copy(alpha = if (active) 1f else 0.32f)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun VoiceRecordButton(
+    isRecording: Boolean,
+    isTranscribing: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val buttonEnabled = enabled && !isTranscribing
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                when {
+                    isRecording -> ErrorSurface
+                    buttonEnabled -> AppGreenSoft
+                    else -> BorderGreen
+                }
+            )
+            .clickable(enabled = buttonEnabled) { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (isTranscribing) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = MutedText,
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = TablerMicrophoneIcon,
+                contentDescription = if (isRecording) "停止录音" else "开始录音",
+                tint = if (isRecording) ErrorText else AccentGreenDark,
+                modifier = Modifier.size(21.dp),
             )
         }
     }
@@ -1983,11 +2126,91 @@ private fun ProductCard.knowledgeSections(): KnowledgeSections {
 private fun InputBar(
     value: String,
     isLoading: Boolean,
+    isTranscribing: Boolean,
     statusText: String?,
+    asrStatusText: String?,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     onQuickPrompt: (String) -> Unit,
+    onAudioRecorded: (File) -> Unit,
 ) {
+    val context = LocalContext.current
+    var recordingSession by remember { mutableStateOf<VoiceRecordingSession?>(null) }
+    var voiceError by remember { mutableStateOf<String?>(null) }
+    var waveformLevels by remember {
+        mutableStateOf(List(VoiceWaveformBarCount) { 0.03f })
+    }
+
+    fun startRecording() {
+        if (isLoading || isTranscribing || recordingSession != null) return
+        voiceError = null
+        runCatching {
+            startVoiceRecording(context)
+        }.onSuccess { session ->
+            waveformLevels = List(VoiceWaveformBarCount) { 0.03f }
+            recordingSession = session
+        }.onFailure { error ->
+            voiceError = "录音启动失败：${error.localizedMessage ?: "请检查麦克风权限"}"
+        }
+    }
+
+    fun stopRecording() {
+        val session = recordingSession ?: return
+        recordingSession = null
+        runCatching {
+            session.stop()
+        }.onSuccess { audioFile ->
+            voiceError = null
+            onAudioRecorded(audioFile)
+        }.onFailure { error ->
+            session.file.delete()
+            voiceError = "录音失败：${error.localizedMessage ?: "录音时间太短，请重新试一次"}"
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) {
+            startRecording()
+        } else {
+            voiceError = "需要麦克风权限才能语音输入"
+        }
+    }
+
+    fun toggleRecording() {
+        if (recordingSession != null) {
+            stopRecording()
+            return
+        }
+        if (hasRecordAudioPermission(context)) {
+            startRecording()
+        } else {
+            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            recordingSession?.discard()
+        }
+    }
+
+    LaunchedEffect(recordingSession) {
+        val session = recordingSession ?: return@LaunchedEffect
+        while (recordingSession === session) {
+            waveformLevels = (waveformLevels + session.amplitudeLevel()).takeLast(VoiceWaveformBarCount)
+            delay(VoiceWaveformSampleMillis)
+        }
+    }
+
+    val voiceStatusText = when {
+        recordingSession != null -> "正在录音，再点一次停止"
+        isTranscribing -> "正在本地转写..."
+        voiceError != null -> voiceError
+        asrStatusText != null -> asrStatusText
+        else -> null
+    }
+    val isVoiceStatusError = voiceError != null || asrStatusText?.startsWith("转写失败") == true
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -2003,6 +2226,13 @@ private fun InputBar(
         ) {
             if (statusText != null) {
                 LoadingStatusCard(statusText = statusText)
+            }
+            if (voiceStatusText != null) {
+                VoiceStatusCard(
+                    text = voiceStatusText,
+                    isError = isVoiceStatusError,
+                    waveformLevels = if (recordingSession != null) waveformLevels else emptyList(),
+                )
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 DemoPrompts.forEach { (label, prompt) ->
@@ -2037,6 +2267,12 @@ private fun InputBar(
                     ),
                     shape = RoundedCornerShape(18.dp),
                 )
+                VoiceRecordButton(
+                    isRecording = recordingSession != null,
+                    isTranscribing = isTranscribing,
+                    enabled = !isLoading,
+                    onClick = ::toggleRecording,
+                )
                 Button(
                     onClick = onSend,
                     enabled = !isLoading && value.isNotBlank(),
@@ -2066,4 +2302,69 @@ private fun InputBar(
         }
     }
     Spacer(modifier = Modifier.height(4.dp))
+}
+
+private class VoiceRecordingSession(
+    private val recorder: MediaRecorder,
+    val file: File,
+) {
+    private var released = false
+
+    fun stop(): File {
+        try {
+            recorder.stop()
+            return file
+        } finally {
+            release()
+        }
+    }
+
+    fun discard() {
+        if (!released) {
+            runCatching { recorder.stop() }
+            release()
+        }
+        file.delete()
+    }
+
+    fun amplitudeLevel(): Float {
+        if (released) return 0f
+        val amplitude = runCatching { recorder.maxAmplitude }.getOrDefault(0)
+        if (amplitude <= 0) return 0.03f
+        return sqrt(amplitude / 32767f).coerceIn(0.03f, 1f)
+    }
+
+    private fun release() {
+        if (released) return
+        runCatching { recorder.reset() }
+        recorder.release()
+        released = true
+    }
+}
+
+private fun startVoiceRecording(context: Context): VoiceRecordingSession {
+    val outputFile = File.createTempFile("voice_query_", ".m4a", context.cacheDir)
+    val recorder = createMediaRecorder(context)
+    recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+    recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+    recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+    recorder.setAudioSamplingRate(16000)
+    recorder.setAudioEncodingBitRate(64000)
+    recorder.setOutputFile(outputFile.absolutePath)
+    recorder.prepare()
+    recorder.start()
+    return VoiceRecordingSession(recorder = recorder, file = outputFile)
+}
+
+private fun createMediaRecorder(context: Context): MediaRecorder {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        MediaRecorder(context)
+    } else {
+        @Suppress("DEPRECATION")
+        MediaRecorder()
+    }
+}
+
+private fun hasRecordAudioPermission(context: Context): Boolean {
+    return context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 }

@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.asr_routes import router as asr_router
 from app.config import get_settings
 from app.data_loader import load_enriched_products, load_raw_products
 from app.feedback import save_feedback
@@ -34,6 +35,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.mount("/assets", StaticFiles(directory=settings.image_base_path), name="assets")
+app.include_router(asr_router)
 
 
 @app.get("/health", response_model=HealthResponse)
