@@ -101,8 +101,15 @@ def main() -> None:
 
         if args.check_stream:
             stream_body = client.post_stream("/api/chat/stream", {"message": spec.query})
-            if "event: done" not in stream_body or "event: products" not in stream_body:
+            if "event: done" not in stream_body:
                 record["failures"].append("incomplete_sse_shape")
+                record["passed"] = False
+            if spec.must_clarify:
+                if "event: products" in stream_body:
+                    record["failures"].append("unexpected_products_event_for_clarification")
+                    record["passed"] = False
+            elif "event: products" not in stream_body:
+                record["failures"].append("missing_products_event")
                 record["passed"] = False
 
         records.append(record)

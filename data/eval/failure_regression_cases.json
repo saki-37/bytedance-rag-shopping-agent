@@ -295,5 +295,99 @@
         }
       }
     ]
+  },
+  {
+    "id": "FR-010",
+    "title": "短句新品类：连续跨品类后早八咖啡不能继承旧上下文",
+    "source": "Android 真实测试：防晒和 T 恤对比后点击早八咖啡，曾返回巴黎欧莱雅防晒",
+    "history": [
+      {
+        "role": "user",
+        "content": "我是油皮，想要200元以内通勤防晒"
+      },
+      {
+        "role": "assistant",
+        "content": "已推荐巴黎欧莱雅防晒同系列规格。",
+        "product_ids": ["p_beauty_006"]
+      },
+      {
+        "role": "user",
+        "content": "AIRism和DRY-EX两件T恤哪个更适合夏天通勤和运动？"
+      },
+      {
+        "role": "assistant",
+        "content": "已对比 AIRism 和 DRY-EX 两件T恤。",
+        "product_ids": ["p_clothes_001", "p_clothes_002"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "早八想提神，想要便携咖啡，不要太甜",
+        "expect": {
+          "expected_category_candidates": ["food"],
+          "forbidden_category_candidates": ["beauty", "apparel"],
+          "expected_facets": {
+            "use_case": ["提神"],
+            "sub_category": ["咖啡"]
+          },
+          "allowed_product_categories": ["食品饮料"],
+          "allowed_product_sub_categories": ["咖啡"],
+          "forbidden_product_categories": ["美妆护肤", "服饰运动"],
+          "forbidden_product_sub_categories": ["防晒", "T恤"],
+          "expected_any_product_ids": ["p_food_001", "p_food_002", "p_food_023"],
+          "forbidden_product_ids": ["p_beauty_006", "p_clothes_001", "p_clothes_002"],
+          "retrieval_message_contains": ["早八想提神", "便携咖啡"],
+          "retrieval_message_not_contains": ["类目：美妆护肤", "类目：服饰运动", "肤质：油皮", "防晒", "T恤"]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-011",
+    "title": "短句泛需求：连续多轮后信息不足追问不能继承旧商品条件",
+    "source": "Android 真实 API 复测：防晒、T 恤和咖啡后点击信息不足追问，曾继承旧条件返回巴黎欧莱雅防晒",
+    "history": [
+      {
+        "role": "user",
+        "content": "我是油皮，想要200元以内通勤防晒"
+      },
+      {
+        "role": "assistant",
+        "content": "已推荐巴黎欧莱雅防晒同系列规格。",
+        "product_ids": ["p_beauty_006"]
+      },
+      {
+        "role": "user",
+        "content": "AIRism和DRY-EX两件T恤哪个更适合夏天通勤和运动？"
+      },
+      {
+        "role": "assistant",
+        "content": "已对比 AIRism 和 DRY-EX 两件T恤。",
+        "product_ids": ["p_clothes_001", "p_clothes_002"]
+      },
+      {
+        "role": "user",
+        "content": "早八想提神，想要便携咖啡，不要太甜"
+      },
+      {
+        "role": "assistant",
+        "content": "已推荐几款便携咖啡。",
+        "product_ids": ["p_food_022", "p_food_002", "p_food_001"]
+      }
+    ],
+    "turns": [
+      {
+        "user": "我想买护肤品，你推荐什么？",
+        "expect": {
+          "must_clarify": true,
+          "max_products": 0,
+          "expected_category_candidates": ["beauty"],
+          "forbidden_product_ids": ["p_beauty_006", "p_clothes_001", "p_clothes_002", "p_food_022", "p_food_002", "p_food_001"],
+          "clarification_contains": ["肤质", "预算"],
+          "retrieval_message_contains": ["我想买护肤品"],
+          "retrieval_message_not_contains": ["规则合并后的检索状态", "200元以内", "防晒", "T恤", "咖啡", "早八"]
+        }
+      }
+    ]
   }
 ]

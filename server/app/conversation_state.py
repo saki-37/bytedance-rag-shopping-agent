@@ -46,6 +46,34 @@ FOLLOW_UP_TERMS = [
     "第三款",
 ]
 
+FOLLOW_UP_ONLY_TERMS = [
+    "放宽",
+    "降低",
+    "降到",
+    "降至",
+    "先看",
+    "先不看",
+    "优先",
+    "排除",
+    "避开",
+    "条件",
+    "便宜",
+    "贵",
+    "换成",
+    "换到",
+    "改看",
+    "刚才",
+    "上一款",
+    "第一款",
+    "第二款",
+    "第三款",
+    "那款",
+    "这款",
+    "那个",
+    "这个",
+    "它",
+]
+
 CONTINUATION_MARKERS = [
     "还有",
     "另外",
@@ -136,9 +164,15 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
 
 def _is_follow_up(message: str, intent: QueryIntent) -> bool:
     normalized = message.strip()
-    if len(normalized) <= 24:
+    if category_exclusions(normalized):
         return True
     if _has_continuation_marker(normalized):
+        return True
+    if _is_self_contained_domain_query(normalized, intent):
+        return False
+    if _is_self_contained_clarification_query(normalized, intent):
+        return False
+    if len(normalized) <= 24:
         return True
     has_structured_intent = (
         bool(intent.category_candidates)
@@ -151,6 +185,31 @@ def _is_follow_up(message: str, intent: QueryIntent) -> bool:
     if any(term in normalized for term in FOLLOW_UP_TERMS):
         return True
     return not has_structured_intent
+
+
+def _is_self_contained_domain_query(message: str, intent: QueryIntent) -> bool:
+    has_domain_intent = bool(intent.facets.get("sub_category")) or any(
+        category != "beauty" for category in intent.category_candidates
+    )
+    if not has_domain_intent:
+        return False
+    if _has_product_reference_signal(message):
+        return False
+    return not _has_follow_up_only_term(message)
+
+
+def _is_self_contained_clarification_query(message: str, intent: QueryIntent) -> bool:
+    if not intent.needs_clarification:
+        return False
+    if not (intent.category_candidates or intent.facets):
+        return False
+    if _has_product_reference_signal(message):
+        return False
+    return not _has_follow_up_only_term(message)
+
+
+def _has_follow_up_only_term(message: str) -> bool:
+    return any(term in message for term in FOLLOW_UP_ONLY_TERMS)
 
 
 def _has_continuation_marker(message: str) -> bool:
