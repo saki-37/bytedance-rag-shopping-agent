@@ -151,6 +151,8 @@ class HealthResponse(BaseModel):
     status: str
     catalog_size: int
     mock_llm: bool
+    llm_provider: str
+    llm_model: str | None = None
 
 
 class FeedbackRequest(BaseModel):

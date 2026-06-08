@@ -73,12 +73,12 @@ def main() -> None:
         from app.config import get_settings
 
         settings = get_settings()
-        if not settings.ark_api_key or not settings.ark_model:
+        if not settings.llm_configured:
             raise SystemExit(
-                "AI review requires ARK_API_KEY and ARK_MODEL in .env. "
+                "AI review requires the active LLM provider key and model in .env. "
                 "Use --mock-review for an offline smoke test."
             )
-        client = OpenAI(api_key=settings.ark_api_key, base_url=settings.ark_base_url)
+        client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
 
     failures: list[str] = []
     for index, record in enumerate(records, start=1):
@@ -89,7 +89,7 @@ def main() -> None:
             assert client is not None and settings is not None
             review = call_ai_review(
                 client=client,
-                model=settings.ark_model,
+                model=settings.llm_model,
                 suite_name=args.suite_name or args.input.stem,
                 compact_record=compact,
             )

@@ -97,11 +97,14 @@ def main() -> None:
     settings = get_settings()
     if settings.mock_llm and not args.allow_mock:
         raise SystemExit(
-            "Planner probe is a real-API benchmark. Set MOCK_LLM=false and provide Ark config, "
+            "Planner probe is a real-API benchmark. Set MOCK_LLM=false and provide active LLM config, "
             "or pass --allow-mock only for offline smoke checks."
         )
-    if (not settings.ark_api_key or not settings.ark_model) and not args.allow_mock:
-        raise SystemExit("Missing ARK_API_KEY or ARK_MODEL; planner probe needs real API config.")
+    if not settings.llm_configured and not args.allow_mock:
+        raise SystemExit(
+            "Missing active LLM key or model; planner probe needs real API config. "
+            f"Current LLM_PROVIDER={settings.active_llm_provider}."
+        )
 
     selected_case_ids = args.case or list(CASES)
     missing = [case_id for case_id in selected_case_ids if case_id not in CASES]

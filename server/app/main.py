@@ -41,7 +41,9 @@ def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
         catalog_size=len(enriched_products),
-        mock_llm=settings.mock_llm or not settings.ark_api_key or not settings.ark_model,
+        mock_llm=settings.mock_llm or not settings.llm_configured,
+        llm_provider=settings.active_llm_provider,
+        llm_model=settings.llm_model,
     )
 
 
@@ -224,8 +226,10 @@ def _request_trace_snapshot(request: ChatRequest) -> dict[str, Any]:
 def _settings_trace_snapshot() -> dict[str, Any]:
     return {
         "mock_llm": settings.mock_llm,
-        "has_ark_key": bool(settings.ark_api_key),
-        "has_ark_model": bool(settings.ark_model),
+        "llm_provider": settings.active_llm_provider,
+        "has_llm_key": bool(settings.llm_api_key),
+        "has_llm_model": bool(settings.llm_model),
+        "llm_model": settings.llm_model,
         "planner_timeout_seconds": settings.planner_timeout_seconds,
     }
 

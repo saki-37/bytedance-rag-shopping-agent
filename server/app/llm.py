@@ -37,15 +37,19 @@ async def stream_answer(
     answer_directive: AnswerDirective | None = None,
 ):
     guardrail_user_context = _compose_guardrail_user_context(user_message, history)
-    if settings.mock_llm or not settings.ark_api_key or not settings.ark_model:
+    if settings.mock_llm or not settings.llm_configured:
         logger.info("Streaming mock LLM response")
         async for token in _stream_text(_mock_answer(user_message, cards, answer_directive)):
             yield token
         return
 
-    logger.info("Streaming Ark response with model=%s", settings.ark_model)
+    logger.info(
+        "Streaming %s response with model=%s",
+        settings.active_llm_provider,
+        settings.llm_model,
+    )
     try:
-        raw_answer = await _collect_ark_answer(
+        raw_answer = await _collect_llm_answer(
             settings=settings,
             user_message=user_message,
             history=history,
@@ -54,7 +58,7 @@ async def stream_answer(
             answer_directive=answer_directive,
         )
     except Exception as exc:
-        logger.warning("Ark response failed; falling back to grounded local answer: %s", exc)
+        logger.warning("LLM response failed; falling back to grounded local answer: %s", exc)
         raw_answer = ""
     guardrail = guard_answer(raw_answer, user_message=guardrail_user_context, cards=cards)
     if not guardrail.passed:
@@ -72,7 +76,7 @@ async def stream_answer(
         yield token
 
 
-async def _collect_ark_answer(
+async def _collect_llm_answer(
     settings: Settings,
     user_message: str,
     history: list[ChatMessage],
@@ -80,7 +84,7 @@ async def _collect_ark_answer(
     cards: list[ProductCard],
     answer_directive: AnswerDirective | None = None,
 ) -> str:
-    client = AsyncOpenAI(api_key=settings.ark_api_key, base_url=settings.ark_base_url)
+    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         *[
@@ -100,18 +104,18 @@ async def _collect_ark_answer(
     ]
     try:
         stream = await client.chat.completions.create(
-            model=settings.ark_model,
+            model=settings.llm_model,
             messages=messages,
             stream=True,
             temperature=0.2,
         )
-        logger.info("Ark stream connected")
+        logger.info("%s stream connected", settings.active_llm_provider)
         chunks: list[str] = []
         async for chunk in stream:
             delta = chunk.choices[0].delta.content
             if delta:
                 chunks.append(delta)
-        logger.info("Ark stream completed")
+        logger.info("%s stream completed", settings.active_llm_provider)
         return "".join(chunks)
     finally:
         await client.close()
@@ -129,7 +133,7 @@ async def _try_repair_answer(
     if not raw_answer.strip() or not cards:
         return guardrail
     try:
-        repaired_answer = await _collect_ark_repair(
+        repaired_answer = await _collect_llm_repair(
             settings=settings,
             user_message=user_message,
             context=context,
@@ -139,7 +143,7 @@ async def _try_repair_answer(
             answer_directive=answer_directive,
         )
     except Exception as exc:
-        logger.warning("Ark repair failed; using safe fallback: %s", exc)
+        logger.warning("LLM repair failed; using safe fallback: %s", exc)
         return guardrail
 
     repaired_guardrail = guard_answer(repaired_answer, user_message=user_message, cards=cards)
@@ -150,7 +154,7 @@ async def _try_repair_answer(
     return guardrail
 
 
-async def _collect_ark_repair(
+async def _collect_llm_repair(
     settings: Settings,
     user_message: str,
     context: str,
@@ -159,7 +163,7 @@ async def _collect_ark_repair(
     issues: list[str],
     answer_directive: AnswerDirective | None = None,
 ) -> str:
-    client = AsyncOpenAI(api_key=settings.ark_api_key, base_url=settings.ark_base_url)
+    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
@@ -186,7 +190,7 @@ async def _collect_ark_repair(
     ]
     try:
         response = await client.chat.completions.create(
-            model=settings.ark_model,
+            model=settings.llm_model,
             messages=messages,
             temperature=0.1,
         )

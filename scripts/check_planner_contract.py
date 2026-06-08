@@ -284,7 +284,7 @@ async def check_planner_fallback() -> None:
     trace = result.trace["planner_trace"]
     assert trace["called"] is False
     assert trace["applied"] is False
-    assert trace["fallback_reason"] == "planner_disabled_by_mock_or_missing_ark_config"
+    assert trace["fallback_reason"] == "planner_disabled_by_mock_or_missing_llm_config"
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
 
 日期：2026-05-28
 
-更新：2026-06-04 补充 rule-only conversation state merge、evidence-aware fallback 和轻量反馈闭环。
+更新：2026-06-08 补充 LLM provider 切换层；正式评测默认 Ark / Doubao，演示可临时切到 Yunwu。
 
 用途：说明当前 RAG 美妆导购 Agent 的端到端工程架构，方便评审、复盘和后续开发对齐。
 
@@ -10,7 +10,7 @@
 
 当前系统是一条原生移动端到后端 RAG 的闭环：
 
-> Android Kotlin 原生 App 负责对话、流式渲染、商品卡片和详情展示；FastAPI 后端负责意图解析、商品检索、Doubao 调用、生成后校验和 SSE 返回；数据层保留官方 raw 数据，并通过 enriched 商品字段支撑可解释推荐。
+> Android Kotlin 原生 App 负责对话、流式渲染、商品卡片和详情展示；FastAPI 后端负责意图解析、商品检索、OpenAI-compatible LLM provider 调用、生成后校验和 SSE 返回；数据层保留官方 raw 数据，并通过 enriched 商品字段支撑可解释推荐。
 
 ## 总体链路
 
@@ -24,7 +24,7 @@ flowchart TD
     R --> D["商品数据<br/>raw + enriched"]
     R --> V["Chroma Vector Index<br/>语义召回"]
     R --> T["RetrievalTrace<br/>过滤/召回/排序/guardrail 信息"]
-    API -->|"候选商品 + 证据上下文"| L["Doubao / Ark<br/>OpenAI-compatible API"]
+    API -->|"候选商品 + 证据上下文"| L["LLM Provider<br/>Ark / Doubao 默认<br/>Yunwu 演示备用"]
     L --> G["Generation Guardrails<br/>价格/库存/优惠/无证据断言校验"]
     G -->|"安全回答或二次改写/兜底"| API
     API -->|"SSE: status / token / products / done / error"| A
@@ -76,7 +76,7 @@ flowchart TD
    - `GET /assets/{image_path}`
 4. 在检索前做 rule-only conversation state merge，例如预算更新、预算取消、排除条件继承和短追问补全。
 5. 调用检索层得到候选商品、证据文本和 trace。
-6. 调用 Doubao / Ark 生成导购回答。
+6. 调用当前 LLM provider 生成导购回答；正式评测默认 Ark / Doubao，演示可按 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md) 临时切到 Yunwu。
 7. 对模型输出做 guardrail 校验，必要时二次改写或安全兜底。
 8. 用稳定 SSE 形态返回给 Android，避免客户端因为模型失败直接卡死。
 
@@ -85,10 +85,10 @@ flowchart TD
 - `main.py`：API 路由、SSE 事件、上下文合并、静态图片服务。
 - `conversation_state.py`：检索前的多轮状态合并，负责继承/覆盖/放宽预算、类目、肤质、功效、场景、排除条件和偏好。
 - `feedback.py`：轻量反馈闭环，把有用/不准确反馈和有界证据快照写入本地 JSONL。
-- `config.py`：读取 `.env` 和本地路径配置。
+- `config.py`：读取 `.env`、本地路径配置和当前 LLM provider。
 - `data_loader.py`：加载 raw / enriched 商品数据。
 - `models.py`：Pydantic 数据结构。
-- `llm.py`：Doubao 调用、二次改写、mock / safe fallback。
+- `llm.py`：OpenAI-compatible LLM 调用、二次改写、mock / safe fallback。
 - `guardrails.py`：生成后校验和安全回答生成。
 - `retrieval.py`：意图解析、硬过滤、多路召回、排序和 trace。
 - `embeddings.py`：sentence-transformer embedding。

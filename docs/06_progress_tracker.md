@@ -18,6 +18,8 @@
 
 2026-06-07 完成主线收口回归：修正多轮里“上一轮对比意图污染下一轮约束补充”的问题，`comparison_mode` 改为当前轮生效；普通推荐下的美妆肤质条件改为要求商品有正向肤质适配证据，避免只有便宜 SKU 或评论噪声的商品混入；同系列 SKU 安全兜底回答会显式展示匹配点；跑步鞋/徒步鞋对比增加用途优先级和子类覆盖选择。离线回归已完成：conversation 7/7、comparison 3/3、groundedness mock 11/11、generation guardrails、planner contract、feedback loop、Android `compileDebugKotlin` 和 `git diff --check` 均通过。
 
+2026-06-08 补上 LLM provider 切换文档体系：正式测试继续默认 Ark / Doubao；演示可通过命令行临时覆盖到 Yunwu；候选模型和 smoke test 命令集中到 `docs/28_llm_provider_switching.md`。
+
 ## 对照课题必做最小闭环
 
 | 模块 | 课题要求 | 当前状态 | 说明 |

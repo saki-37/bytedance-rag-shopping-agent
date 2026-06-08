@@ -9,8 +9,9 @@
 ## 录屏前检查
 
 1. 后端运行在 `0.0.0.0:8000`，Android 模拟器通过 `adb reverse tcp:8000 tcp:8000` 后访问 `http://127.0.0.1:8000`。
-2. 本地 `.env` 已配置真实 `ARK_API_KEY`、`ARK_MODEL`，且 `MOCK_LLM=false`。
-3. 如果真实 API 需要代理，终端使用：
+2. 本地 `.env` 已配置真实 API。正式复验保持 `LLM_PROVIDER=ark`、`ARK_API_KEY`、`ARK_MODEL`、`MOCK_LLM=false`；如果现场演示等待太长，可按 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md) 临时设 `LLM_PROVIDER=yunwu` 并覆盖 `YUNWU_MODEL`。
+3. 启动后用 `curl http://127.0.0.1:8000/health` 确认 `llm_provider` 和 `llm_model` 与本轮口径一致。
+4. 如果真实 API 需要代理，终端使用：
 
 ```bash
 export https_proxy=http://127.0.0.1:7897
@@ -18,7 +19,7 @@ export http_proxy=http://127.0.0.1:7897
 export all_proxy=socks5://127.0.0.1:7897
 ```
 
-4. Android App 使用最新 Debug 版，首页能看到 9 个快捷问题：
+5. Android App 使用最新 Debug 版，首页能看到 9 个快捷问题：
    - `油皮通勤防晒`
    - `敏感肌修护`
    - `信息不足追问`

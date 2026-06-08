@@ -103,8 +103,8 @@ async def build_planned_retrieval_message(
         "validation_errors": [],
     }
 
-    if settings.mock_llm or not settings.ark_api_key or not settings.ark_model:
-        planner_trace["fallback_reason"] = "planner_disabled_by_mock_or_missing_ark_config"
+    if settings.mock_llm or not settings.llm_configured:
+        planner_trace["fallback_reason"] = "planner_disabled_by_mock_or_missing_llm_config"
         return _with_planner_trace(rule_build, planner_trace)
 
     started = time.perf_counter()
@@ -158,13 +158,13 @@ async def _collect_plan_payload(
     rule_build: RetrievalMessageBuildResult,
 ) -> dict:
     client = AsyncOpenAI(
-        api_key=settings.ark_api_key,
-        base_url=settings.ark_base_url,
+        api_key=settings.llm_api_key,
+        base_url=settings.llm_base_url,
         timeout=settings.planner_timeout_seconds,
     )
     try:
         response = await client.chat.completions.create(
-            model=settings.ark_model,
+            model=settings.llm_model,
             messages=[
                 {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
                 {

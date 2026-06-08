@@ -16,9 +16,16 @@ class Settings(BaseSettings):
 
     app_env: str = "local"
     mock_llm: bool = False
+    llm_provider: str = "ark"
+
     ark_api_key: str | None = None
     ark_base_url: str = "https://ark.cn-beijing.volces.com/api/v3/"
     ark_model: str | None = None
+
+    yunwu_api_key: str | None = None
+    yunwu_base_url: str = "https://yunwu.ai/v1"
+    yunwu_model: str | None = None
+
     planner_timeout_seconds: float = 20.0
 
     raw_data_dir: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"
@@ -28,6 +35,41 @@ class Settings(BaseSettings):
     image_base_path: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"
     feedback_dir: Path = ROOT_DIR / "data" / "tmp" / "feedback"
     trace_dir: Path = ROOT_DIR / "data" / "tmp" / "traces"
+
+    @property
+    def active_llm_provider(self) -> str:
+        provider = self.llm_provider.strip().lower()
+        if provider in {"ark", "doubao", "volcengine"}:
+            return "ark"
+        if provider in {"yunwu", "demo"}:
+            return "yunwu"
+        return provider
+
+    @property
+    def llm_api_key(self) -> str | None:
+        if self.active_llm_provider == "yunwu":
+            return self.yunwu_api_key
+        if self.active_llm_provider == "ark":
+            return self.ark_api_key
+        return None
+
+    @property
+    def llm_base_url(self) -> str:
+        if self.active_llm_provider == "yunwu":
+            return self.yunwu_base_url
+        return self.ark_base_url
+
+    @property
+    def llm_model(self) -> str | None:
+        if self.active_llm_provider == "yunwu":
+            return self.yunwu_model
+        if self.active_llm_provider == "ark":
+            return self.ark_model
+        return None
+
+    @property
+    def llm_configured(self) -> bool:
+        return bool(self.llm_api_key and self.llm_model)
 
 
 @lru_cache

@@ -11,7 +11,7 @@
 - SSE 流式协议：`status`、`token`、`products`、`done`、`error`；推荐场景下先流式展示文本，再展示商品卡片。
 - 商品 RAG：结构化硬过滤 + 必要功效/子类过滤 + keyword/facet 匹配 + Chroma `products` 统一 collection 向量召回 + metadata filter + 可解释 `RetrievalTrace`。
 - V2 多品类起步：新增 5 条服饰运动 enriched 样例，覆盖变体、规格、证据来源和第二品类 query benchmark。
-- Doubao / Ark OpenAI-compatible API 接入；默认评测口径使用真实 API，只有显式开启 `MOCK_LLM=true` 或缺少 Key/模型名时才走 mock / safe fallback。
+- Doubao / Ark OpenAI-compatible API 接入；默认评测口径使用真实 Ark / Doubao，也支持通过 `LLM_PROVIDER=yunwu` 临时切到 Yunwu OpenAI-compatible API 做快速演示；只有显式开启 `MOCK_LLM=true` 或缺少当前 provider 的 Key/模型名时才走 mock / safe fallback。
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
 - 轻量反馈闭环：Android 端可在回答下方点击 `有用` / `不准确`；后端记录最近上下文、回答、商品卡片等有界快照，debug 脚本可额外带上检索 trace。
 - Claim-level audit 样例：已沉淀 5 个高风险人工标注样例、8 条 claim，可渲染 Markdown / JSONL 报告，展示商品事实如何逐条回到数据源。
@@ -25,6 +25,7 @@
 - 评测记录：[docs/11_evaluation_report.md](docs/11_evaluation_report.md)
 - 提交材料清单：[docs/14_submission_package.md](docs/14_submission_package.md)
 - 依赖版本与复现说明：[docs/20_reproducibility_and_dependencies.md](docs/20_reproducibility_and_dependencies.md)
+- LLM Provider 切换与演示模型候选：[docs/28_llm_provider_switching.md](docs/28_llm_provider_switching.md)
 - 答辩口袋稿：[docs/22_defense_cheatsheet.md](docs/22_defense_cheatsheet.md)
 - Claim-level audit 样例：[data/eval/claim_audit_samples.json](data/eval/claim_audit_samples.json)、[scripts/render_claim_audit_report.py](scripts/render_claim_audit_report.py)
 - 文档总入口：[docs/00_index.md](docs/00_index.md)
@@ -63,8 +64,21 @@ cp .env.example .env
 ARK_API_KEY=YOUR_LOCAL_KEY
 ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/
 ARK_MODEL=YOUR_MODEL_ENDPOINT
+LLM_PROVIDER=ark
 MOCK_LLM=false
 ```
+
+演示时如需临时使用科研项目里同类的 Yunwu OpenAI-compatible API，可在 `.env` 中切换 provider：
+
+```env
+LLM_PROVIDER=yunwu
+YUNWU_API_KEY=YOUR_LOCAL_KEY
+YUNWU_BASE_URL=https://yunwu.ai/v1
+YUNWU_MODEL=gpt-5.4-mini
+MOCK_LLM=false
+```
+
+切回正式测试口径时，把 `LLM_PROVIDER` 改回 `ark`；Planner 和最终导购回答会同时跟随这个开关。启动后可用 `curl http://127.0.0.1:8000/health` 确认当前 `llm_provider` 和 `llm_model`。完整命令行临时覆盖方式和候选模型见 [docs/28_llm_provider_switching.md](docs/28_llm_provider_switching.md)。
 
 如果只是离线验证端到端链路，可以显式改成：
 
@@ -144,7 +158,8 @@ adb -s emulator-5554 reverse tcp:8000 tcp:8000
 
 评测口径约定：
 
-- 默认开发/回归口径：`.env` 配置真实 `ARK_API_KEY`、`ARK_MODEL`，并保持 `MOCK_LLM=false`。
+- 默认开发/回归口径：`.env` 配置真实 `ARK_API_KEY`、`ARK_MODEL`，保持 `LLM_PROVIDER=ark`、`MOCK_LLM=false`。
+- 快速演示口径：可临时设 `LLM_PROVIDER=yunwu` 并配置 `YUNWU_API_KEY`、`YUNWU_MODEL`；演示结束后切回 `ark` 再做正式回归。
 - `run_golden_queries.py` 不加 `--check-stream` 时只验证检索层，不调用模型。
 - `run_groundedness_cases.py` 默认会走项目正常 settings；只有显式传 `--mock-llm` 才是本地 mock generation。
 - `--retrieval-only` 只证明检索和约束解析，不证明生成质量。

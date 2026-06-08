@@ -32,6 +32,7 @@
 - [Runtime Trace Log 与可追溯反馈闭环](25_runtime_trace_log_plan.md)
 - [进阶路线调研顺序与取舍方案](26_advanced_route_research.md)
 - [主线验收与 Demo 收口计划](27_mainline_acceptance_and_demo_plan.md)
+- [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md)
 
 ## 当前里程碑
 
@@ -51,3 +52,4 @@
 12. 答辩口袋稿已收口项目介绍、架构链路、可靠性证据、关键代码入口和当前边界。
 13. 2026-06-07 主线收口完成：多轮比较意图污染、肤质正向证据过滤、跑步鞋/徒步鞋用途排序、SKU 回答匹配点和 groundedness mock 边界已修；conversation 7/7、comparison 3/3、groundedness mock 11/11、Android Kotlin 编译和反馈闭环均通过。
 14. Claim-level judge 样例已落地：5 个高风险人工标注样例、8 条 claim，可渲染 Markdown/JSONL 报告，用于展示“逐条事实主张如何回到数据源”。
+15. LLM provider 切换文档已补齐：正式评测默认 Ark / Doubao，演示可临时用命令行覆盖到 Yunwu，并记录 `gpt-5.4-mini`、`gemini-3.5-flash`、`claude-sonnet-4-6` 和 `gpt-4o-mini` 候选。

@@ -107,5 +107,5 @@ all_proxy=socks5://127.0.0.1:7897
 
 ```bash
 cd /Users/jia/Developer/bytedance-rag-shopping-agent
-server/.venv/bin/python -c 'import sys; sys.path.insert(0,"server"); from app.config import get_settings; s=get_settings(); print({"mock_llm": s.mock_llm, "has_key": bool(s.ark_api_key), "has_model": bool(s.ark_model), "base_url": s.ark_base_url})'
+server/.venv/bin/python -c 'import sys; sys.path.insert(0,"server"); from app.config import get_settings; s=get_settings(); print({"mock_llm": s.mock_llm, "provider": s.active_llm_provider, "has_key": bool(s.llm_api_key), "has_model": bool(s.llm_model), "model": s.llm_model, "base_url": s.llm_base_url})'
 ```

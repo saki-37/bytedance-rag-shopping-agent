@@ -6,11 +6,12 @@
 
 ## 复现结论
 
-当前仓库可以用两种方式复现。**开发和评测默认口径是 Ark / Doubao 真实模型**；Mock / safe fallback 只用于无 Key 环境、离线结构检查或明确的降级演示。
+当前仓库可以按下面几种口径复现。**开发和评测默认口径是 Ark / Doubao 真实模型**；如需录制或现场演示时降低等待时间，可以按 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md) 临时把 `LLM_PROVIDER` 切到 Yunwu OpenAI-compatible API。Mock / safe fallback 只用于无 Key 环境、离线结构检查或明确的降级演示。
 
 | 复现模式 | 需要真实 API Key | 目的 | 推荐场景 |
 | --- | --- | --- | --- |
 | Ark / Doubao 真实模型 | 是 | 验证真实模型流式生成和 evidence-bound 导购回复 | 默认开发回归、Demo 前复验、答辩展示、模型效果分析 |
+| Yunwu 快速演示 provider | 是 | 沿用同一套 OpenAI-compatible 调用链，降低现场等待时间 | 演示录屏或现场 demo；不能替代正式评测 |
 | Mock / safe fallback | 否 | 验证 Android、FastAPI、SSE、RAG 检索、商品卡片和评测脚本闭环 | 无 Key 环境、离线自测、网络故障时的结构检查 |
 
 默认 `.env.example` 使用 `MOCK_LLM=false`。如果没有真实 Key 或模型名，后端会自动使用 safe fallback，保证端到端链路不阻塞；如果要强制离线 mock，请在本地 `.env` 显式改成 `MOCK_LLM=true`。真实 Key 只放本地 `.env`，不得提交。
@@ -112,8 +113,23 @@ cp .env.example .env
 ARK_API_KEY=YOUR_LOCAL_KEY
 ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/
 ARK_MODEL=YOUR_MODEL_ENDPOINT
+LLM_PROVIDER=ark
 MOCK_LLM=false
 ```
+
+快速演示可临时改成：
+
+```env
+LLM_PROVIDER=yunwu
+YUNWU_API_KEY=YOUR_LOCAL_KEY
+YUNWU_BASE_URL=https://yunwu.ai/v1
+YUNWU_MODEL=gpt-5.4-mini
+MOCK_LLM=false
+```
+
+`LLM_PROVIDER` 会同时影响轻量 Planner 和最终导购回答。切到 `yunwu` 的结果只作为演示链路复现，不计入正式 Doubao 生成质量评测。
+
+完整切换方式、命令行临时覆盖和候选模型见 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md)。
 
 如果只做离线结构检查，再显式改成 `MOCK_LLM=true`。
 
@@ -149,6 +165,7 @@ curl http://127.0.0.1:8000/health
 ARK_API_KEY=YOUR_LOCAL_KEY
 ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/
 ARK_MODEL=YOUR_MODEL_ENDPOINT
+LLM_PROVIDER=ark
 MOCK_LLM=false
 ```
 
@@ -323,10 +340,10 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 | Android 显示 `unexpected end of stream` | 本地 HTTP 连接被后端/模拟器提前关闭，或旧连接复用异常 | 当前客户端已关闭连接池复用并设置 `Connection: close`；若复现，先重启后端并重新运行 `adb reverse` |
 | Android Studio 提示 `Couldn't terminate previous instance of app` | Studio/adb 没能停止旧进程 | 手动执行 `adb shell am force-stop com.saki.bytedance.ragshopping`；仍失败时重启 adb 或模拟器 |
 | Gradle 依赖下载慢或失败 | Maven / Google 仓库网络不稳定 | 使用代理参数，或在 Android Studio 中重新 Sync |
-| 真实 Doubao 请求超时 | 网络代理、Key/模型名配置异常，或 Planner / 生成模型本身延迟偏高 | 先确认 `.env`、代理和非沙盒网络；必要时用 targeted real API case 定位。Mock / retrieval-only 只能做拆因，不能替代正式 benchmark |
+| 真实 Doubao 请求超时 | 网络代理、Key/模型名配置异常，或 Planner / 生成模型本身延迟偏高 | 先确认 `.env`、代理和非沙盒网络；必要时用 targeted real API case 定位。演示可临时设 `LLM_PROVIDER=yunwu` 降低等待，但正式 benchmark 仍要切回 `ark` |
 | Chroma 检索无结果 | 索引未构建或 enriched 数据未生成 | 重新运行 `python scripts/build_index.py` |
 | 反馈脚本写入失败 | `data/tmp/feedback/` 无写入权限或当前沙盒不允许写仓库临时目录 | 在真实本地终端运行，或确认仓库目录可写 |
-| AI 语义复核无法运行 | `.env` 缺少 `ARK_API_KEY` 或 `ARK_MODEL` | 先用 `--mock-review` 做离线烟测；真实复核前确认 `.env` 已配置 |
+| AI 语义复核无法运行 | `.env` 缺少当前 `LLM_PROVIDER` 对应的 Key 或模型 | 先用 `--mock-review` 做离线烟测；真实复核前确认 `.env` 已配置 |
 | 提交前 secret scan 失败 | `.env`、文档或录屏说明中出现疑似 Key | 删除真实 Key，重新运行 `python3 scripts/scan_secrets.py --all` |
 
 ## 提交前复现检查表
