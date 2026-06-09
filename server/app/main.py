@@ -17,15 +17,34 @@ from app.config import get_settings
 from app.data_loader import load_enriched_products, load_raw_products
 from app.feedback import save_feedback
 from app.llm import stream_answer
-from app.models import AnswerDirective, ChatRequest, ConstraintTrace, FeedbackRequest, FeedbackResponse, HealthResponse, PlannerTrace, ProductCard
+from app.models import (
+    AnswerDirective,
+    ChatRequest,
+    ConstraintTrace,
+    FeedbackRequest,
+    FeedbackResponse,
+    HealthResponse,
+    MemoryTrace,
+    PlannerTrace,
+    ProductCard,
+)
 from app.planner import build_planned_retrieval_message
 from app.retrieval import retrieve
+from app.user_memory import (
+    DisabledMemoryProvider,
+    MEMORY_PROVIDER_DISABLED,
+    build_memory_augmented_request,
+    build_memory_trace,
+    get_memory_provider,
+    resolve_user_id,
+)
 from app.trace_logger import new_trace_id, write_runtime_trace
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 raw_products = load_raw_products(settings.raw_data_dir)
 enriched_products = load_enriched_products(settings.enriched_data_dir, raw_products)
+memory_provider = get_memory_provider(settings)
 
 app = FastAPI(title="ByteDance RAG Shopping Agent")
 app.add_middleware(
@@ -63,15 +82,42 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
         quick_reply: dict[str, Any] | None = None
         answer_tokens: list[str] = []
         stage_timings: dict[str, int] = {}
+        memory_trace: MemoryTrace | None = None
+        interaction_prefs = None
+        memory_profile = None
+        resolved_user_id = resolve_user_id(request)
 
         def mark_stage(name: str) -> None:
             stage_timings.setdefault(name, int((time.perf_counter() - started_at) * 1000))
 
         async def build_retrieval_context() -> tuple[Any, str, Any, AnswerDirective | None]:
-            retrieval_build_inner = await build_planned_retrieval_message(settings, request)
+            nonlocal memory_profile, memory_trace, interaction_prefs
+            memory_profile = memory_provider.get_profile(resolved_user_id)
+            retrieval_request, _, applied_constraints, applied_short_term_signals = build_memory_augmented_request(
+                request,
+                memory_profile,
+            )
+            provider_name = MEMORY_PROVIDER_DISABLED if isinstance(memory_provider, DisabledMemoryProvider) else settings.memory_provider
+            memory_trace = build_memory_trace(
+                provider=provider_name,
+                user_id=resolved_user_id,
+                memory_profile=memory_profile,
+                applied_constraints=applied_constraints,
+                applied_short_term_signals=applied_short_term_signals,
+                applied_preferences=memory_profile.interaction_preferences.model_dump(mode="json"),
+                skipped=[],
+                fallback=None,
+            )
+            interaction_prefs = memory_profile.interaction_preferences
+            retrieval_build_inner = await build_planned_retrieval_message(settings, retrieval_request)
             mark_stage("planner_complete_ms")
             retrieval_message_inner = retrieval_build_inner.message
-            result_inner = retrieve(retrieval_message_inner, enriched_products, index_dir=settings.index_dir)
+            result_inner = retrieve(
+                retrieval_message_inner,
+                enriched_products,
+                index_dir=settings.index_dir,
+                memory_profile=memory_profile,
+            )
             _attach_conversation_trace(result_inner.trace, retrieval_build_inner.trace)
             answer_directive_inner = _build_answer_directive(request, retrieval_build_inner.trace, result_inner.cards)
             if answer_directive_inner:
@@ -142,6 +188,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                     context=result.context,
                     cards=result.cards,
                     answer_directive=answer_directive,
+                    interaction_preferences=interaction_prefs,
                 ):
                     if not answer_tokens:
                         mark_stage("first_token_sent_ms")
@@ -154,6 +201,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 request=request,
                 started_at=started_at,
                 status="ok",
+                memory_trace=memory_trace.model_dump(mode="json") if memory_trace else None,
                 retrieval_message=retrieval_message,
                 conversation_state=retrieval_build.trace if retrieval_build else None,
                 retrieval_trace=result.trace.model_dump(mode="json") if result else None,
@@ -174,6 +222,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 request=request,
                 started_at=started_at,
                 status="error",
+                memory_trace=memory_trace.model_dump(mode="json") if memory_trace else None,
                 retrieval_message=retrieval_message,
                 conversation_state=retrieval_build.trace if retrieval_build else None,
                 retrieval_trace=result.trace.model_dump(mode="json") if result else None,
@@ -194,9 +243,28 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
 async def debug_retrieve(request: ChatRequest) -> dict:
     trace_id = new_trace_id()
     started_at = time.perf_counter()
-    retrieval_build = await build_planned_retrieval_message(settings, request)
+    resolved_user_id = resolve_user_id(request)
+    memory_profile = memory_provider.get_profile(resolved_user_id)
+    retrieval_request, _, applied_constraints, applied_short_term_signals = build_memory_augmented_request(request, memory_profile)
+    provider_name = MEMORY_PROVIDER_DISABLED if isinstance(memory_provider, DisabledMemoryProvider) else settings.memory_provider
+    memory_trace = build_memory_trace(
+        provider=provider_name,
+        user_id=resolved_user_id,
+        memory_profile=memory_profile,
+        applied_constraints=applied_constraints,
+        applied_short_term_signals=applied_short_term_signals,
+        applied_preferences=memory_profile.interaction_preferences.model_dump(mode="json"),
+        skipped=[],
+        fallback=None,
+    )
+    retrieval_build = await build_planned_retrieval_message(settings, retrieval_request)
     retrieval_message = retrieval_build.message
-    result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
+    result = retrieve(
+        retrieval_message,
+        enriched_products,
+        index_dir=settings.index_dir,
+        memory_profile=memory_profile,
+    )
     _attach_conversation_trace(result.trace, retrieval_build.trace)
     answer_directive = _build_answer_directive(request, retrieval_build.trace, result.cards)
     if answer_directive:
@@ -207,6 +275,7 @@ async def debug_retrieve(request: ChatRequest) -> dict:
         request=request,
         started_at=started_at,
         status="ok",
+        memory_trace=memory_trace.model_dump(mode="json"),
         retrieval_message=retrieval_message,
         conversation_state=retrieval_build.trace,
         retrieval_trace=result.trace.model_dump(mode="json"),
@@ -340,6 +409,7 @@ def _write_runtime_trace_safely(
     trace_id: str,
     endpoint: str,
     request: ChatRequest,
+    memory_trace: dict[str, Any] | None,
     started_at: float,
     status: str,
     retrieval_message: str | None,
@@ -361,6 +431,7 @@ def _write_runtime_trace_safely(
                 "endpoint": endpoint,
                 "status": status,
                 "request": _request_trace_snapshot(request),
+                "memory_trace": memory_trace,
                 "settings": _settings_trace_snapshot(),
                 "retrieval_message": retrieval_message,
                 "conversation_state": conversation_state,
@@ -383,6 +454,7 @@ def _write_runtime_trace_safely(
 def _request_trace_snapshot(request: ChatRequest) -> dict[str, Any]:
     return {
         "message": request.message,
+        "user_id": request.user_id,
         "conversation_id": request.conversation_id,
         "history": [item.model_dump(mode="json") for item in request.history],
     }
@@ -396,6 +468,7 @@ def _settings_trace_snapshot() -> dict[str, Any]:
         "has_llm_model": bool(settings.llm_model),
         "llm_model": settings.llm_model,
         "planner_timeout_seconds": settings.planner_timeout_seconds,
+        "memory_provider": settings.memory_provider,
         "fast_first_screen_enabled": settings.fast_first_screen_enabled,
         "fast_quick_reply_deadline_seconds": settings.fast_quick_reply_deadline_seconds,
     }

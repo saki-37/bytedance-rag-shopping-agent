@@ -1,4 +1,5 @@
 from typing import Literal
+from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
 
@@ -11,8 +12,90 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
+    user_id: str | None = None
     conversation_id: str | None = None
     history: list[ChatMessage] = Field(default_factory=list)
+
+
+def _utcnow_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat()
+
+
+class MemorySnapshot(BaseModel):
+    key: str
+    weight: float = 0.5
+    source: str
+    created_at: str = Field(default_factory=_utcnow_iso)
+    ttl_days: int = 7
+
+
+class UserMemoryConstraints(BaseModel):
+    allergies: list[str] = Field(default_factory=list)
+    avoid_terms: list[str] = Field(default_factory=list)
+    brand_exclude: list[str] = Field(default_factory=list)
+    budget_max: float | None = None
+    accessibility_needs: list[str] = Field(default_factory=list)
+
+
+class UserMemoryLongTermPreferences(BaseModel):
+    preferred_categories: dict[str, float] = Field(default_factory=dict)
+    preferred_tags: dict[str, float] = Field(default_factory=dict)
+    price_sensitivity: float | None = None
+
+
+class UserMemoryShortTermSnapshots(BaseModel):
+    recent_interests: list[MemorySnapshot] = Field(default_factory=list)
+    recent_avoidance: list[MemorySnapshot] = Field(default_factory=list)
+
+
+class UserMemoryInteractionPreferences(BaseModel):
+    answer_length: Literal["brief", "normal", "detailed"] = "normal"
+    explanation_depth: Literal["short", "medium", "full"] = "medium"
+    tone: str = "natural"
+    show_trace_reason: bool = True
+
+
+class UserMemoryGovernance(BaseModel):
+    auto_learn_enabled: bool = False
+    user_editable: bool = True
+    retention_days: int = 30
+
+
+class MemorySourceEvent(BaseModel):
+    event_type: str
+    event_value: str
+    created_at: str = Field(default_factory=_utcnow_iso)
+    source: str | None = None
+
+
+class UserMemoryProfile(BaseModel):
+    schema_version: str = "0.1"
+    user_id: str
+    updated_at: str = Field(default_factory=_utcnow_iso)
+    constraints: UserMemoryConstraints = Field(default_factory=UserMemoryConstraints)
+    long_term_preferences: UserMemoryLongTermPreferences = Field(default_factory=UserMemoryLongTermPreferences)
+    short_term_snapshots: UserMemoryShortTermSnapshots = Field(default_factory=UserMemoryShortTermSnapshots)
+    interaction_preferences: UserMemoryInteractionPreferences = Field(default_factory=UserMemoryInteractionPreferences)
+    governance: UserMemoryGovernance = Field(default_factory=UserMemoryGovernance)
+    source_events: list[MemorySourceEvent] = Field(default_factory=list)
+
+
+class MemoryTrace(BaseModel):
+    provider: str
+    user_id: str
+    enabled: bool = True
+    applied_constraints: dict[str, object] = Field(default_factory=dict)
+    applied_short_term_signals: list[str] = Field(default_factory=list)
+    applied_preferences: dict[str, object] = Field(default_factory=dict)
+    skipped_items: list[str] = Field(default_factory=list)
+    fallback: str | None = None
+    updated_at: str = Field(default_factory=_utcnow_iso)
+
+
+class MemorySearchHit(BaseModel):
+    key: str
+    score: float
+    source: str
 
 
 class ProductVariantCard(BaseModel):

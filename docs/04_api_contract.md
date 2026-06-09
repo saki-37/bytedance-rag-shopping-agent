@@ -23,6 +23,7 @@ SSE 流式聊天接口。
 ```json
 {
   "message": "我是油皮，想要200元以内的通勤防晒",
+  "user_id": "local-demo-user",
   "conversation_id": "local-demo",
   "history": [
     {"role": "user", "content": "我想找防晒"},
@@ -36,6 +37,8 @@ SSE 流式聊天接口。
 ```
 
 `history[].product_ids` 为可选字段。Android 会把上一轮 assistant 商品卡片的 `product_id` 带回后端，用于解析“第一款”“它”“这款”等商品指代；旧请求不传该字段时按空数组处理。
+
+`user_id` 可选。若未传，后端回退到 `conversation_id / local-demo-user`。当 `MEMORY_PROVIDER` 非 `disabled` 时，`user_id` 参与跨会话记忆 profile 加载与应用。
 
 事件类型：
 
@@ -228,11 +231,12 @@ data/tmp/traces/trace_YYYY-MM-DD.jsonl
 
 - `trace_id`、`endpoint`、`status`、`latency_ms`。
 - 当前请求的 `message`、`conversation_id` 和 `history`。
+- `memory_trace`（provider、user_id、已应用 constraints / preferences / short-term signals / skipped）。
 - `retrieval_message`、`conversation_state`、`retrieval_trace`。
 - `answer_directive`，用于复盘对比类问题最终选择了哪些商品。
 - `quick_reply` 和 `stage_timings_ms`，用于复盘首屏响应；推荐场景重点看 `products_sent_ms`、`quick_reply_sent_ms`、`first_token_sent_ms`、`done_ready_ms`。
 - 最终 `products` 顺序、流式拼接后的 `answer`、`token_count`、`answer_char_count`、`error`。
-- `settings` 只记录 `mock_llm`、LLM provider、是否配置 key/model、模型名、Planner timeout 和 quick reply deadline，不记录 API key、header 或完整环境变量。
+- `settings` 只记录 `mock_llm`、LLM provider、是否配置 key/model、模型名、Planner timeout、quick reply deadline、`memory_provider`；不记录 API key、header 或完整环境变量。
 
 该目录被 `.gitignore` 的 `data/tmp/` 覆盖，不进入 Git。后续用户反馈可以通过 `trace_id` 回指同一条 runtime trace。
 

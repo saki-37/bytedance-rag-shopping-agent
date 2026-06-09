@@ -37,6 +37,8 @@
 - [场景化组合推荐 Planner 实现记录](30_scene_bundle_planner_implementation.md)
 - [本地 ASR 后端接入方案](31_local_asr_backend_integration.md)
 - [TTS 语音播报方案记录](32_tts_voice_broadcast_plan.md)
+- [首屏极速响应与临时聊天气泡方案](33_first_screen_fast_response_plan.md)
+- [用户记忆与本地偏好层方案](34_user_memory_profile_plan.md)
 
 ## 当前里程碑
 
@@ -60,3 +62,4 @@
 16. 场景化组合推荐 Planner 第一版已落地：Planner 输出 `scene_bundle + search_slots`，retrieval 按结构化计划跨类目选品；三亚度假 case 已有真实 API Planner probe 和 `FR-012` 回归。
 17. 首屏极速响应 UX 已落地：`quick_reply` SSE 事件、Android 临时气泡、ephemeral history 过滤、本地打字机动画和 `stage_timings_ms` trace 均已接入。
 18. 快速响应边界已收口：`FAST_QUICK_REPLY_DEADLINE_SECONDS` 只影响临时气泡，不截断 Planner 或向量检索；复杂跨类目 case 已验证 Planner 完整 applied。
+19. 用户记忆与本地偏好层方案已补齐：建议先做本仓库 local provider 薄层，硬约束结构化执行，Mem0 仅作为后续软记忆可选增强。

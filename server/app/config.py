@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     planner_timeout_seconds: float = 20.0
     fast_first_screen_enabled: bool = True
     fast_quick_reply_deadline_seconds: float = 0.8
+    memory_provider: str = "local"
+    memory_dir: Path = ROOT_DIR / "data" / "tmp" / "user_memory"
+    memory_auto_learn: bool = False
+    mem0_api_key: str | None = None
+    mem0_base_url: str | None = None
 
     raw_data_dir: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"
     enriched_data_dir: Path = ROOT_DIR / "data" / "enriched"

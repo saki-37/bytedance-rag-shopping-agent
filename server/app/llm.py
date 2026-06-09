@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 from app.config import Settings
 from app.guardrails import build_safe_answer, guard_answer
 from app.guardrails import GenerationGuardrailResult
-from app.models import AnswerDirective, ChatMessage, ProductCard
+from app.models import AnswerDirective, ChatMessage, ProductCard, UserMemoryInteractionPreferences
 
 
 logger = logging.getLogger(__name__)
@@ -35,11 +35,19 @@ async def stream_answer(
     context: str,
     cards: list[ProductCard],
     answer_directive: AnswerDirective | None = None,
+    interaction_preferences: UserMemoryInteractionPreferences | None = None,
 ):
     guardrail_user_context = _compose_guardrail_user_context(user_message, history)
     if settings.mock_llm or not settings.llm_configured:
         logger.info("Streaming mock LLM response")
-        async for token in _stream_text(_mock_answer(user_message, cards, answer_directive)):
+        async for token in _stream_text(
+            _mock_answer(
+                user_message=user_message,
+                cards=cards,
+                answer_directive=answer_directive,
+                interaction_preferences=interaction_preferences,
+            )
+        ):
             yield token
         return
 
@@ -56,6 +64,7 @@ async def stream_answer(
             context=context,
             cards=cards,
             answer_directive=answer_directive,
+            interaction_preferences=interaction_preferences,
         )
     except Exception as exc:
         logger.warning("LLM response failed; falling back to grounded local answer: %s", exc)
@@ -71,6 +80,7 @@ async def stream_answer(
             raw_answer=raw_answer,
             guardrail=guardrail,
             answer_directive=answer_directive,
+            interaction_preferences=interaction_preferences,
         )
     async for token in _stream_text(guardrail.answer):
         yield token
@@ -83,6 +93,7 @@ async def _collect_llm_answer(
     context: str,
     cards: list[ProductCard],
     answer_directive: AnswerDirective | None = None,
+    interaction_preferences: UserMemoryInteractionPreferences | None = None,
 ) -> str:
     client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
     messages = [
@@ -99,6 +110,7 @@ async def _collect_llm_answer(
                 context=context,
                 cards=cards,
                 answer_directive=answer_directive,
+                interaction_preferences=interaction_preferences,
             ),
         },
     ]
@@ -129,6 +141,7 @@ async def _try_repair_answer(
     raw_answer: str,
     guardrail: GenerationGuardrailResult,
     answer_directive: AnswerDirective | None = None,
+    interaction_preferences: UserMemoryInteractionPreferences | None = None,
 ) -> GenerationGuardrailResult:
     if not raw_answer.strip() or not cards:
         return guardrail
@@ -141,6 +154,7 @@ async def _try_repair_answer(
             raw_answer=raw_answer,
             issues=guardrail.issues,
             answer_directive=answer_directive,
+            interaction_preferences=interaction_preferences,
         )
     except Exception as exc:
         logger.warning("LLM repair failed; using safe fallback: %s", exc)
@@ -162,6 +176,7 @@ async def _collect_llm_repair(
     raw_answer: str,
     issues: list[str],
     answer_directive: AnswerDirective | None = None,
+    interaction_preferences: UserMemoryInteractionPreferences | None = None,
 ) -> str:
     client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
     messages = [
@@ -178,6 +193,7 @@ async def _collect_llm_repair(
                 "可以改成：资料中有温和、舒缓、耳后测试等信息，但我不能确认具体成分或刺激风险；建议核对成分表并先局部测试。\n"
                 "输出时不要解释校验规则，只给用户可读的改写版回答。\n\n"
                 f"用户问题：{user_message}\n\n"
+                f"{_format_interaction_preferences(interaction_preferences)}\n\n"
                 f"{_format_answer_directive(answer_directive)}\n\n"
                 f"{_format_visible_product_order(cards)}\n\n"
                 "顺序要求：如果待改写回答是普通推荐，必须让编号 1/2/3 与上面的可见商品顺序一致；"
@@ -203,12 +219,14 @@ def _mock_answer(
     user_message: str,
     cards: list[ProductCard],
     answer_directive: AnswerDirective | None = None,
+    interaction_preferences: UserMemoryInteractionPreferences | None = None,
 ) -> str:
     if answer_directive and answer_directive.mode == "compare" and len(cards) >= 2:
         return _mock_comparison_table(cards, answer_directive, user_message)
     if "护肤品" in user_message and not any(word in user_message for word in ["油皮", "干皮", "敏感", "预算", "防晒", "修护"]):
         return "我可以先帮你缩小范围：你更在意肤质适配、预算，还是防晒/修护/控油这类具体功效？"
-    return build_safe_answer(cards, user_message=user_message)
+    answer = build_safe_answer(cards, user_message=user_message)
+    return _format_answer_by_style(answer, interaction_preferences)
 
 
 def _build_generation_user_prompt(
@@ -216,9 +234,11 @@ def _build_generation_user_prompt(
     context: str,
     cards: list[ProductCard],
     answer_directive: AnswerDirective | None = None,
+    interaction_preferences: UserMemoryInteractionPreferences | None = None,
 ) -> str:
     return (
         f"用户问题：{user_message}\n\n"
+        f"{_format_interaction_preferences(interaction_preferences)}\n\n"
         f"{_format_answer_directive(answer_directive)}\n\n"
         f"{_format_visible_product_order(cards)}\n\n"
         "顺序要求：普通推荐回答必须按上面的可见商品顺序编号和描述；"
@@ -234,6 +254,47 @@ def _format_visible_product_order(cards: list[ProductCard]) -> str:
     for index, card in enumerate(cards[:3], start=1):
         lines.append(f"{index}. product_id={card.product_id}；品牌={card.brand}；标题={card.title}")
     return "\n".join(lines)
+
+
+def _format_interaction_preferences(
+    interaction_preferences: UserMemoryInteractionPreferences | None,
+) -> str:
+    if interaction_preferences is None:
+        return ""
+    length_clause = "回答保持当前默认长度。"
+    if interaction_preferences.answer_length == "brief":
+        length_clause = "回答要简短，先给结论再给1到2条关键依据。"
+    elif interaction_preferences.answer_length == "detailed":
+        length_clause = "回答偏详细，给出更完整解释。"
+
+    depth_clause = "解释深度为中等。"
+    if interaction_preferences.explanation_depth == "short":
+        depth_clause = "解释要简短。"
+    elif interaction_preferences.explanation_depth == "full":
+        depth_clause = "解释要完整，尽量覆盖边界与证据来源。"
+
+    tone_clause = (
+        f"语气偏向：{interaction_preferences.tone}。"
+        if interaction_preferences.tone
+        else ""
+    )
+
+    trace_clause = ""
+    if interaction_preferences.show_trace_reason is False:
+        trace_clause = "不主动说明内部检索或记忆细节。"
+
+    return " ".join(
+        [clause for clause in [length_clause, depth_clause, tone_clause, trace_clause] if clause]
+    )
+
+
+def _format_answer_by_style(
+    answer: str,
+    interaction_preferences: UserMemoryInteractionPreferences | None,
+) -> str:
+    if interaction_preferences is None or interaction_preferences.answer_length != "brief":
+        return answer
+    return " ".join((answer or "").split())[:350]
 
 
 def _format_answer_directive(answer_directive: AnswerDirective | None) -> str:

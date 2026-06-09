@@ -2,6 +2,7 @@ import contextlib
 import io
 import re
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -14,6 +15,7 @@ from app.models import (
     ProductCard,
     ProductVariantCard,
     QueryIntent,
+    UserMemoryProfile,
     RetrievalChannels,
     RetrievalHit,
     RetrievalTrace,
@@ -555,15 +557,25 @@ def _category_from_facets(facets: dict[str, list[str]]) -> str | None:
     return None
 
 
-def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path | None = None) -> RetrievalResult:
+def retrieve(
+    query: str,
+    products: list[dict],
+    limit: int = 3,
+    index_dir: Path | None = None,
+    memory_profile: UserMemoryProfile | None = None,
+) -> RetrievalResult:
     intent = parse_query_intent(query)
+    memory_applied: list[str] = []
+    if memory_profile is not None:
+        intent, memory_applied = _apply_memory_profile(intent, memory_profile, now=datetime.now(UTC))
+
     _apply_catalog_product_references(intent, query, products)
     if intent.needs_clarification:
         trace = RetrievalTrace(
             query=query,
             parsed_intent=intent,
             guardrail_checks=GuardrailChecks(needs_clarification=True),
-            constraint_trace=_constraint_trace_from_intent(intent),
+            constraint_trace=_constraint_trace_from_intent(intent, memory_applied=memory_applied),
             safety_trace=_safety_trace(query, intent),
         )
         return RetrievalResult(
@@ -599,6 +611,11 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
         if not is_referenced_product and required_sub_categories and raw.get("sub_category", "") not in required_sub_categories:
             hard_filtered_out.append(
                 FilteredProduct(product_id=raw["product_id"], reason=f"sub_category {raw.get('sub_category', '')} not in {required_sub_categories}")
+            )
+            continue
+        if not is_referenced_product and _matches_brand_exclude(raw.get("brand", ""), intent.universal_constraints.brand_exclude):
+            hard_filtered_out.append(
+                FilteredProduct(product_id=raw["product_id"], reason=f"brand {raw.get('brand', '')} in brand_exclude")
             )
             continue
         if not is_referenced_product and budget is not None and not _has_price_within_budget(raw, budget):
@@ -686,7 +703,7 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
                 excluded_term_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("matches excluded")),
                 needs_clarification=True,
             ),
-            constraint_trace=_constraint_trace_from_intent(intent),
+            constraint_trace=_constraint_trace_from_intent(intent, memory_applied=memory_applied),
             safety_trace=_safety_trace(query, intent),
         )
         return RetrievalResult(
@@ -725,21 +742,165 @@ def retrieve(query: str, products: list[dict], limit: int = 3, index_dir: Path |
             excluded_term_candidates=sum(1 for item in hard_filtered_out if item.reason.startswith("matches excluded")),
             needs_clarification=False,
         ),
-        constraint_trace=_constraint_trace_from_intent(intent),
+        constraint_trace=_constraint_trace_from_intent(intent, memory_applied=memory_applied),
         safety_trace=_safety_trace(query, intent),
         source_trace=_source_trace(selected),
     )
     return RetrievalResult(cards=cards, context=context, trace=trace)
 
 
-def _constraint_trace_from_intent(intent: QueryIntent) -> ConstraintTrace:
+def _apply_memory_profile(
+    intent: QueryIntent,
+    memory_profile: UserMemoryProfile,
+    now: datetime,
+) -> tuple[QueryIntent, list[str]]:
+    applied: list[str] = []
+    constraints = memory_profile.constraints
+    if constraints.budget_max is not None:
+        current_budget = intent.universal_constraints.budget_max
+        if current_budget is None or constraints.budget_max < current_budget:
+            intent.universal_constraints.budget_max = constraints.budget_max
+            applied.append(f"budget_max:{constraints.budget_max:g}")
+    avoid_terms = [term.strip().lower() for term in constraints.avoid_terms + constraints.allergies if term.strip()]
+    if avoid_terms:
+        for term in avoid_terms:
+            if term not in intent.exclude_terms:
+                intent.exclude_terms.append(term)
+        applied.append(f"avoid_terms:{','.join(dict.fromkeys(avoid_terms))}")
+
+    if constraints.brand_exclude:
+        cleaned_brand_exclude = _unique_lower_stripped(constraints.brand_exclude)
+        if cleaned_brand_exclude:
+            intent.universal_constraints.brand_exclude = _unique_lower_stripped(
+                intent.universal_constraints.brand_exclude + cleaned_brand_exclude
+            )
+            applied.append(f"brand_exclude:{','.join(cleaned_brand_exclude)}")
+
+    for tag, weight in _top_typed_preferences(memory_profile.long_term_preferences.preferred_tags, limit=4, min_weight=0.4):
+        if tag and tag not in intent.soft_preferences:
+            intent.soft_preferences.append(tag)
+            applied.append(f"long_term_tag:{tag}:{weight:g}")
+    for category, weight in _top_typed_preferences(memory_profile.long_term_preferences.preferred_categories, limit=2, min_weight=0.55):
+        mapped_category = _raw_category_from_label(category)
+        if mapped_category and mapped_category not in intent.soft_preferences:
+            intent.soft_preferences.append(mapped_category)
+            applied.append(f"long_term_category:{mapped_category}:{weight:g}")
+
+    for interest in _active_memory_snapshots(memory_profile.short_term_snapshots.recent_interests, now=now):
+        if interest["key"] and interest["key"] not in intent.soft_preferences:
+            intent.soft_preferences.append(interest["key"])
+            applied.append(f"recent_interest:{interest['key']}:{interest['weight']:.2f}")
+
+    for avoidance in _active_memory_snapshots(memory_profile.short_term_snapshots.recent_avoidance, now=now):
+        if avoidance["key"] and avoidance["key"] not in intent.exclude_terms:
+            intent.exclude_terms.append(avoidance["key"])
+            applied.append(f"recent_avoidance:{avoidance['key']}:{avoidance['weight']:.2f}")
+
+    intent.soft_preferences = _unique_strings(intent.soft_preferences)
+    intent.exclude_terms = _unique_lower_stripped(intent.exclude_terms)
+    return intent, applied
+
+
+def _top_typed_preferences(
+    source: dict[str, float],
+    *,
+    limit: int,
+    min_weight: float,
+) -> list[tuple[str, float]]:
+    items = [
+        (str(key).strip(), float(value))
+        for key, value in source.items()
+        if str(key).strip() and isinstance(value, (int, float)) and float(value) >= min_weight
+    ]
+    items.sort(key=lambda item: item[1], reverse=True)
+    return items[:limit]
+
+
+def _raw_category_from_label(label: str) -> str | None:
+    normalized = str(label).strip()
+    if not normalized:
+        return None
+    if normalized in CATEGORY_TO_RAW:
+        return CATEGORY_TO_RAW[normalized]
+    if normalized in RAW_TO_CATEGORY:
+        return normalized
+    lowered = normalized.lower()
+    for category, raw in CATEGORY_TO_RAW.items():
+        if lowered == category.lower():
+            return raw
+    return None
+
+
+def _active_memory_snapshots(
+    snapshots: list,
+    now: datetime,
+) -> list[dict[str, object]]:
+    active: list[dict[str, object]] = []
+    for snapshot in snapshots:
+        created_at = str(getattr(snapshot, "created_at", ""))
+        ttl_days = getattr(snapshot, "ttl_days", 3)
+        if ttl_days <= 0:
+            continue
+        if not _is_snapshot_active(created_at, now, int(ttl_days)):
+            continue
+        key = str(getattr(snapshot, "key", "")).strip()
+        if not key:
+            continue
+        weight = float(getattr(snapshot, "weight", 0.5))
+        source = str(getattr(snapshot, "source", "recent_query"))
+        active.append({"key": key, "weight": weight, "source": source})
+    return sorted(active, key=lambda item: float(item["weight"]), reverse=True)
+
+
+def _is_snapshot_active(created_at_raw: str, now: datetime, ttl_days: int) -> bool:
+    try:
+        created_at = datetime.fromisoformat(created_at_raw)
+    except ValueError:
+        return False
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+    return now - created_at <= timedelta(days=ttl_days)
+
+
+def _matches_brand_exclude(brand: str, exclusions: list[str]) -> bool:
+    target = str(brand).strip().lower()
+    for exclusion in exclusions:
+        normalized = str(exclusion).strip().lower()
+        if not normalized:
+            continue
+        if normalized in target:
+            return True
+    return False
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    output: list[str] = []
+    for value in values:
+        if value not in output:
+            output.append(value)
+    return output
+
+
+def _unique_lower_stripped(values: list[str]) -> list[str]:
+    output: list[str] = []
+    for value in values:
+        normalized = str(value).strip().lower()
+        if normalized and normalized not in output:
+            output.append(normalized)
+    return output
+
+
+def _constraint_trace_from_intent(
+    intent: QueryIntent,
+    memory_applied: list[str] | None = None,
+) -> ConstraintTrace:
     current_turn = _constraints_from_intent(intent)
     return ConstraintTrace(
         current_turn=current_turn,
         inherited={},
         relaxed=[],
         effective=current_turn,
-        actions=[],
+        actions=list(memory_applied or []),
     )
 
 
