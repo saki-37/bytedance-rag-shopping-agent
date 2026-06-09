@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     asr_max_upload_mb: int = 50
     asr_timeout_seconds: float = 180.0
 
+    multimodal_upload_dir: Path = ROOT_DIR / "data" / "tmp" / "user_uploads"
+    multimodal_max_upload_mb: int = 10
+    multimodal_retention_hours: int = 24
+    multimodal_model: str | None = None
+    multimodal_timeout_seconds: float = 20.0
+
     @property
     def active_llm_provider(self) -> str:
         provider = self.llm_provider.strip().lower()
@@ -79,8 +85,16 @@ class Settings(BaseSettings):
         return None
 
     @property
+    def active_multimodal_model(self) -> str | None:
+        return self.multimodal_model or self.llm_model
+
+    @property
     def llm_configured(self) -> bool:
         return bool(self.llm_api_key and self.llm_model)
+
+    @property
+    def multimodal_configured(self) -> bool:
+        return bool(self.llm_api_key and self.active_multimodal_model)
 
 
 @lru_cache
