@@ -263,7 +263,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                         message.role == Role.Assistant
                     MessageBubble(
                         message = message,
-                        showFeedback = !state.isLoading && hasPriorUserMessage,
+                        showFeedback = !state.isLoading && hasPriorUserMessage && !message.isEphemeral,
                         isThinking = isThinking,
                         isStreaming = isAssistantStreaming,
                         assetBaseUrl = assetBaseUrl,
@@ -329,22 +329,30 @@ private fun MessageBubble(
     val alignment = if (message.role == Role.User) Alignment.End else Alignment.Start
     val background = when (message.role) {
         Role.User -> Ink
-        Role.Assistant -> SurfaceCream
+        Role.Assistant -> if (message.isQuickReply) AppGreenSoft else SurfaceCream
         Role.Status -> AppGreenSoft
         Role.Error -> ErrorSurface
     }
     val textColor = when (message.role) {
         Role.User -> SurfaceWhite
         Role.Error -> ErrorText
+        Role.Assistant -> if (message.isQuickReply) MutedText else Ink
         else -> Ink
     }
     val border = if (message.role == Role.User) null else BorderStroke(1.dp, BorderGreen)
     val cardContent: @Composable () -> Unit = {
-        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (isThinking) {
-                ThinkingIndicator()
-            } else if (message.content.isNotBlank()) {
-                if (message.role == Role.Assistant && message.products.isNotEmpty()) {
+        val contentPadding = if (message.isQuickReply) 12.dp else 14.dp
+        Column(modifier = Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            when {
+                message.role == Role.Assistant && message.isQuickReply -> {
+                    Text(
+                        text = message.content,
+                        color = textColor,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+
+                message.role == Role.Assistant && message.products.isNotEmpty() -> {
                     AssistantMessageContent(
                         content = message.content,
                         products = message.products,
@@ -352,19 +360,28 @@ private fun MessageBubble(
                         assetBaseUrl = assetBaseUrl,
                         onProductClick = onProductClick,
                     )
-                } else {
-                    if (message.role == Role.Assistant) {
-                        MarkdownText(markdown = message.content, color = textColor)
-                    } else {
-                        Text(
-                            text = message.content,
-                            color = textColor,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
+                    if (isThinking) {
+                        ThinkingIndicator()
                     }
                 }
+
+                isThinking -> {
+                    ThinkingIndicator()
+                }
+
+                message.content.isNotBlank() && message.role == Role.Assistant -> {
+                    MarkdownText(markdown = message.content, color = textColor)
+                }
+
+                message.content.isNotBlank() -> {
+                    Text(
+                        text = message.content,
+                        color = textColor,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
-            if (message.role == Role.Assistant && message.content.isNotBlank() && showFeedback) {
+            if (message.role == Role.Assistant && message.content.isNotBlank() && showFeedback && !message.isQuickReply) {
                 FeedbackControls(message = message, onFeedback = onFeedback)
             }
         }
@@ -901,6 +918,9 @@ private fun buildAssistantContentBlocks(
     val textBlocks = splitAssistantText(content, isStreaming)
     if (products.isEmpty()) {
         return textBlocks.map { AssistantContentBlock(text = it.text) }
+    }
+    if (textBlocks.isEmpty()) {
+        return listOf(AssistantContentBlock(text = "", products = products))
     }
     if (containsMarkdownTable(content)) {
         return listOf(

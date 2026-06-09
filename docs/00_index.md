@@ -58,3 +58,5 @@
 14. Claim-level judge 样例已落地：5 个高风险人工标注样例、8 条 claim，可渲染 Markdown/JSONL 报告，用于展示“逐条事实主张如何回到数据源”。
 15. LLM provider 切换文档已补齐：正式评测默认 Ark / Doubao，演示可临时用命令行覆盖到 Yunwu，并记录 `gpt-5.4-mini`、`gemini-3.5-flash`、`claude-sonnet-4-6` 和 `gpt-4o-mini` 候选。
 16. 场景化组合推荐 Planner 第一版已落地：Planner 输出 `scene_bundle + search_slots`，retrieval 按结构化计划跨类目选品；三亚度假 case 已有真实 API Planner probe 和 `FR-012` 回归。
+17. 首屏极速响应 UX 已落地：`quick_reply` SSE 事件、Android 临时气泡、ephemeral history 过滤、本地打字机动画和 `stage_timings_ms` trace 均已接入。
+18. 快速响应边界已收口：`FAST_QUICK_REPLY_DEADLINE_SECONDS` 只影响临时气泡，不截断 Planner 或向量检索；复杂跨类目 case 已验证 Planner 完整 applied。

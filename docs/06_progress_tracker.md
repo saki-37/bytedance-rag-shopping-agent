@@ -1,7 +1,7 @@
 # 进度对照表
 
 日期：2026-05-21  
-更新：2026-06-07
+更新：2026-06-09
 用途：把当前实现状态对照课题最终要求，避免只围绕局部 UI 问题推进。
 
 ## 当前一句话状态
@@ -20,17 +20,21 @@
 
 2026-06-08 补上 LLM provider 切换文档体系：正式测试继续默认 Ark / Doubao；演示可通过命令行临时覆盖到 Yunwu；候选模型和 smoke test 命令集中到 `docs/28_llm_provider_switching.md`。
 
+2026-06-09 补上首屏极速响应 UX：`/api/chat/stream` 新增 `quick_reply` SSE 事件和 `stage_timings_ms` runtime trace；Android 端渲染临时聊天气泡、过滤 ephemeral history，并在 `done/error` 后移除。为避免牺牲候选质量，`FAST_QUICK_REPLY_DEADLINE_SECONDS` 只作用于临时气泡支线：0.8 秒内完整 Planner + retrieval 未返回时，先发送 `source=deadline_fallback` 的等待气泡；主链路继续等待完整 Planner 和向量检索，不截断、不降级。RAG 结果返回后会发送 `source=template` 的候选态 quick reply 更新同一气泡，再展示商品卡片和正式回答。已通过 mock golden stream 8/8、Android `compileDebugKotlin`、`git diff --check`，真实 Yunwu 复杂跨类目 probe 显示 quick reply 约 801ms，Planner 完整 applied，fallback 为 null。
+
+同日补上场景化组合推荐回归收口：复杂请求“分别推荐防晒霜、帽子/防晒衣和裤子”已纳入 failure regression 和 Planner probe；Planner 输出 `scene_bundle + search_slots`，retrieval 执行层可跨美妆护肤和服饰运动返回候选，避免 rule-only fallback 把多槽位需求误锁成单一美妆类目。
+
 ## 对照课题必做最小闭环
 
 | 模块 | 课题要求 | 当前状态 | 说明 |
 | --- | --- | --- | --- |
 | 原生客户端 | iOS 或 Android 原生 App | 已完成第一版 | Android Kotlin + Jetpack Compose 已能启动和发送文字 |
 | 文字输入 | 对话窗口，支持发送文字 | 已完成 | 输入框、发送按钮、用户消息展示已可用 |
-| 流式回复 | 接收并渲染 AI 流式回复 | 已完成第一版 | SSE token 能逐步展示；已修正 loading 收尾问题 |
+| 流式回复 | 接收并渲染 AI 流式回复 | 已完成第一版+ | SSE token 能逐步展示；已修正 loading 收尾问题；新增 `quick_reply` 临时气泡和本地打字机动画 |
 | 商品卡片 | 回复中包含商品卡片 | 已完成第一版 | 展示图片、品牌、商品名、价格、标签、推荐理由 |
 | 卡片详情 | 可点击商品卡片，跳转落地页或模拟详情页 | 已完成第一版 | 点击商品卡片打开详情弹窗，详情字段来自数据源 |
 | 后端服务 | Python / Go / Node / 任一后端 | 已完成第一版 | FastAPI 服务已跑通 |
-| 流式 API | SSE 或 WebSocket | 已完成 | `POST /api/chat/stream` 返回 `status/products/token/done/error`；推荐型回答先发结构化商品卡，再随 token 流式插入到对应文本段落 |
+| 流式 API | SSE 或 WebSocket | 已完成 | `POST /api/chat/stream` 返回 `status/quick_reply/products/token/done/error`；临时气泡先接住需求，商品卡片来自完整 Planner + retrieval |
 | 向量数据库 | 集成向量数据库 | 已完成 V1 | Chroma 索引已可构建，运行时 trace 能看到 vector hits；索引产物仅本地保留 |
 | RAG 基本链路 | 检索商品并基于资料回答 | 已完成 V1 | 结构化硬过滤 + 关键词/facet/Chroma 召回 + 轻量 graph-aware rerank + 可解释 trace |
 | 模型调用 | 调用大模型生成导购回复 | 已完成第一版 | OpenAI-compatible Doubao 已通过代理复验；真实调用失败时会走安全兜底 |

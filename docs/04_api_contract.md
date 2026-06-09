@@ -42,20 +42,45 @@ SSE 流式聊天接口。
 - `status`：阶段状态，`retrieving` 或 `generating`，payload 会带 `trace_id`。
 - `token`：模型输出文本片段。
 - `products`：本轮召回并展示的商品卡片，payload 会带 `trace_id`。
+- `quick_reply`：临时聊天气泡，只做需求接收和候选态说明，payload 会带 `trace_id`；客户端可见但不应写入下一轮 history。
 - `done`：流结束，payload 会带 `trace_id`。
 - `error`：可恢复错误，payload 会带 `trace_id`。
 
 推荐型回答的事件顺序为：
 
 ```text
-status(retrieving, trace_id) -> status(generating, trace_id) -> products(trace_id) -> token... -> done(trace_id)
+status(retrieving, trace_id) -> quick_reply(template, trace_id) -> products(trace_id) -> status(generating, trace_id) -> token... -> done(trace_id)
 ```
 
-这样 Android 端会先拿到结构化商品卡片，再随着 `token` 流式输出把卡片嵌入到对应说明段落后。信息不足需要追问时，后端只返回追问文本，不发送 `products`：
+如果完整 Planner + 检索在 `FAST_QUICK_REPLY_DEADLINE_SECONDS` 内还没返回，后端可以先发送一个 `source=deadline_fallback` 的临时气泡，主链路继续等待完整 Planner 和检索，不取消、不降级：
 
 ```text
-status(retrieving, trace_id) -> status(generating, trace_id) -> token... -> done(trace_id)
+status(retrieving, trace_id) -> quick_reply(deadline_fallback, trace_id) -> quick_reply(template, trace_id) -> products(trace_id) -> status(generating, trace_id) -> token... -> done(trace_id)
 ```
+
+这样 Android 端会尽快展示需求已被接收的临时气泡；结构化商品卡片仍来自完整 Planner + 检索结果，再随着 `token` 流式输出嵌入到对应说明段落后。信息不足需要追问时，后端不发送 `products`：
+
+```text
+status(retrieving, trace_id) -> quick_reply(trace_id) -> status(generating, trace_id) -> token... -> done(trace_id)
+```
+
+`quick_reply` 事件示例：
+
+```json
+{
+  "trace_id": "uuid",
+  "text": "我先筛出了几款候选，接下来会重点看价格、适合人群和注意事项，再补齐推荐依据。",
+  "ephemeral": true,
+  "source": "template"
+}
+```
+
+约束：
+
+- `quick_reply` 只允许复述需求、说明候选态或将比较的维度，不输出最终排序、商品功效结论或购买承诺。
+- `quick_reply.ephemeral` 固定为 `true`；Android 应渲染成临时气泡，在 `done` / `error` 后移除，并在 `history` 回传时过滤掉它，避免污染 Planner 和正式回答上下文。
+- `quick_reply.source=deadline_fallback` 时，不允许写“已筛出某商品/品牌”；只能表达“已接收需求、正在查资料和约束”。
+- 同一轮出现多条 `quick_reply` 时，Android 应更新同一个临时气泡，而不是追加多个气泡；展示上可以用本地打字机动画模拟流式思考。
 
 `products` 事件示例：
 
@@ -205,8 +230,9 @@ data/tmp/traces/trace_YYYY-MM-DD.jsonl
 - 当前请求的 `message`、`conversation_id` 和 `history`。
 - `retrieval_message`、`conversation_state`、`retrieval_trace`。
 - `answer_directive`，用于复盘对比类问题最终选择了哪些商品。
+- `quick_reply` 和 `stage_timings_ms`，用于复盘首屏响应；推荐场景重点看 `products_sent_ms`、`quick_reply_sent_ms`、`first_token_sent_ms`、`done_ready_ms`。
 - 最终 `products` 顺序、流式拼接后的 `answer`、`token_count`、`answer_char_count`、`error`。
-- `settings` 只记录 `mock_llm`、是否配置 Ark key/model、Planner timeout，不记录 API key、header 或完整环境变量。
+- `settings` 只记录 `mock_llm`、LLM provider、是否配置 key/model、模型名、Planner timeout 和 quick reply deadline，不记录 API key、header 或完整环境变量。
 
 该目录被 `.gitignore` 的 `data/tmp/` 覆盖，不进入 Git。后续用户反馈可以通过 `trace_id` 回指同一条 runtime trace。
 

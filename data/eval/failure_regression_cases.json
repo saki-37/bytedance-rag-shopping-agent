@@ -423,5 +423,40 @@
         }
       }
     ]
+  },
+  {
+    "id": "FR-013",
+    "title": "场景化组合推荐：显式分别要防晒霜、帽子/防晒衣和裤子时不能只召回防晒霜",
+    "source": "Android 真实 trace 2026-06-09 line 124：Planner 被 fast-first-screen 0.8s deadline 截断，rule-only fallback 把类目锁成 beauty，回答称暂无帽子/防晒衣/裤子资料",
+    "turns": [
+      {
+        "user": "能不能分别给我推荐一个防晒霜、一个帽子或者是防晒衣，然后再来个裤子？",
+        "planner_additions": [
+          "- 推荐模式：场景组合",
+          "- 类目：美妆护肤、服饰运动",
+          "- 子类：防晒、帽子、运动短裤、运动长裤、户外裤",
+          "- 功效：防晒",
+          "- 场景：户外",
+          "- 搜索槽：防晒霜 | 类目=美妆护肤 | 子类=防晒 | 功效=防晒 | 场景=户外",
+          "- 搜索槽：遮阳帽 | 类目=服饰运动 | 子类=帽子 | 场景=户外",
+          "- 搜索槽：户外裤装 | 类目=服饰运动 | 子类=运动短裤,运动长裤,户外裤 | 场景=户外"
+        ],
+        "expect": {
+          "min_products": 3,
+          "min_distinct_product_categories": 2,
+          "expected_category_candidates": ["beauty", "apparel"],
+          "expected_facets": {
+            "effect": ["防晒"],
+            "use_case": ["户外"],
+            "sub_category": ["防晒", "帽子"]
+          },
+          "allowed_product_categories": ["美妆护肤", "服饰运动"],
+          "expected_product_categories_present": ["美妆护肤", "服饰运动"],
+          "expected_product_sub_categories_present": ["防晒", "帽子"],
+          "forbidden_product_categories": ["食品饮料", "数码电子"],
+          "retrieval_message_contains": ["防晒霜", "帽子", "裤子", "推荐模式：场景组合"]
+        }
+      }
+    ]
   }
 ]

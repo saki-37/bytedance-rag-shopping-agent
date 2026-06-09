@@ -193,6 +193,60 @@ p_clothes_025 服饰运动 / 背包
 p_clothes_024 服饰运动 / 帽子
 ```
 
+## 2026-06-09 追加回归：快首屏绕过 Planner
+
+真实 Android trace 中新增一个失败：
+
+```text
+能不能分别给我推荐一个防晒霜、一个帽子或者是防晒衣，然后再来个裤子？
+```
+
+trace 里 Planner 曾被首屏极速路径的短 deadline 截断：
+
+```text
+planner_trace.fallback_reason = planner_fast_first_screen_timeout
+parsed_intent.category_candidates = ["beauty"]
+products = p_beauty_010, p_beauty_006, p_beauty_023
+```
+
+这说明问题已经不是 Planner 语义判断错误，而是复杂跨类目请求没有等 Planner 生效，rule-only fallback 又把类目锁成 `beauty`，导致回答错误地说“暂无帽子、防晒衣、裤子资料”。
+
+当前修正原则：
+
+1. `chat_stream` 不再给 Planner 传首屏短 deadline，也不再为了首屏禁用向量检索；Planner 和 retrieval 都走完整主链路。
+2. 首屏 deadline 只作用在 `quick_reply` 体验支线。主链路未及时返回时，先发送 `source=deadline_fallback` 的临时气泡，但不发送 rule-only 商品卡片。
+
+新增回归：
+
+- `FR-013`: 防晒霜 + 帽子/防晒衣 + 裤子，验证 retrieval 执行层必须同时返回美妆护肤和服饰运动。
+- `probe_planner.py --case scene_bundle_sunscreen_hat_pants`: 真实 API 验证 Planner 能输出 `scene_bundle` 和 beauty/apparel 搜索槽。
+
+真实 API 复测结果：
+
+```text
+[PASS] scene_bundle_sunscreen_hat_pants latency_ms=20282 applied=True fallback=None
+recommendation_mode = scene_bundle
+search_slots = 防晒霜推荐(beauty/防晒) + 防晒配饰推荐(apparel/帽子) + 裤子推荐(apparel/运动长裤,户外裤)
+```
+
+### 收尾复测观察项：物理防晒非化妆品
+
+新增 `probe_planner.py --case physical_sunscreen_non_cosmetic`，记录 2026-06-09 trace 中的观察项：
+
+```text
+有没有什么？就是除了化妆品之外，比如说像防晒衣、防晒帽，嗯，就是物理防晒上的一些可以做的，就是推荐的东西。
+```
+
+这个 case 暂不作为离线 failure regression，因为当前讨论结论是：它主要暴露 Planner 超时后的降级路径偏窄，而不是主链路语义方案已经确认失败。最后收尾时用真实快速 API 复测：
+
+```bash
+PLANNER_TIMEOUT_SECONDS=30 server/.venv/bin/python scripts/probe_planner.py \
+  --case physical_sunscreen_non_cosmetic \
+  --repeat 1
+```
+
+期望不是继续补 keyword 规则，而是确认 Planner 能把“物理防晒 / 除了化妆品”落到 `apparel`，并产生帽子、速干T恤、户外裤、运动长裤或运动短裤等物理防护候选。
+
 ## 当前边界与风险
 
 1. Planner 语义方向已验证，但真实 API 延迟有波动。

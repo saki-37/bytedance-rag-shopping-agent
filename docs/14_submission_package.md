@@ -30,6 +30,7 @@
 | Android 原生聊天 | 已完成 | `client/android/`、Demo 录屏 |
 | FastAPI 后端 | 已完成 | `server/app/`、`docs/10_architecture.md` |
 | SSE 流式回复 | 已完成 | `docs/04_api_contract.md`、`docs/10_architecture.md` |
+| 首屏临时气泡 | 已完成 | `quick_reply` SSE event、Android ephemeral bubble、`docs/33_first_screen_fast_response_plan.md` |
 | 商品卡片与图片 | 已完成 | Demo 录屏、`docs/11_evaluation_report.md` |
 | 商品详情弹窗 | 已完成 | Demo 录屏、`docs/11_evaluation_report.md` |
 | 真实 Doubao 接入 | 已完成第一版 | `docs/11_evaluation_report.md` |

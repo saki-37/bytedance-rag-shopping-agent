@@ -27,7 +27,7 @@ flowchart TD
     API -->|"候选商品 + 证据上下文"| L["LLM Provider<br/>Ark / Doubao 默认<br/>Yunwu 演示备用"]
     L --> G["Generation Guardrails<br/>价格/库存/优惠/无证据断言校验"]
     G -->|"安全回答或二次改写/兜底"| API
-    API -->|"SSE: status / token / products / done / error"| A
+    API -->|"SSE: status / quick_reply / products / token / done / error"| A
     A --> C["聊天消息<br/>商品卡片<br/>图片<br/>详情弹窗"]
     A -->|"POST /api/feedback<br/>feedback + bounded snapshot"| F["Feedback JSONL<br/>data/tmp/feedback"]
 ```
@@ -44,8 +44,9 @@ flowchart TD
 2. 通过 OkHttp 调用后端 `POST /api/chat/stream`。
 3. 消费 SSE 事件：
    - `status`：展示检索/生成状态。
+   - `quick_reply`：展示临时气泡，用于首屏接住需求或更新候选态。
    - `token`：逐步追加助手回复。
-   - `products`：文本完成后渲染商品卡片。
+   - `products`：渲染完整 Planner + retrieval 产生的商品卡片。
    - `done`：结束 loading。
    - `error`：展示可理解错误。
 4. 加载商品图片：使用后端 `/assets/{image_path}`。
@@ -196,12 +197,13 @@ SSE 事件：
 | 事件 | 作用 |
 | --- | --- |
 | `status` | 告诉客户端正在检索或生成 |
+| `quick_reply` | 返回临时聊天气泡；可先发 `deadline_fallback`，再用 `template` 更新候选态 |
 | `token` | 返回回答文本片段 |
-| `products` | 返回本轮商品卡片数组；推荐型回答中位于 token 之后 |
+| `products` | 返回本轮商品卡片数组；来自完整 Planner + retrieval |
 | `done` | 本轮结束 |
 | `error` | 可恢复错误 |
 
-推荐型回答的顺序为 `status -> token -> products -> done`。信息不足需要追问时只返回 `status -> token -> done`，不提前展示商品卡片。
+推荐型回答的常规顺序为 `status -> quick_reply -> products -> status -> token -> done`；如果主链路超过 quick reply deadline，会先发 `quick_reply(deadline_fallback)`，完整 Planner + retrieval 返回后再发 `quick_reply(template)` 和 `products`。信息不足需要追问时不发送 `products`。
 
 图片接口：`GET /assets/{image_path}`
 

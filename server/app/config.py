@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     yunwu_model: str | None = None
 
     planner_timeout_seconds: float = 20.0
+    fast_first_screen_enabled: bool = True
+    fast_quick_reply_deadline_seconds: float = 0.8
 
     raw_data_dir: Path = ROOT_DIR / "data" / "raw" / "ecommerce_agent_dataset"
     enriched_data_dir: Path = ROOT_DIR / "data" / "enriched"

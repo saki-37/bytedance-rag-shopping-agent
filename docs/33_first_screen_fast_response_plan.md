@@ -4,7 +4,7 @@
 
 ## 背景
 
-当前 `/api/chat/stream` 已经采用 SSE，并且推荐场景会先发 `products`，再发 `token`。这对感知性能是好基础，但真实首 token 仍可能慢，主要有两点：
+当前 `/api/chat/stream` 已经采用 SSE，并且推荐场景会发送 `products` 和 `token`。这对感知性能是好基础，但真实首 token 仍可能慢，主要有两点：
 
 - Planner 在检索前执行，默认超时较长；复杂场景下会挡住首屏商品卡。
 - `stream_answer` 当前会先收集完整 LLM 流、做 guardrail / repair，再把最终文本按字符流出；因此接口是 SSE，生成体感不等于真实模型首 token。
@@ -12,13 +12,13 @@
 新增方案不追求把最终回答强行提前，而是增加一个安全的首屏反馈层：
 
 ```text
-快速检索拿候选卡 -> 临时聊天气泡接住用户 -> Planner / 正式回答继续生成
+临时聊天气泡接住用户 -> 完整 Planner + retrieval 返回候选 -> 正式回答继续生成
 ```
 
 ## 目标
 
 1. 用户发送后 1s 内看到聊天区有明确反馈，而不只是 loading。
-2. 商品候选卡尽量先展示，证明系统已经开始基于商品资料工作。
+2. 商品候选卡必须来自完整 Planner + retrieval；不为了首屏速度发送 rule-only 卡片。
 3. 临时气泡只做“需求复述 + 候选态说明 + 将比较的维度”，不输出最终推荐结论。
 4. 临时气泡不进入后续 Planner / answer generation history，避免污染多轮上下文。
 5. 现有 groundedness、guardrail、trace 和商品事实边界不被削弱。
@@ -56,14 +56,14 @@ Payload：
 | `trace_id` | string | 与本轮 stream 一致，方便 trace 关联 |
 | `text` | string | 展示在聊天区的临时气泡文案 |
 | `ephemeral` | boolean | 固定为 true，表示可见但不进入正式对话历史 |
-| `source` | string | `template` 或 `fast_model`，用于后续观测 |
+| `source` | string | `template`、`deadline_fallback` 或未来可选 `fast_model`，用于后续观测 |
 
 推荐型回答事件顺序建议：
 
 ```text
 status(retrieving)
-products
 quick_reply
+products
 status(generating)
 token...
 done
@@ -73,14 +73,15 @@ done
 
 ```text
 status(retrieving)
-quick_reply
+quick_reply(deadline_fallback)
+quick_reply(template)
 products
 status(generating)
 token...
 done
 ```
 
-但优先选择 `products -> quick_reply`，因为本项目 RAG 通常较快，先展示真实候选比先展示泛化文案更稳。
+`deadline_fallback` 只说明“已接收需求、正在查资料”，不包含候选商品或品牌；`template` quick reply 可在完整候选返回后说明正在浏览/比较哪些候选。
 
 澄清型回答事件顺序：
 
@@ -165,27 +166,29 @@ V1 不调用额外快模型，只用已有 request、rule intent 和 cards 生�
 - 文案会偏模板化。
 - 如果 Planner 很慢，`products` 和 `quick_reply` 仍会被 Planner 阻塞。
 
-### V2：Planner 短超时 + Rule-only 首屏
+### V2：Quick Reply Deadline + 完整主链路
 
-为了真正靠近 1s，需要把 Planner 从首屏关键路径里移出。
+为了让用户在 1s 内看到响应，同时不破坏 Planner 的候选质量，首屏 deadline 只作用在 `quick_reply` 体验支线。Planner、向量检索和正式回答仍属于主链路，不能被首屏 deadline 截断。
 
 流程：
 
 ```text
 收到请求
-  -> 同时启动 rule-only retrieval 和 Planner
-  -> rule-only retrieval 完成后先发 products + quick_reply
-  -> Planner 在短 deadline 内返回：用于正式回答或必要时后续 planned retrieval
-  -> Planner 超时：正式回答使用 rule-only retrieval
+  -> 启动完整 Planner + retrieval
+  -> 如果主链路在 quick reply deadline 内完成：发送 template quick_reply + products
+  -> 如果主链路没有及时完成：先发送 deadline_fallback quick_reply
+  -> 继续等待完整 Planner + retrieval
+  -> 发送 template quick_reply 更新候选态
+  -> 发送 products，并进入正式回答
 ```
 
 建议参数：
 
 - `FAST_FIRST_SCREEN_ENABLED=true`
-- `FAST_PLANNER_DEADLINE_SECONDS=0.5`
-- `QUICK_REPLY_SOURCE=template`
+- `FAST_QUICK_REPLY_DEADLINE_SECONDS=0.8`
+- `QUICK_REPLY_SOURCE=template | deadline_fallback`
 
-注意：V2 第一版不建议发送 `products_update`。如果 Planner 后来改了候选列表，会造成 UI 和正式回答不一致。更稳的做法是：首屏卡片和最终回答使用同一批 rule-only cards；Planner 只补充回答策略，或在下一轮再体现。
+注意：`deadline_fallback` 文案不能写“已筛出某商品/品牌”，只能表达“已接收需求，正在查商品资料和约束”。商品卡片必须等完整 Planner + retrieval 完成后再发送；发送卡片前可用 `template` quick reply 把“正在浏览/比较哪些候选”先展示出来。
 
 ### V3：快模型临时气泡
 
@@ -235,10 +238,12 @@ val isQuickReply: Boolean = false
 渲染策略：
 
 - `quick_reply` 到达时，在当前 assistant turn 中插入一条临时 assistant 气泡。
+- 同一轮多条 `quick_reply` 到达时，更新同一个临时气泡，不追加多个气泡。
 - 视觉上比正式回答更轻，例如小字号、浅色背景、无反馈按钮。
+- 客户端可用本地打字机动画逐字显示 quick reply，即使 SSE payload 是一次性到达。
 - `token` 到达后继续写入正式 assistant message，而不是追加到 quick reply 上。
 - `history.toPayloadHistory()` 过滤 `isEphemeral == true` 的消息，避免下轮传回后端。
-- `done` 后 V1 可保留该气泡；后续如果聊天区显得冗余，可改成正式回答开始后自动折叠或替换。
+- `done` / `error` 后移除该气泡，只保留正式回答，避免聊天区重复。
 
 推荐消息结构：
 
@@ -261,7 +266,7 @@ Assistant formal answer bubble, with product cards and tokens
 | `products_sent_ms` | 发出 `products` |
 | `quick_reply_sent_ms` | 发出 `quick_reply` |
 | `first_token_sent_ms` | 发出正式回答第一个 token |
-| `done_sent_ms` | 本轮结束 |
+| `done_ready_ms` | 正式回答已生成并准备结束 |
 | `planner_latency_ms` | Planner 耗时 |
 | `answer_generation_latency_ms` | 正式回答生成耗时 |
 | `guardrail_latency_ms` | guardrail / repair 耗时 |
@@ -275,10 +280,10 @@ V1 验收：
 
 V2 验收：
 
-- 典型推荐场景 `products_sent_ms - request_received_ms <= 1000`。
 - `quick_reply_sent_ms - request_received_ms <= 1000`。
-- Planner 超时不会导致首屏空等。
-- trace 能区分 rule-only 首屏和 Planner 是否参与正式回答。
+- Planner 不因为 quick reply deadline 被取消；trace 中不能出现 `planner_fast_first_screen_timeout`。
+- `products` 和正式回答使用同一套完整 Planner + retrieval 结果。
+- `quick_reply.source=deadline_fallback` 时，文案不包含候选商品、品牌、功效结论或购买建议。
 
 ## 分步推进
 
@@ -286,8 +291,8 @@ V2 验收：
 2. V1 后端：新增 `quick_reply` event 和模板文案生成函数。
 3. V1 Android：新增临时聊天气泡，过滤 ephemeral history。
 4. V1 回归：跑 API stream、Android 手测和现有 regression。
-5. V2 后端：加入 Planner 短 deadline / rule-only 首屏策略。
-6. V2 验收：用 trace 数据确认 1s 首屏是否达成。
+5. V2 后端：加入 quick reply deadline fallback，不截断 Planner。
+6. V2 验收：用 trace 数据确认 1s 临时气泡是否达成，并确认 Planner 主链路完整。
 7. V3 可选：只有模板气泡体验明显不足时，再引入快模型。
 
 ## 风险与处理
@@ -295,7 +300,7 @@ V2 验收：
 | 风险 | 处理 |
 | --- | --- |
 | 临时气泡被误解成最终结论 | 文案只写“先筛出候选 / 接下来会比较”，不写排序和推荐 |
-| Planner 后续结果和首屏卡片不一致 | V2 第一版不发送 `products_update`，正式回答沿用首屏 cards |
+| Planner 被首屏 deadline 误截断 | deadline 只作用在 `quick_reply` 体验支线，主链路不传短 timeout |
 | 快模型引入幻觉 | V1 先不用快模型；V3 prompt 严格限制，不给完整商品事实 |
 | 多轮上下文污染 | Android 过滤 ephemeral message，后端也不接受 quick reply 作为历史依据 |
 | trace 变复杂 | 明确记录 `quick_reply_source`、Planner 是否 applied、各阶段 latency |
@@ -304,4 +309,4 @@ V2 验收：
 
 先做 V1：新增 `quick_reply` SSE event + Android 临时聊天气泡。它能最小成本验证体验，且不改变检索、Planner 和正式回答安全边界。
 
-V1 稳定后再做 V2：把 Planner 移出首屏关键路径，用 rule-only retrieval 承担 1s 候选态。
+V1 稳定后再做 V2：把 1s 目标收敛到临时气泡，不用 rule-only retrieval 替代完整 Planner 候选。

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import random
 import re
 import time
 from collections.abc import AsyncIterator
@@ -59,24 +60,81 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
         retrieval_message = request.message
         result = None
         answer_directive = None
+        quick_reply: dict[str, Any] | None = None
         answer_tokens: list[str] = []
+        stage_timings: dict[str, int] = {}
+
+        def mark_stage(name: str) -> None:
+            stage_timings.setdefault(name, int((time.perf_counter() - started_at) * 1000))
+
+        async def build_retrieval_context() -> tuple[Any, str, Any, AnswerDirective | None]:
+            retrieval_build_inner = await build_planned_retrieval_message(settings, request)
+            mark_stage("planner_complete_ms")
+            retrieval_message_inner = retrieval_build_inner.message
+            result_inner = retrieve(retrieval_message_inner, enriched_products, index_dir=settings.index_dir)
+            _attach_conversation_trace(result_inner.trace, retrieval_build_inner.trace)
+            answer_directive_inner = _build_answer_directive(request, retrieval_build_inner.trace, result_inner.cards)
+            if answer_directive_inner:
+                result_inner.cards = _ordered_cards(result_inner.cards, answer_directive_inner.target_product_ids)
+            mark_stage("retrieval_complete_ms")
+            return retrieval_build_inner, retrieval_message_inner, result_inner, answer_directive_inner
 
         try:
+            mark_stage("retrieving_status_sent_ms")
             yield _event("status", {"status": "retrieving", "trace_id": trace_id})
-            retrieval_build = await build_planned_retrieval_message(settings, request)
-            retrieval_message = retrieval_build.message
-            result = retrieve(retrieval_message, enriched_products, index_dir=settings.index_dir)
-            _attach_conversation_trace(result.trace, retrieval_build.trace)
-            answer_directive = _build_answer_directive(request, retrieval_build.trace, result.cards)
-            if answer_directive:
-                result.cards = _ordered_cards(result.cards, answer_directive.target_product_ids)
-            yield _event("status", {"status": "generating", "trace_id": trace_id})
+            retrieval_task = asyncio.create_task(build_retrieval_context())
+            quick_reply_sent = False
+            if settings.fast_first_screen_enabled:
+                done, _ = await asyncio.wait(
+                    {retrieval_task},
+                    timeout=settings.fast_quick_reply_deadline_seconds,
+                )
+                if retrieval_task not in done:
+                    quick_reply = _quick_reply_waiting_payload(trace_id=trace_id, request=request)
+                    mark_stage("quick_reply_deadline_ms")
+                    mark_stage("quick_reply_sent_ms")
+                    yield _event("quick_reply", quick_reply)
+                    quick_reply_sent = True
+            retrieval_build, retrieval_message, result, answer_directive = await retrieval_task
             if result.clarification_question:
+                quick_reply = _quick_reply_payload(
+                    trace_id=trace_id,
+                    request=request,
+                    cards=result.cards,
+                    answer_directive=answer_directive,
+                    clarification_question=result.clarification_question,
+                )
+                if quick_reply_sent:
+                    mark_stage("quick_reply_update_sent_ms")
+                else:
+                    mark_stage("quick_reply_sent_ms")
+                yield _event("quick_reply", quick_reply)
+                quick_reply_sent = True
+                mark_stage("generating_status_sent_ms")
+                yield _event("status", {"status": "generating", "trace_id": trace_id})
                 async for token in _stream_text(result.clarification_question):
+                    if not answer_tokens:
+                        mark_stage("first_token_sent_ms")
                     answer_tokens.append(token)
                     yield _event("token", {"token": token})
             else:
+                quick_reply = _quick_reply_payload(
+                    trace_id=trace_id,
+                    request=request,
+                    cards=result.cards,
+                    answer_directive=answer_directive,
+                    clarification_question=None,
+                )
+                if quick_reply_sent:
+                    mark_stage("quick_reply_update_sent_ms")
+                else:
+                    mark_stage("quick_reply_sent_ms")
+                yield _event("quick_reply", quick_reply)
+                quick_reply_sent = True
+                mark_stage("products_sent_ms")
                 yield _event("products", {"trace_id": trace_id, "products": [card.model_dump() for card in result.cards]})
+                mark_stage("generating_status_sent_ms")
+                yield _event("status", {"status": "generating", "trace_id": trace_id})
                 async for token in stream_answer(
                     settings=settings,
                     user_message=retrieval_message,
@@ -85,8 +143,11 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                     cards=result.cards,
                     answer_directive=answer_directive,
                 ):
+                    if not answer_tokens:
+                        mark_stage("first_token_sent_ms")
                     answer_tokens.append(token)
                     yield _event("token", {"token": token})
+            mark_stage("done_ready_ms")
             _write_runtime_trace_safely(
                 trace_id=trace_id,
                 endpoint="chat_stream",
@@ -97,6 +158,8 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 conversation_state=retrieval_build.trace if retrieval_build else None,
                 retrieval_trace=result.trace.model_dump(mode="json") if result else None,
                 answer_directive=answer_directive,
+                quick_reply=quick_reply,
+                stage_timings=stage_timings,
                 products=result.cards if result else [],
                 answer="".join(answer_tokens),
                 token_count=len(answer_tokens),
@@ -104,6 +167,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
             )
             yield _event("done", {"ok": True, "trace_id": trace_id})
         except Exception as exc:  # Keep SSE shape stable for the Android client.
+            mark_stage("error_ready_ms")
             _write_runtime_trace_safely(
                 trace_id=trace_id,
                 endpoint="chat_stream",
@@ -114,6 +178,8 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 conversation_state=retrieval_build.trace if retrieval_build else None,
                 retrieval_trace=result.trace.model_dump(mode="json") if result else None,
                 answer_directive=answer_directive,
+                quick_reply=quick_reply,
+                stage_timings=stage_timings,
                 products=result.cards if result else [],
                 answer="".join(answer_tokens),
                 token_count=len(answer_tokens),
@@ -145,6 +211,8 @@ async def debug_retrieve(request: ChatRequest) -> dict:
         conversation_state=retrieval_build.trace,
         retrieval_trace=result.trace.model_dump(mode="json"),
         answer_directive=answer_directive,
+        quick_reply=None,
+        stage_timings=None,
         products=result.cards,
         answer=None,
         token_count=0,
@@ -170,6 +238,97 @@ def _event(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+def _quick_reply_payload(
+    *,
+    trace_id: str,
+    request: ChatRequest,
+    cards: list[ProductCard],
+    answer_directive: AnswerDirective | None,
+    clarification_question: str | None,
+) -> dict[str, Any]:
+    return {
+        "trace_id": trace_id,
+        "text": _build_quick_reply_text(
+            message=request.message,
+            cards=cards,
+            answer_directive=answer_directive,
+            clarification_question=clarification_question,
+        ),
+        "ephemeral": True,
+        "source": "template",
+    }
+
+
+def _quick_reply_waiting_payload(*, trace_id: str, request: ChatRequest) -> dict[str, Any]:
+    return {
+        "trace_id": trace_id,
+        "text": _build_quick_reply_waiting_text(request.message),
+        "ephemeral": True,
+        "source": "deadline_fallback",
+    }
+
+
+def _build_quick_reply_waiting_text(message: str) -> str:
+    dimensions = _quick_reply_dimensions(message)
+    templates = [
+        "我先接住你的需求，正在查商品资料和约束；如果需要推荐，我会先按{dimensions}来核对。",
+        "收到，我先不急着下结论，正在核对商品资料、限制条件和可比维度。",
+        "我在先过一遍你的条件，稍后会把候选和依据一起补上；重点会看{dimensions}。",
+        "我先把需求记住了，正在找匹配候选；会优先看{dimensions}，再给出推荐依据。",
+    ]
+    return random.choice(templates).format(dimensions=dimensions)
+
+
+def _build_quick_reply_text(
+    *,
+    message: str,
+    cards: list[ProductCard],
+    answer_directive: AnswerDirective | None,
+    clarification_question: str | None,
+) -> str:
+    if clarification_question:
+        return "我先接住你的需求，下面会先确认一个关键条件，避免直接乱推商品。"
+
+    if answer_directive and answer_directive.mode == "compare":
+        subject = _quick_card_subject(cards, fallback="这几款候选")
+        return f"我正在把{subject}放在一起比较，先看价格、适合人群和注意事项，再给你收敛建议。"
+
+    if cards:
+        subject = _quick_card_subject(cards, fallback=f"{min(len(cards), 3)} 款候选")
+        dimensions = _quick_reply_dimensions(message)
+        return f"我正在浏览{subject}这几款候选，先按{dimensions}做取舍，再补齐推荐依据。"
+
+    return "我先接住你的需求，下面会先确认关键条件，避免直接乱推商品。"
+
+
+def _quick_card_subject(cards: list[ProductCard], fallback: str) -> str:
+    names = []
+    for card in cards[:3]:
+        label = card.brand.strip() or card.sub_category.strip() or card.category.strip()
+        if label and label not in names:
+            names.append(label)
+    if not names:
+        return fallback
+    if len(names) == 1:
+        return f"{names[0]}这类候选"
+    return "、".join(names)
+
+
+def _quick_reply_dimensions(message: str) -> str:
+    dimensions: list[str] = []
+    if any(term in message for term in ["预算", "元", "便宜", "贵", "价格", "性价比"]):
+        dimensions.append("价格")
+    if any(term in message for term in ["通勤", "早八", "办公室", "户外", "运动", "上课", "出差", "度假", "场景"]):
+        dimensions.append("使用场景")
+    if any(term in message for term in ["敏感", "过敏", "不要", "不想", "避开", "风险", "刺激"]):
+        dimensions.append("注意事项")
+    if any(term in message for term in ["适合", "人群", "肤质", "油皮", "干皮", "学生", "妈妈"]):
+        dimensions.append("适合人群")
+    if not dimensions:
+        dimensions = ["价格", "适合人群", "注意事项"]
+    return "、".join(list(dict.fromkeys(dimensions))[:3])
+
+
 async def _stream_text(text: str) -> AsyncIterator[str]:
     for char in text:
         yield char
@@ -187,6 +346,8 @@ def _write_runtime_trace_safely(
     conversation_state: dict | None,
     retrieval_trace: dict | None,
     answer_directive: AnswerDirective | None,
+    quick_reply: dict[str, Any] | None,
+    stage_timings: dict[str, int] | None,
     products: list[ProductCard],
     answer: str | None,
     token_count: int,
@@ -205,6 +366,8 @@ def _write_runtime_trace_safely(
                 "conversation_state": conversation_state,
                 "retrieval_trace": retrieval_trace,
                 "answer_directive": answer_directive.model_dump(mode="json") if answer_directive else None,
+                "quick_reply": quick_reply,
+                "stage_timings_ms": stage_timings or {},
                 "products": [card.model_dump(mode="json") for card in products],
                 "answer": answer,
                 "token_count": token_count,
@@ -233,6 +396,8 @@ def _settings_trace_snapshot() -> dict[str, Any]:
         "has_llm_model": bool(settings.llm_model),
         "llm_model": settings.llm_model,
         "planner_timeout_seconds": settings.planner_timeout_seconds,
+        "fast_first_screen_enabled": settings.fast_first_screen_enabled,
+        "fast_quick_reply_deadline_seconds": settings.fast_quick_reply_deadline_seconds,
     }
 
 

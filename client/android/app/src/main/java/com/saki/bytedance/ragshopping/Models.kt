@@ -36,6 +36,8 @@ data class ChatMessage(
     val role: Role,
     val content: String,
     val products: List<ProductCard> = emptyList(),
+    val isEphemeral: Boolean = false,
+    val isQuickReply: Boolean = false,
     val feedback: FeedbackType? = null,
     val isFeedbackSending: Boolean = false,
     val feedbackError: String? = null,

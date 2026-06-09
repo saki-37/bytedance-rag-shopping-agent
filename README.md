@@ -2,15 +2,16 @@
 
 字节跳动 AI 全栈挑战赛项目：基于 RAG 的多模态电商智能导购 AI Agent。
 
-当前版本聚焦 **美妆护肤文字导购闭环**：Android Kotlin 原生 App 输入需求，FastAPI 后端解析意图并检索商品，Doubao / Ark 生成 evidence-bound 导购回复，Android 端流式展示回答、商品卡片、图片和详情弹窗。
+当前版本聚焦 **文字导购闭环 + 首屏体验优化**：Android Kotlin 原生 App 输入需求，FastAPI 后端解析意图并检索商品，Doubao / Ark 生成 evidence-bound 导购回复，Android 端展示临时响应气泡、流式回答、商品卡片、图片和详情弹窗。
 
 ## 当前完成能力
 
 - Android Kotlin + Jetpack Compose 原生聊天界面。
 - FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve`、`POST /api/feedback` 和图片静态服务。
-- SSE 流式协议：`status`、`token`、`products`、`done`、`error`；推荐场景下先流式展示文本，再展示商品卡片。
+- SSE 流式协议：`status`、`quick_reply`、`products`、`token`、`done`、`error`；推荐场景下先用临时气泡接住需求，完整 Planner + 检索返回后再展示商品卡片和正式回答。
 - 商品 RAG：结构化硬过滤 + 必要功效/子类过滤 + keyword/facet 匹配 + Chroma `products` 统一 collection 向量召回 + metadata filter + 可解释 `RetrievalTrace`。
 - V2 多品类起步：新增 5 条服饰运动 enriched 样例，覆盖变体、规格、证据来源和第二品类 query benchmark。
+- 场景化组合推荐第一版：Planner 可输出 `scene_bundle + search_slots`，retrieval 按结构化计划跨类目选品，并补充防晒霜 + 帽子/防晒衣 + 裤子回归 case。
 - Doubao / Ark OpenAI-compatible API 接入；默认评测口径使用真实 Ark / Doubao，也支持通过 `LLM_PROVIDER=yunwu` 临时切到 Yunwu OpenAI-compatible API 做快速演示；只有显式开启 `MOCK_LLM=true` 或缺少当前 provider 的 Key/模型名时才走 mock / safe fallback。
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
 - 轻量反馈闭环：Android 端可在回答下方点击 `有用` / `不准确`；后端记录最近上下文、回答、商品卡片等有界快照，debug 脚本可额外带上检索 trace。
@@ -65,6 +66,8 @@ ARK_API_KEY=YOUR_LOCAL_KEY
 ARK_BASE_URL=https://ark.cn-beijing.volces.com/api/v3/
 ARK_MODEL=YOUR_MODEL_ENDPOINT
 LLM_PROVIDER=ark
+FAST_FIRST_SCREEN_ENABLED=true
+FAST_QUICK_REPLY_DEADLINE_SECONDS=0.8
 MOCK_LLM=false
 ```
 
@@ -78,7 +81,7 @@ YUNWU_MODEL=gpt-5.4-mini
 MOCK_LLM=false
 ```
 
-切回正式测试口径时，把 `LLM_PROVIDER` 改回 `ark`；Planner 和最终导购回答会同时跟随这个开关。启动后可用 `curl http://127.0.0.1:8000/health` 确认当前 `llm_provider` 和 `llm_model`。完整命令行临时覆盖方式和候选模型见 [docs/28_llm_provider_switching.md](docs/28_llm_provider_switching.md)。
+切回正式测试口径时，把 `LLM_PROVIDER` 改回 `ark`；Planner 和最终导购回答会同时跟随这个开关。`FAST_QUICK_REPLY_DEADLINE_SECONDS` 只影响 `/api/chat/stream` 的临时气泡：如果完整 Planner + 检索还没返回，先发一个不含候选结论的等待气泡；Planner 和检索本身不会被截断或降级。启动后可用 `curl http://127.0.0.1:8000/health` 确认当前 `llm_provider` 和 `llm_model`。完整命令行临时覆盖方式和候选模型见 [docs/28_llm_provider_switching.md](docs/28_llm_provider_switching.md)。
 
 如果只是离线验证端到端链路，可以显式改成：
 

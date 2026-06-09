@@ -20,6 +20,7 @@ sealed interface StreamEvent {
     data class Status(val value: String) : StreamEvent
     data class Token(val value: String) : StreamEvent
     data class Products(val value: List<ProductCard>) : StreamEvent
+    data class QuickReply(val text: String, val ephemeral: Boolean, val source: String) : StreamEvent
     data object Done : StreamEvent
     data class Error(val message: String) : StreamEvent
     data class Connection(val baseUrl: String) : StreamEvent
@@ -226,6 +227,11 @@ class ShoppingAgentClient(
             "status" -> StreamEvent.Status(json.optString("status"))
             "token" -> StreamEvent.Token(json.optString("token"))
             "products" -> StreamEvent.Products(parseProducts(json.optJSONArray("products") ?: JSONArray()))
+            "quick_reply" -> StreamEvent.QuickReply(
+                text = json.optString("text"),
+                ephemeral = json.optBoolean("ephemeral", true),
+                source = json.optString("source", "template"),
+            )
             "done" -> StreamEvent.Done
             "error" -> StreamEvent.Error(json.optString("message", "Unknown error"))
             else -> null
@@ -244,7 +250,11 @@ class ShoppingAgentClient(
     private fun List<ChatMessage>.toPayloadHistory(): JSONArray {
         val array = JSONArray()
         takeLast(8)
-            .filter { it.content.isNotBlank() && it.role in setOf(Role.User, Role.Assistant) }
+            .filter {
+                it.content.isNotBlank() &&
+                    !it.isEphemeral &&
+                    it.role in setOf(Role.User, Role.Assistant)
+            }
             .forEach { message ->
                 val role = when (message.role) {
                     Role.User -> "user"

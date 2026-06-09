@@ -2,6 +2,8 @@ package com.saki.bytedance.ragshopping
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -29,6 +31,7 @@ class ChatViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state
+    private var quickReplyTypingJob: Job? = null
 
     fun updateInput(value: String) {
         _state.update { it.copy(input = value, asrStatusText = null) }
@@ -64,7 +67,11 @@ class ChatViewModel(
             ?: return
         val history = snapshot.messages
             .take(assistantIndex + 1)
-            .filter { it.content.isNotBlank() && it.role in setOf(Role.User, Role.Assistant) }
+            .filter {
+                it.content.isNotBlank() &&
+                    !it.isEphemeral &&
+                    it.role in setOf(Role.User, Role.Assistant)
+            }
             .dropWhile { it.role != Role.User }
 
         _state.update { current ->
@@ -153,8 +160,13 @@ class ChatViewModel(
 
     private fun sendMessage(message: String) {
         if (message.isEmpty() || state.value.isLoading) return
+        cancelQuickReplyTyping()
         val history = state.value.messages
-            .filter { it.content.isNotBlank() && it.role in setOf(Role.User, Role.Assistant) }
+            .filter {
+                it.content.isNotBlank() &&
+                    !it.isEphemeral &&
+                    it.role in setOf(Role.User, Role.Assistant)
+            }
             .drop(1)
 
         _state.update {
@@ -174,6 +186,7 @@ class ChatViewModel(
                     is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
                     is StreamEvent.Status -> appendStatus(event.value)
                     is StreamEvent.Products -> rememberProducts(event.value)
+                    is StreamEvent.QuickReply -> appendQuickReply(event.text, event.ephemeral)
                     is StreamEvent.Token -> appendToken(event.value)
                     is StreamEvent.Error -> appendError(event.message)
                     StreamEvent.Done -> finishAssistantTurn()
@@ -191,6 +204,42 @@ class ChatViewModel(
         _state.update { it.copy(statusText = text) }
     }
 
+    private fun appendQuickReply(text: String, ephemeral: Boolean) {
+        val cleanText = text.trim()
+        if (cleanText.isBlank()) return
+        quickReplyTypingJob?.cancel()
+        val existingQuickReplyId = state.value.messages
+            .lastOrNull { it.role == Role.Assistant && it.isQuickReply }
+            ?.id
+        val newQuickReply = ChatMessage(
+            role = Role.Assistant,
+            content = "",
+            isEphemeral = ephemeral,
+            isQuickReply = true,
+        )
+        val quickReplyId = existingQuickReplyId ?: newQuickReply.id
+        _state.update { current ->
+            val existingIndex = current.messages.indexOfLast { it.role == Role.Assistant && it.isQuickReply }
+            val messages = if (existingIndex >= 0) {
+                current.messages.mapIndexed { index, item ->
+                    if (index == existingIndex) {
+                        item.copy(content = "", isEphemeral = ephemeral, isQuickReply = true)
+                    } else {
+                        item
+                    }
+                }
+            } else {
+                current.messages.insertBeforeLastAssistant(newQuickReply)
+            }
+            current.copy(
+                messages = messages
+            )
+        }
+        quickReplyTypingJob = viewModelScope.launch {
+            revealQuickReply(quickReplyId, cleanText)
+        }
+    }
+
     private fun rememberProducts(products: List<ProductCard>) {
         _state.update { current ->
             current.copy(
@@ -201,13 +250,15 @@ class ChatViewModel(
     }
 
     private fun finishAssistantTurn() {
+        cancelQuickReplyTyping()
         _state.update { current ->
             val lastAssistant = current.messages.lastOrNull { it.role == Role.Assistant }
-            val messages = if (current.pendingProducts.isEmpty() || lastAssistant?.products?.isNotEmpty() == true) {
+            val messagesWithProducts = if (current.pendingProducts.isEmpty() || lastAssistant?.products?.isNotEmpty() == true) {
                 current.messages
             } else {
                 current.messages.mapLastAssistant { it.copy(products = current.pendingProducts) }
             }
+            val messages = messagesWithProducts.filterNot { it.isEphemeral && it.isQuickReply }
             current.copy(
                 isLoading = false,
                 statusText = null,
@@ -224,18 +275,47 @@ class ChatViewModel(
     }
 
     private fun appendError(message: String) {
+        cancelQuickReplyTyping()
         _state.update {
             it.copy(
                 isLoading = false,
                 statusText = null,
                 pendingProducts = emptyList(),
-                messages = it.messages + ChatMessage(Role.Error, "请求失败：$message"),
+                messages = it.messages
+                    .filterNot { item -> item.isEphemeral && item.isQuickReply } +
+                    ChatMessage(Role.Error, "请求失败：$message"),
             )
         }
     }
 
+    private suspend fun revealQuickReply(messageId: String, text: String) {
+        var visibleText = ""
+        for (char in text) {
+            visibleText += char
+            _state.update { current ->
+                current.copy(
+                    messages = current.messages.mapMessageById(messageId) {
+                        it.copy(content = visibleText)
+                    }
+                )
+            }
+            delay(18)
+        }
+    }
+
+    private fun cancelQuickReplyTyping() {
+        quickReplyTypingJob?.cancel()
+        quickReplyTypingJob = null
+    }
+
+    private fun List<ChatMessage>.insertBeforeLastAssistant(message: ChatMessage): List<ChatMessage> {
+        val index = indexOfLast { it.role == Role.Assistant && !it.isQuickReply }
+        if (index < 0) return this + message
+        return take(index) + message + drop(index)
+    }
+
     private fun List<ChatMessage>.mapLastAssistant(transform: (ChatMessage) -> ChatMessage): List<ChatMessage> {
-        val index = indexOfLast { it.role == Role.Assistant }
+        val index = indexOfLast { it.role == Role.Assistant && !it.isQuickReply }
         if (index < 0) return this
         return mapIndexed { itemIndex, item -> if (itemIndex == index) transform(item) else item }
     }

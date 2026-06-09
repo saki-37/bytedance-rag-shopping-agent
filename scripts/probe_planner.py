@@ -94,6 +94,34 @@ CASES: dict[str, dict[str, Any]] = {
             "search_slot_sub_categories_any": ["防晒", "短袖T恤", "速干T恤", "帽子", "运动短裤", "背包"],
         },
     },
+    "scene_bundle_sunscreen_hat_pants": {
+        "title": "场景组合：显式分别要防晒霜、帽子/防晒衣和裤子",
+        "message": "能不能分别给我推荐一个防晒霜、一个帽子或者是防晒衣，然后再来个裤子？",
+        "history": [],
+        "expect": {
+            "recommendation_mode": "scene_bundle",
+            "search_slot_categories": ["beauty", "apparel"],
+            "search_slot_sub_categories_any": ["防晒", "帽子", "运动短裤", "运动长裤", "户外裤"],
+        },
+    },
+    "physical_sunscreen_non_cosmetic": {
+        "title": "物理防晒：排除化妆品后应转成服饰防护候选",
+        "message": "有没有什么？就是除了化妆品之外，比如说像防晒衣、防晒帽，嗯，就是物理防晒上的一些可以做的，就是推荐的东西。",
+        "history": [
+            {"role": "user", "content": "我可能马上要去三亚玩，然后想买一些防晒的东西，防晒的多件套的那种，你有什么推荐吗？"},
+            {
+                "role": "assistant",
+                "content": "已返回防晒候选。",
+                "product_ids": ["p_beauty_010", "p_beauty_023", "p_beauty_006"],
+            },
+        ],
+        "expect": {
+            "recommendation_mode_any": ["scene_bundle", "single_category"],
+            "plan_categories_present": ["apparel"],
+            "forbidden_plan_categories": ["beauty"],
+            "plan_sub_categories_any": ["帽子", "速干T恤", "户外裤", "运动长裤", "运动短裤"],
+        },
+    },
 }
 
 
@@ -204,6 +232,9 @@ def evaluate(expectation: dict[str, Any], trace: dict[str, Any]) -> list[str]:
     expected_mode = expectation.get("recommendation_mode")
     if expected_mode is not None and validated.get("recommendation_mode") != expected_mode:
         failures.append(f"recommendation_mode expected={expected_mode} got={validated.get('recommendation_mode')}")
+    expected_modes = expectation.get("recommendation_mode_any")
+    if expected_modes is not None and validated.get("recommendation_mode") not in expected_modes:
+        failures.append(f"recommendation_mode expected_any={expected_modes} got={validated.get('recommendation_mode')}")
     expected_slot_categories = expectation.get("search_slot_categories")
     if expected_slot_categories is not None:
         slots = validated.get("search_slots") or []
@@ -222,7 +253,46 @@ def evaluate(expectation: dict[str, Any], trace: dict[str, Any]) -> list[str]:
             failures.append(
                 f"search_slot_sub_categories_any expected_any={expected_any_sub_categories} got={actual_sub_categories}"
             )
+    expected_plan_categories = expectation.get("plan_categories_present")
+    forbidden_plan_categories = expectation.get("forbidden_plan_categories")
+    if expected_plan_categories or forbidden_plan_categories:
+        actual_plan_categories = _plan_categories(validated)
+        if expected_plan_categories:
+            missing = [category for category in expected_plan_categories if category not in actual_plan_categories]
+            if missing:
+                failures.append(f"plan_categories missing={missing} got={actual_plan_categories}")
+        if forbidden_plan_categories:
+            present = [category for category in forbidden_plan_categories if category in actual_plan_categories]
+            if present:
+                failures.append(f"forbidden_plan_categories present={present} got={actual_plan_categories}")
+    expected_plan_sub_categories = expectation.get("plan_sub_categories_any")
+    if expected_plan_sub_categories:
+        actual_plan_sub_categories = _plan_sub_categories(validated)
+        if not set(expected_plan_sub_categories).intersection(actual_plan_sub_categories):
+            failures.append(
+                f"plan_sub_categories_any expected_any={expected_plan_sub_categories} got={actual_plan_sub_categories}"
+            )
     return failures
+
+
+def _plan_categories(validated: dict[str, Any]) -> list[str]:
+    categories: list[str] = []
+    category_patch = validated.get("category_patch") or {}
+    categories.extend(str(item) for item in category_patch.get("include", []) if item)
+    for slot in validated.get("search_slots") or []:
+        if isinstance(slot, dict) and slot.get("category"):
+            categories.append(str(slot["category"]))
+    return list(dict.fromkeys(categories))
+
+
+def _plan_sub_categories(validated: dict[str, Any]) -> list[str]:
+    sub_categories: list[str] = []
+    facets_patch = validated.get("facets_patch") or {}
+    sub_categories.extend(str(item) for item in facets_patch.get("sub_category", []) if item)
+    for slot in validated.get("search_slots") or []:
+        if isinstance(slot, dict):
+            sub_categories.extend(str(item) for item in slot.get("sub_categories", []) if item)
+    return list(dict.fromkeys(sub_categories))
 
 
 def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
