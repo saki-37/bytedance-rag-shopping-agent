@@ -2,9 +2,9 @@
 
 日期：2026-05-28
 
-用途：录制第一版 1 分钟闭环 Demo，证明当前版本已经能跑通 Android 原生端、FastAPI、RAG 检索、Doubao 生成、商品卡片、详情弹窗和轻量反馈按钮。
+用途：保留第一版 1 分钟闭环 Demo 的短脚本，并作为最终提交视频的入口页。5-10 分钟带讲解主版请看 `docs/submission_video_script.md`。
 
-答辩口头讲解可直接参考 `docs/22_defense_cheatsheet.md`。本页只负责 Demo 展示顺序。
+答辩口头讲解可直接参考 `docs/22_defense_cheatsheet.md`。提交给评委的设计文档和体验说明分别见 `docs/submission_design_doc.md`、`docs/submission_user_guide.md`。
 
 ## 录屏前检查
 
@@ -28,7 +28,11 @@ export all_proxy=socks5://127.0.0.1:7897
    - `蜜粉`
    - `唇釉`
    - `眉笔`
-   - `卸妆`
+	   - `卸妆`
+6. 如需展示图片/语音/TTS，提前验证：
+   - 图片上传后能得到 `image_plan`，并能继续发送聊天请求。
+   - ASR sidecar 已启动，`POST /api/asr/transcribe` 能返回文本。
+   - Android 系统 TTS 中文播报可用。
 
 ## 1 分钟展示顺序
 
@@ -111,6 +115,8 @@ export all_proxy=socks5://127.0.0.1:7897
 
 ## 当前边界
 
-1. 当前 Demo 主线是美妆文字导购，不展示图片输入、语音或购物车。
-2. 当前 enriched 数据已覆盖完整 25 条美妆商品，但 Demo 主线仍聚焦文字导购。
-3. Guardrail 是规则版，不是完整 groundedness judge；后续需要继续沉淀 failure cases。
+1. 当前 Demo 主线仍建议优先展示文字导购、流式返回、商品卡片、详情页和防幻觉边界。
+2. 图片输入、ASR 语音输入和 TTS 播报已接入第一版；只有在最终设备/provider/sidecar 复验稳定时才放入主视频现场展示。
+3. 当前 enriched 数据以美妆深度主线为核心，并有服饰样例和全品类 thin support；不要承诺所有品类都达到美妆深度。
+4. 当前不展示购物车、真实下单、库存、实时优惠或支付。
+5. Guardrail 是规则版，不是完整 groundedness judge；提交时应讲“发现/拦截/修复/兜底”，不要讲“零幻觉”。

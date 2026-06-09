@@ -8,6 +8,9 @@
 
 ## 工程文档
 
+- [提交版系统设计文档](submission_design_doc.md)
+- [提交版部署与体验说明](submission_user_guide.md)
+- [最终提交演示视频脚本](submission_video_script.md)
 - [API 契约](04_api_contract.md)
 - [Golden Queries](05_golden_queries.md)
 - [进度对照表](06_progress_tracker.md)
@@ -68,3 +71,6 @@
 17. 首屏极速响应 UX 已落地：`quick_reply` SSE 事件、Android 临时气泡、ephemeral history 过滤、本地打字机动画和 `stage_timings_ms` trace 均已接入。
 18. 快速响应边界已收口：`FAST_QUICK_REPLY_DEADLINE_SECONDS` 只影响临时气泡，不截断 Planner 或向量检索；复杂跨类目 case 已验证 Planner 完整 applied。
 19. 用户记忆与本地偏好层方案已补齐：建议先做本仓库 local provider 薄层，硬约束结构化执行，Mem0 仅作为后续软记忆可选增强。
+20. 多模态图片输入 MVP 已接入：Android 相机/相册上传，后端 `/api/multimodal/images` 生成 `image_plan` / `query_text`，再复用现有 RAG；当前不是图搜图。
+21. ASR 语音输入和 TTS 播报已接入第一版：Android 录音上传 `/api/asr/transcribe`，后端代理本地 sidecar；TTS 使用 Android 系统 TextToSpeech。
+22. 提交版设计文档、体验说明和 5-10 分钟视频脚本已补齐 Markdown 中间稿，后续需要复制到飞书并检查权限。

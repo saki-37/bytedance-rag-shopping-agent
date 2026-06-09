@@ -2,12 +2,12 @@
 
 字节跳动 AI 全栈挑战赛项目：基于 RAG 的多模态电商智能导购 AI Agent。
 
-当前版本聚焦 **文字导购闭环 + 首屏体验优化**：Android Kotlin 原生 App 输入需求，FastAPI 后端解析意图并检索商品，Doubao / Ark 生成 evidence-bound 导购回复，Android 端展示临时响应气泡、流式回答、商品卡片、图片和详情弹窗。
+当前版本聚焦 **原生移动端 RAG 导购闭环 + 证据约束生成**：Android Kotlin 原生 App 支持文字、图片和语音需求输入，FastAPI 后端解析意图并检索商品，Doubao / Ark 生成 evidence-bound 导购回复，Android 端展示临时响应气泡、流式回答、商品卡片、图片、详情弹窗、反馈和 TTS 播报。
 
 ## 当前完成能力
 
-- Android Kotlin + Jetpack Compose 原生聊天界面。
-- FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve`、`POST /api/feedback` 和图片静态服务。
+- Android Kotlin + Jetpack Compose 原生聊天界面，不是 H5。
+- FastAPI 后端，提供 `GET /health`、`POST /api/chat/stream`、`POST /api/debug/retrieve`、`POST /api/feedback`、`POST /api/multimodal/images`、`POST /api/asr/transcribe`、购买对象上下文接口和图片静态服务。
 - SSE 流式协议：`status`、`quick_reply`、`products`、`token`、`done`、`error`；推荐场景下先用临时气泡接住需求，完整 Planner + 检索返回后再展示商品卡片和正式回答。
 - 商品 RAG：结构化硬过滤 + 必要功效/子类过滤 + keyword/facet 匹配 + Chroma `products` 统一 collection 向量召回 + metadata filter + 可解释 `RetrievalTrace`。
 - V2 多品类起步：新增 5 条服饰运动 enriched 样例，覆盖变体、规格、证据来源和第二品类 query benchmark。
@@ -16,12 +16,18 @@
 - 生成后 guardrail：拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
 - 轻量反馈闭环：Android 端可在回答下方点击 `有用` / `不准确`；后端记录最近上下文、回答、商品卡片等有界快照，debug 脚本可额外带上检索 trace。
 - Claim-level audit 样例：已沉淀 5 个高风险人工标注样例、8 条 claim，可渲染 Markdown / JSONL 报告，展示商品事实如何逐条回到数据源。
+- 多模态图片输入第一版：Android 支持相机/相册图片上传，后端把图片理解为 `image_plan` / `query_text` 后接入现有 RAG；当前是 text-first 图片理解，不是图像向量搜同款。
+- 语音输入与 TTS 第一版：Android 录音上传 `/api/asr/transcribe`，后端代理本地 ASR sidecar；助手回答可用 Android 系统 TTS 播报。最终视频是否主展示取决于设备和 sidecar 稳定性。
+- 常用购买对象 / recipient context：Android 可选择和管理购买对象，后端把对象约束合入检索请求，作为个性化补充能力。
 - 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
 - Golden queries、conversation cases、真实 API 三轮回归和 Android 模拟器复验证据已整理在文档中。
 
 ## Demo 与提交入口
 
 - Demo 脚本：[docs/12_demo_script.md](docs/12_demo_script.md)
+- 提交版设计文档中间稿：[docs/submission_design_doc.md](docs/submission_design_doc.md)
+- 提交版体验说明中间稿：[docs/submission_user_guide.md](docs/submission_user_guide.md)
+- 提交版视频脚本：[docs/submission_video_script.md](docs/submission_video_script.md)
 - 系统架构：[docs/10_architecture.md](docs/10_architecture.md)
 - 评测记录：[docs/11_evaluation_report.md](docs/11_evaluation_report.md)
 - 提交材料清单：[docs/14_submission_package.md](docs/14_submission_package.md)
@@ -82,6 +88,22 @@ MOCK_LLM=false
 ```
 
 切回正式测试口径时，把 `LLM_PROVIDER` 改回 `ark`；Planner 和最终导购回答会同时跟随这个开关。`FAST_QUICK_REPLY_DEADLINE_SECONDS` 只影响 `/api/chat/stream` 的临时气泡：如果完整 Planner + 检索还没返回，先发一个不含候选结论的等待气泡；Planner 和检索本身不会被截断或降级。启动后可用 `curl http://127.0.0.1:8000/health` 确认当前 `llm_provider` 和 `llm_model`。完整命令行临时覆盖方式和候选模型见 [docs/28_llm_provider_switching.md](docs/28_llm_provider_switching.md)。
+
+可选移动端增强配置：
+
+```env
+MEMORY_PROVIDER=local
+MEMORY_AUTO_LEARN=false
+ASR_SIDECAR_URL=http://127.0.0.1:8765/transcribe
+ASR_MAX_UPLOAD_MB=50
+ASR_TIMEOUT_SECONDS=180
+MULTIMODAL_MODEL=
+MULTIMODAL_MAX_UPLOAD_MB=10
+MULTIMODAL_RETENTION_HOURS=24
+MULTIMODAL_TIMEOUT_SECONDS=20
+```
+
+`MULTIMODAL_MODEL` 留空时会尝试复用当前 provider 的模型配置；如果当前模型不支持图片，图片理解会降级或返回可理解错误。ASR 需要额外启动本地 sidecar；TTS 使用 Android 系统引擎，不需要后端模型。
 
 如果只是离线验证端到端链路，可以显式改成：
 
@@ -242,7 +264,7 @@ python3 scripts/scan_secrets.py --all
 
 ## Current Scope
 
-当前版本重点是 **文字美妆导购主线**，用于证明移动端、后端、RAG、模型生成、商品卡片和评测闭环可以端到端运行。
+当前版本重点是 **原生 Android RAG 导购主线**，用于证明移动端、后端、RAG、模型生成、流式返回、商品卡片、详情页和评测闭环可以端到端运行。
 
 当前边界：
 
@@ -251,7 +273,8 @@ python3 scripts/scan_secrets.py --all
 - 多商品对比已有第一版 benchmark 和后端回答策略；当前仍复用聊天回复和多商品卡片，不新增复杂对比 UI。
 - `RetrievalTrace` 已显式输出 `metadata_filter`、`filter_summary` 和 `ranking_signals`，便于解释过滤和排序过程。
 - Graph-aware relation score 已有第一版：运行时派生 category、sub_category、budget、facet、preference 关系，并以小权重参与 rerank。
-- 图片输入、语音、购物车、下单不在当前版本。
+- 图片输入、ASR 语音输入和 TTS 播报已接入第一版，可作为提交加分项；它们需要最终实机/provider/sidecar 验证后再决定是否放入主视频。
+- 当前不做购物车、真实下单、支付、库存和实时优惠；图片输入不等于图像向量搜同款。
 - Evidence-aware fallback 已有第一版：兜底回答会引用商品资料、官方 FAQ、用户评价和“资料未说明/不能保证”边界。
 - 轻量用户反馈闭环已有 Android 可见第一版：回答下方可点 `有用` / `不准确`，反馈 JSONL 写入 `data/tmp/feedback/`，该目录被 `.gitignore` 忽略。
 - 更细的 claim-level groundedness 已有第一版人工标注样例和报告脚本；完整自动化 judge 平台仍是下一阶段增强项。
@@ -259,10 +282,13 @@ python3 scripts/scan_secrets.py --all
 
 ## Recommended Reading Order
 
-1. [docs/14_submission_package.md](docs/14_submission_package.md)：提交材料和评审入口。
-2. [docs/22_defense_cheatsheet.md](docs/22_defense_cheatsheet.md)：答辩口袋稿和关键代码入口。
-3. [docs/10_architecture.md](docs/10_architecture.md)：系统架构和端到端链路。
-4. [docs/11_evaluation_report.md](docs/11_evaluation_report.md)：当前评测证据。
-5. [docs/12_demo_script.md](docs/12_demo_script.md)：Demo 展示脚本。
-6. [docs/20_reproducibility_and_dependencies.md](docs/20_reproducibility_and_dependencies.md)：依赖版本、复现说明和检查表。
-7. [docs/08_rag_retrieval_strategy.md](docs/08_rag_retrieval_strategy.md)：RAG 策略调研与后续路线。
+1. [docs/submission_user_guide.md](docs/submission_user_guide.md)：评委部署与体验说明，适合复制到飞书。
+2. [docs/submission_design_doc.md](docs/submission_design_doc.md)：提交版系统设计文档，适合复制到飞书。
+3. [docs/submission_video_script.md](docs/submission_video_script.md)：5-10 分钟演示视频脚本。
+4. [docs/14_submission_package.md](docs/14_submission_package.md)：提交材料和评审入口。
+5. [docs/22_defense_cheatsheet.md](docs/22_defense_cheatsheet.md)：答辩口袋稿和关键代码入口。
+6. [docs/10_architecture.md](docs/10_architecture.md)：系统架构和端到端链路。
+7. [docs/11_evaluation_report.md](docs/11_evaluation_report.md)：当前评测证据。
+8. [docs/12_demo_script.md](docs/12_demo_script.md)：Demo 展示脚本。
+9. [docs/20_reproducibility_and_dependencies.md](docs/20_reproducibility_and_dependencies.md)：依赖版本、复现说明和检查表。
+10. [docs/08_rag_retrieval_strategy.md](docs/08_rag_retrieval_strategy.md)：RAG 策略调研与后续路线。

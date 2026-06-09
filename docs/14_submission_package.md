@@ -10,18 +10,21 @@
 
 1. GitHub 仓库：`saki-37/bytedance-rag-shopping-agent`
 2. 根目录 README：`README.md`
-3. Demo 录屏：优先上传本地 `demo/录屏v1_submission_phone_60s.mp4`；原始录屏为 `demo/录屏v1.mov`
-4. 架构说明：`docs/10_architecture.md`
-5. 评测记录：`docs/11_evaluation_report.md`
-6. 依赖版本与复现说明：`docs/20_reproducibility_and_dependencies.md`
-7. 答辩口袋稿：`docs/22_defense_cheatsheet.md`
+3. 设计文档飞书正文中间稿：`docs/submission_design_doc.md`
+4. 部署与体验说明飞书正文中间稿：`docs/submission_user_guide.md`
+5. 演示视频脚本：`docs/submission_video_script.md`
+6. Demo 录屏：现有短素材 `demo/录屏v1_submission_phone_60s.mp4`；最终仍需 5-10 分钟带讲解主版
+7. 架构说明：`docs/10_architecture.md`
+8. 评测记录：`docs/11_evaluation_report.md`
+9. 依赖版本与复现说明：`docs/20_reproducibility_and_dependencies.md`
+10. 答辩口袋稿：`docs/22_defense_cheatsheet.md`
 
 其中 README 是第一入口；本页是提交前自检清单；架构说明和评测记录用于支撑答辩或技术追问。
 如果需要快速准备口头讲解，优先看答辩口袋稿。
 
 ## 一句话项目介绍
 
-这是一个原生 Android + FastAPI 的美妆 RAG 导购 Agent。用户在 App 中输入肤质、预算、使用场景和排除条件后，后端通过结构化硬过滤、关键词/属性匹配和 Chroma 向量召回筛选商品，再调用 Doubao / Ark 生成受商品证据约束的导购回复，最后在 Android 端流式展示回答、商品卡片、图片和详情弹窗。
+这是一个原生 Android + FastAPI 的 RAG 智能导购 Agent。用户在 App 中输入文字、图片或语音需求后，后端通过结构化硬过滤、关键词/属性匹配、Chroma 向量召回和场景化 Planner 筛选商品，再调用 Doubao / Ark 生成受商品证据约束的导购回复，最后在 Android 端流式展示回答、商品卡片、图片、详情弹窗和可选 TTS 播报。
 
 ## 当前可展示能力
 
@@ -41,6 +44,9 @@
 | 多商品对比 | 已完成第一版 | `scripts/run_comparison_queries.py`、`docs/11_evaluation_report.md` |
 | Groundedness 陷阱评测 | 已完成生成层第一版 | `data/eval/groundedness_cases.json`、`scripts/run_groundedness_cases.py`、`docs/11_evaluation_report.md` |
 | 轻量反馈闭环 | 已完成 Android + 后端第一版 | Android `有用` / `不准确` 按钮、`POST /api/feedback`、`scripts/check_feedback_loop.py`、`docs/04_api_contract.md` |
+| 图片输入 | 已完成 text-first MVP，需最终实机/provider 验证 | `POST /api/multimodal/images`、`server/app/asr_routes.py`、Android 相机/相册入口 |
+| ASR 语音输入 | 已完成 sidecar 代理接入，需最终设备/sidecar 验证 | `POST /api/asr/transcribe`、Android 录音上传 |
+| TTS 播报 | 已完成 Android 系统 TTS 接入，需设备中文引擎验证 | `TtsSpeaker.kt`、`TtsSettings.kt` |
 | 依赖版本与复现说明 | 已完成 | `docs/20_reproducibility_and_dependencies.md` |
 
 ## 评分点对照
@@ -54,19 +60,21 @@
 
 ## Demo 讲解顺序
 
-详见 `docs/12_demo_script.md`。当前建议上传 60 秒手机屏版本：
+短版详见 `docs/12_demo_script.md`，最终提交建议按 `docs/submission_video_script.md` 录制 5-10 分钟带讲解主版。现有 60 秒手机屏版本可作为短素材：
 
 ```text
 demo/录屏v1_submission_phone_60s.mp4
 ```
 
-建议 60-90 秒内展示：
+5-10 分钟主版建议展示：
 
-1. 打开 Android App，展示快捷问题。
-2. 点击 `油皮通勤防晒`，展示真实流式回复和商品卡片。
+1. 打开 Android App，并展示后端 `/health`。
+2. 点击或输入 `油皮通勤防晒`，展示真实流式回复和商品卡片。
 3. 点击商品卡片，展示详情弹窗。
-4. 可选点击回答下方 `有用` / `不准确`，展示反馈闭环已接入真实 App。
-5. 点击或展示 `信息不足追问`，证明系统不会在信息不足时强行推荐。
+4. 点击或展示 `信息不足追问`，证明系统不会在信息不足时强行推荐。
+5. 展示多轮对比或场景化组合推荐。
+6. 稳定时展示图片输入、ASR 或 TTS 中的一项。
+7. 可选点击回答下方 `有用` / `不准确`，展示反馈闭环已接入真实 App。
 
 讲解重点：
 
@@ -171,11 +179,12 @@ git diff --check
 
 当前提交版本明确不覆盖：
 
-1. 图片输入、语音输入、购物车和下单。
-2. 全品类导购主线。
-3. 完整重型 GraphRAG / Neo4j 图数据库。
-4. 完整自动化 claim-level groundedness judge 平台化；当前已有人工标注样例和报告脚本。
-5. 完整自动反馈归因和自动转 benchmark。
+1. 购物车、真实下单、支付、库存和实时优惠。
+2. 图像向量搜同款；当前图片输入是 text-first `image_plan` 后接文本 RAG。
+3. 全品类同等深度导购主线；美妆是深度主线，服饰是第二品类样例，其余为 thin support。
+4. 完整重型 GraphRAG / Neo4j 图数据库。
+5. 完整自动化 claim-level groundedness judge 平台化；当前已有人工标注样例和报告脚本。
+6. 完整自动反馈归因和自动转 benchmark。
 
 这些不是当前版本的失败点，而是下一阶段路线。当前版本主打的是：
 

@@ -2,7 +2,7 @@
 
 日期：2026-05-28
 
-更新：2026-06-08 补充 LLM provider 切换层；正式评测默认 Ark / Doubao，演示可临时切到 Yunwu。
+更新：2026-06-09 补充多模态图片输入、ASR 语音输入、TTS 播报和购买对象上下文；正式评测默认 Ark / Doubao，演示可临时切到 Yunwu。
 
 用途：说明当前 RAG 美妆导购 Agent 的端到端工程架构，方便评审、复盘和后续开发对齐。
 
@@ -10,14 +10,18 @@
 
 当前系统是一条原生移动端到后端 RAG 的闭环：
 
-> Android Kotlin 原生 App 负责对话、流式渲染、商品卡片和详情展示；FastAPI 后端负责意图解析、商品检索、OpenAI-compatible LLM provider 调用、生成后校验和 SSE 返回；数据层保留官方 raw 数据，并通过 enriched 商品字段支撑可解释推荐。
+> Android Kotlin 原生 App 负责文字/图片/语音输入、流式渲染、商品卡片、详情展示、反馈和 TTS 播报；FastAPI 后端负责意图解析、图片理解线索接入、ASR 代理、商品检索、OpenAI-compatible LLM provider 调用、生成后校验和 SSE 返回；数据层保留官方 raw 数据，并通过 enriched 商品字段支撑可解释推荐。
 
 ## 总体链路
 
 ```mermaid
 flowchart TD
     U["用户"] --> A["Android App<br/>Kotlin + Jetpack Compose"]
-    A -->|"POST /api/chat/stream<br/>message + history"| API["FastAPI 后端"]
+	    A -->|"POST /api/chat/stream<br/>message + images + history + recipient_id"| API["FastAPI 后端"]
+	    A -->|"POST /api/multimodal/images"| MI["图片理解<br/>image_plan / query_text"]
+	    A -->|"POST /api/asr/transcribe"| ASR["ASR sidecar 代理"]
+	    MI --> API
+	    ASR --> A
     API --> CS["Rule-only Conversation State<br/>继承/覆盖/放宽多轮约束"]
     CS --> R["Retrieval Pipeline"]
     R --> Q["QueryIntent<br/>预算/肤质/功效/场景/排除条件"]
@@ -28,7 +32,7 @@ flowchart TD
     L --> G["Generation Guardrails<br/>价格/库存/优惠/无证据断言校验"]
     G -->|"安全回答或二次改写/兜底"| API
     API -->|"SSE: status / quick_reply / products / token / done / error"| A
-    A --> C["聊天消息<br/>商品卡片<br/>图片<br/>详情弹窗"]
+    A --> C["聊天消息<br/>商品卡片<br/>图片<br/>详情弹窗<br/>TTS 播报"]
     A -->|"POST /api/feedback<br/>feedback + bounded snapshot"| F["Feedback JSONL<br/>data/tmp/feedback"]
 ```
 
@@ -51,15 +55,19 @@ flowchart TD
    - `error`：展示可理解错误。
 4. 加载商品图片：使用后端 `/assets/{image_path}`。
 5. 点击商品卡片打开详情弹窗，展示来自数据源的结构化字段。
-6. 提供 9 个演示快捷问题，降低中文输入和现场演示的不确定性，并覆盖新增美妆子类。
-7. 多轮对话后自动滚动到最新回复，保证录屏和演示可见。
+6. 支持相机/相册图片上传，上传成功后把 `image_plan` 作为本轮检索线索。
+7. 支持录音上传 ASR 和 Android 系统 TTS 播报，作为移动端可访问体验增强。
+8. 支持购买对象选择，把当前 `recipient_id` 带给后端。
+9. 提供 9 个演示快捷问题，降低中文输入和现场演示的不确定性，并覆盖新增美妆子类。
+10. 多轮对话后自动滚动到最新回复，保证录屏和演示可见。
 
 关键文件：
 
 - `MainActivity.kt`：Compose UI、消息列表、商品卡片、详情弹窗、快捷问题。
 - `ChatViewModel.kt`：维护输入、消息、loading 状态和发送逻辑。
-- `ShoppingAgentClient.kt`：封装 SSE 请求、事件解析、商品卡片解析。
+- `ShoppingAgentClient.kt`：封装 SSE 请求、图片上传、ASR 上传、反馈、recipient 接口、事件解析和商品卡片解析。
 - `Models.kt`：Android 端消息和商品卡片数据结构。
+- `TtsSpeaker.kt`、`TtsSettings.kt`：系统 TTS 播报和用户设置。
 
 ### FastAPI 后端
 
@@ -72,9 +80,12 @@ flowchart TD
 3. 暴露核心接口：
    - `GET /health`
    - `POST /api/chat/stream`
-   - `POST /api/debug/retrieve`
-   - `POST /api/feedback`
-   - `GET /assets/{image_path}`
+	   - `POST /api/debug/retrieve`
+	   - `POST /api/feedback`
+	   - `POST /api/multimodal/images`
+	   - `POST /api/asr/transcribe`
+	   - `GET/PUT /api/user-memory/{user_id}/recipients`
+	   - `GET /assets/{image_path}`
 4. 在检索前做 rule-only conversation state merge，例如预算更新、预算取消、排除条件继承和短追问补全。
 5. 调用检索层得到候选商品、证据文本和 trace。
 6. 调用当前 LLM provider 生成导购回答；正式评测默认 Ark / Doubao，演示可按 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md) 临时切到 Yunwu。
@@ -86,6 +97,8 @@ flowchart TD
 - `main.py`：API 路由、SSE 事件、上下文合并、静态图片服务。
 - `conversation_state.py`：检索前的多轮状态合并，负责继承/覆盖/放宽预算、类目、肤质、功效、场景、排除条件和偏好。
 - `feedback.py`：轻量反馈闭环，把有用/不准确反馈和有界证据快照写入本地 JSONL。
+- `asr_routes.py`：ASR 代理和多模态图片上传 / preview 接口。
+- `user_memory.py`：本地用户记忆、购买对象上下文和检索前约束注入。
 - `config.py`：读取 `.env`、本地路径配置和当前 LLM provider。
 - `data_loader.py`：加载 raw / enriched 商品数据。
 - `models.py`：Pydantic 数据结构。
@@ -188,7 +201,9 @@ Doubao 生成层遵循 evidence-bound 设计：
 
 请求包含：
 
-- `message`：本轮用户输入。
+- `message`：本轮用户输入；图片-only 请求时可由后端根据 `images` 生成检索线索。
+- `images`：可选图片引用，来自 `/api/multimodal/images` 的 `image_plan` / `query_text`。
+- `recipient_id`：可选购买对象，用于 local memory 约束注入。
 - `conversation_id`：本地 demo 标识。
 - `history`：最近用户和助手消息，用于多轮上下文；assistant 消息可携带上一轮商品卡片 `product_ids`。
 
@@ -224,6 +239,17 @@ SSE 事件：
 - 记录的是有界证据快照：当前 query、最近 8 条 history、最终回答、商品卡片、clarification、retrieval message 和 `RetrievalTrace`。
 - 写入 `data/tmp/feedback/feedback_YYYY-MM-DD.jsonl`，该目录不进入 Git。
 
+多模态图片接口：`POST /api/multimodal/images`
+
+- 接收 JPEG/PNG，生成 `image_id`、预览地址、`summary`、`query_text` 和 `image_plan`。
+- 当前是 text-first 图片理解，不是图像向量搜同款。
+- 用户上传图片写入 `data/tmp/user_uploads/`，不进入 Git。
+
+ASR 接口：`POST /api/asr/transcribe`
+
+- 接收 Android 录音文件，代理到本地 `ASR_SIDECAR_URL`。
+- 无 sidecar 时不影响文字 RAG 主链路。
+
 ## 当前验证状态
 
 已经完成：
@@ -245,11 +271,12 @@ SSE 事件：
 
 ## 当前边界
 
-1. 主线仍是美妆文字导购，不包含图片输入、语音、购物车或下单。
+1. 主线仍是 RAG 商品导购；图片输入、ASR 语音输入和 TTS 播报已接入第一版，但需要最终设备/provider/sidecar 复验后决定视频展示占比。
 2. enriched 数据已覆盖完整 25 条美妆商品和 5 条服饰运动样例，但当前 Android 演示主线仍以美妆垂类为主。
 3. Guardrail 和 evidence-aware fallback 是规则版，不是完整 groundedness judge。
 4. Chroma 当前作为轻量向量召回通道，已使用统一 `products` collection 和 metadata filter；还没有做 embedding 模型对比 benchmark。
 5. Graph-aware retrieval 和多商品对比已进入主链路；轻量反馈闭环已有后端/debug 第一版。
+6. 当前不做购物车、真实下单、支付、库存、实时优惠或图像向量搜同款。
 
 ## 后续演进
 

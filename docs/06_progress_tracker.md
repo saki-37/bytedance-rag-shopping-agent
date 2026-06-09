@@ -153,11 +153,12 @@
    - 商品图片真实加载。
    - 卡片排版、详情弹窗、加载状态、错误重试。
 5. 可选多模态：
-   - 图片输入 / 拍照找货作为 stretch goal，不抢主线。
+   - 图片输入 text-first MVP 已接入，作为提交加分项需最终实机/provider 验证。
+   - ASR 语音输入和 TTS 播报已接入第一版，作为移动端可访问体验增强。
 
 ## 当前最应该做的下一步
 
-文档状态收口、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、Always-light Planner 第一版、targeted Planner probe、**100 条全品类薄支持** 和 2026-06-07 主线离线回归收口已经完成。下一步优先在 **真实 Android 端体验复验**、**真实 API groundedness 再复验**、**claim-level judge 样例** 和 **最终复现检查** 之间选择，其中 Android 真实体验复验和最终复现检查优先级最高。
+文档状态收口、evidence-aware fallback、轻量反馈闭环后端和 Android 按钮、真实 API 三轮复验、Always-light Planner 第一版、targeted Planner probe、**100 条全品类薄支持**、图片输入 text-first MVP、ASR 语音输入、TTS 播报和 2026-06-07 主线离线回归收口已经完成。下一步优先在 **真实 Android 端体验复验**、**真实 API groundedness 再复验**、**提交版飞书文档迁移**、**演示视频录制** 和 **最终复现检查** 之间选择，其中 Android 真实体验复验和最终复现检查优先级最高。
 
 原因：
 

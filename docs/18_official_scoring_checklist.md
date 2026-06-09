@@ -1,6 +1,6 @@
 # 官方采分点逐项对照表
 
-更新：2026-06-06
+更新：2026-06-09
 
 来源：`docs/01_topic_brief.md` 中根据官方课题说明整理出的“课题真实要求、评分权重、基础/进阶/高级场景”。本页不按我们自己的 V0/V1/V2/V3 展开，只按官方采分口径看当前完成度。
 
@@ -21,7 +21,7 @@
 | 基础功能完整性 35% | ✅ 基本稳 | Android 原生端到后端 RAG、模型流式、商品卡片和详情已经跑通 |
 | 工程质量 25% | ✅ 基本稳 | 目录、接口、文档、安全、评测、依赖版本表和复现说明都有；文档状态已收口，最终提交前再跑一轮复现检查 |
 | 效果与可靠性 20% | ◯ 已有可讲证据，仍是答辩重点 | 已有检索 benchmark、conversation、guardrail、三层 trace、evidence-aware fallback、groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮 8/8 stable PASS；`GRD-L03/05/08/L01` 高风险真实 API + AI review 均已通过语义复核 |
-| 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、Always-light Planner、多品类样例和 Android 可见轻量反馈闭环已有 |
+| 加分项深度 20% | ◯ 有明确主打 | 可解释 RAG、graph-aware relation score、多商品对比、Always-light Planner、多品类样例、Android 可见轻量反馈闭环、图片输入、ASR 语音输入和 TTS 播报已有 |
 | 数据覆盖口径 | ✅ 已补薄支持 | raw 官方数据共 100 条；当前为 25 条美妆 deep + 5 条服饰 deep + 70 条 thin，统一索引 100 条商品；美妆仍作为深度主线 |
 
 ## 必做最小闭环
@@ -164,7 +164,8 @@
 | 多品类扩展 | ✅ | 服饰 5 条 deep 样例 + 70 条 thin + 100 条统一索引 + all-category smoke 7/7 PASS | 不承诺所有品类都达到美妆深度；答辩时讲 thin/deep 分层 |
 | Graph-aware retrieval | ◯ | 轻量 relation score 已进主链路 | 说明是轻量图关系，不是完整 GraphRAG |
 | 反馈闭环 | ◯ | Android 端回答下方可点击 `有用` / `不准确`；`POST /api/feedback` 可记录最近上下文、回答、商品卡片到本地 JSONL；debug smoke test 可额外记录 retrieval trace | 目前是轻量反馈第一版，尚未做自动归因或自动转 benchmark |
-| 拍照找货 / 多模态 | ⏸ | 尚未做 | 除非时间非常充裕，否则不抢主线 |
+| 拍照找货 / 多模态 | △ | 图片输入 text-first MVP 已接入：Android 相机/相册上传，后端 `/api/multimodal/images` 生成 `image_plan` / `query_text` 后复用 RAG | 不是图像向量搜同款；需最终 provider/实机验证，稳定才放主视频 |
+| 语音输入 / TTS | △ | ASR sidecar 代理和 Android 系统 TTS 播报已接入第一版 | ASR 依赖 sidecar，TTS 依赖设备中文引擎；稳定才放主视频 |
 | 购物车 / 下单 | ⏸ | 尚未做 | 与核心 RAG 可靠性关系较弱，暂不做 |
 
 ## 基础 / 进阶 / 高级场景对照
@@ -182,8 +183,8 @@
 | 对比决策 | ✅ | 防晒/T恤/鞋对比 benchmark PASS | Android 真机演示可再复验 |
 | 反选 / 排除约束 | ◯ | 不要酒精/刺激已有解析和多轮继承 | 陷阱 case 需要补强 |
 | 购物车与下单 | ⏸ | 未做 | 暂不建议做 |
-| 拍照找货 | ⏸ | 未做 | 暂不建议做 |
-| 端侧体验优化 | △ | 流式、自动滚动、快捷问题、卡片/详情已有 | 没专门做性能指标 |
+| 拍照找货 | △ | 图片上传 + image_plan + 文本 RAG 已接入 | 当前不是图搜图；需最终实机/provider 验证 |
+| 端侧体验优化 | △ | 流式、自动滚动、快捷问题、卡片/详情、ASR/TTS 和低视力可访问性设置已有 | 没专门做性能指标 |
 
 ## 待办池：Groundedness / 反编造 Benchmark
 
@@ -210,7 +211,7 @@ scripts/review_benchmark_with_ai.py
 如果继续做代码，优先级：
 
 1. 真实 Android 端体验复验：确认全品类后卡片、详情、图片、流式顺序仍稳定。
-2. 最终 Demo / 答辩材料收口：把真实 API 可靠性证据、trace 解释、guardrail 兜底链路和全品类薄支持整理成 3-5 句可讲清楚的话。
+2. 最终 Demo / 答辩材料收口：把真实 API 可靠性证据、trace 解释、guardrail 兜底链路、全品类薄支持和稳定的图片/语音能力整理成 3-5 句可讲清楚的话。
 3. 美妆深度线继续保持：Planner、多轮、反幻觉、trace 和 claim-level judge 主要围绕高风险美妆 case 做深。
 4. 可选增强：做 3-5 个 claim-level judge 样例，或把 `inaccurate` 反馈样例自动沉淀为 benchmark。
 

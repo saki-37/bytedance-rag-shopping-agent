@@ -68,6 +68,8 @@
 | RAG | Embedding package | sentence-transformers 3.3.1 | `server/requirements.txt` |
 | LLM client | OpenAI-compatible SDK | openai 1.59.7 | `server/requirements.txt` |
 | Config | Env loader | pydantic-settings 2.7.1、python-dotenv 1.0.1 | `server/requirements.txt` |
+| Upload | Multipart parser | python-multipart 0.0.20 | 图片输入和 ASR 上传 |
+| HTTP client | Sidecar / provider call | httpx 0.28.1 | ASR sidecar 代理、辅助 HTTP 调用 |
 
 ## Android 主要依赖
 
@@ -80,6 +82,7 @@
 | `io.coil-kt:coil-compose` | 2.7.0 | 商品图片加载 |
 | `com.squareup.okhttp3:okhttp` | 4.12.0 | 后端 SSE / HTTP 请求 |
 | `org.jetbrains.kotlinx:kotlinx-coroutines-android` | 1.9.0 | Android 协程 |
+| Android 系统 `TextToSpeech` | 系统提供 | AI 回复播报；依赖设备中文语音引擎 |
 
 ## 目录与生成物
 
@@ -93,6 +96,10 @@
 | `data/enriched/` | 是 | 项目增强后的结构化商品数据 |
 | `data/indexes/` | 否 | Chroma 本地索引，可由脚本重建 |
 | `data/tmp/feedback/` | 否 | 本地反馈 JSONL，记录有界证据快照，不进入 Git |
+| `data/tmp/traces/` | 否 | 后端 runtime trace，不进入 Git |
+| `data/tmp/user_memory/` | 否 | 本地购买对象和偏好上下文，不进入 Git |
+| `data/tmp/user_uploads/` | 否 | 多模态图片上传临时文件，不进入 Git |
+| `data/tmp/asr/` | 否 | ASR 上传临时文件和 trace，不进入 Git |
 | `server/.venv/` | 否 | 本地 Python 虚拟环境 |
 | `demo/*.mov`、`demo/*.mp4` | 否 | 录屏作为平台附件上传，不进入代码仓库 |
 
@@ -132,6 +139,22 @@ MOCK_LLM=false
 完整切换方式、命令行临时覆盖和候选模型见 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md)。
 
 如果只做离线结构检查，再显式改成 `MOCK_LLM=true`。
+
+可选移动端增强配置：
+
+```env
+MEMORY_PROVIDER=local
+MEMORY_AUTO_LEARN=false
+ASR_SIDECAR_URL=http://127.0.0.1:8765/transcribe
+ASR_MAX_UPLOAD_MB=50
+ASR_TIMEOUT_SECONDS=180
+MULTIMODAL_MODEL=
+MULTIMODAL_MAX_UPLOAD_MB=10
+MULTIMODAL_RETENTION_HOURS=24
+MULTIMODAL_TIMEOUT_SECONDS=20
+```
+
+图片输入会把用户上传图保存到 `data/tmp/user_uploads/`，并生成 `image_plan` / `query_text` 接入文本 RAG。ASR 需要额外启动本地 sidecar；TTS 使用 Android 系统能力，不需要后端模型。
 
 检查数据、生成增强数据并构建索引：
 

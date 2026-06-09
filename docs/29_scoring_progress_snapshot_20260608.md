@@ -1,6 +1,6 @@
 # 2026-06-08 评分表进度快照
 
-用途：把当前主线进度严格按官方采分口径重新归档，作为提交前讨论和答辩材料收口的临时快照。本页不接管并行修改中的 `docs/17_scoring_todo_board.md`、`docs/18_official_scoring_checklist.md` 和 UI / provider 文档；只记录本轮已验证事实。
+用途：把当前主线进度严格按官方采分口径重新归档，作为提交前讨论和答辩材料收口的临时快照。本页不接管并行修改中的 `docs/17_scoring_todo_board.md`、`docs/18_official_scoring_checklist.md` 和 UI / provider 文档；只记录本轮已验证事实。2026-06-09 已追加说明：后续提交准备中，多模态图片输入、ASR 语音输入和 TTS 播报已接入代码，需最终设备/provider/sidecar 复验后决定演示占比。
 
 ## 官方权重对照
 
@@ -9,7 +9,7 @@
 | 基础功能完整性 | 35% | ✅ 基本稳 | Android 原生聊天、FastAPI RAG、真实 Ark / Doubao 流式、商品卡片、详情页、SKU 同系列卡、Markdown 表格均已端上可见 | 最终录屏前再跑一次 Android 核心路径 |
 | 工程质量 | 25% | ✅ 基本稳 | monorepo 结构、API 契约、架构/评测/安全/依赖文档、benchmark 脚本、trace 和 feedback 记录链路已有 | 当前 dirty 文件较多，最终提交前需要分线合并、secret scan 和全量 `git diff --check` |
 | 效果与可靠性 | 20% | ◯ 有真实 API 证据，但仍是答辩重点 | 本轮真实 API `golden stream` 8/8 PASS；failure regression 12/12 PASS；conversation 7/7 PASS；Android 真实多轮复测通过防晒、T 恤、咖啡和信息不足追问；三亚场景组合 Planner probe 真实 API PASS | 真实模型仍会触发 guardrail，答辩要讲清 repair / fallback 边界；groundedness real generation 仍不能说“全量稳定” |
-| 加分项深度 | 20% | ◯ 主打方向清晰 | SKU 同系列规格、商品对比表、可解释 trace、轻量 graph-aware relation score、反馈闭环、claim-level audit 样例、场景化组合推荐 Planner search slots 已有 | 不建议再开购物车、多模态、语音等大功能；优先把已有链路讲深 |
+| 加分项深度 | 20% | ◯ 主打方向清晰 | SKU 同系列规格、商品对比表、可解释 trace、轻量 graph-aware relation score、反馈闭环、claim-level audit 样例、场景化组合推荐 Planner search slots、图片输入、ASR 语音输入和 TTS 播报已有 | 不建议再开购物车、下单等大功能；图片/语音只在最终验证稳定时放主视频 |
 
 ## 本轮新增证据
 
@@ -56,13 +56,13 @@
 | 对比决策 | ✅ | Markdown 表格、T 恤对比和防晒 SKU 对比均已端上可见 |
 | 反选 / 排除约束 | ◯ | guardrail 和 groundedness case 有第一版，仍需最终讲清边界 |
 | 购物车与下单 | ⏸ | 未做，不作为当前主线 |
-| 拍照找货 / 多模态 | ⏸ | 已调研，暂不作为当前主线 |
-| 语音输入 | ⏸ | 已调研，暂不作为当前主线 |
+| 拍照找货 / 多模态 | △ | 2026-06-09 后已接入图片上传、`image_plan` 和 text-first RAG；不是图像向量搜同款，需最终实机/provider 验证 |
+| 语音输入 / TTS | △ | 2026-06-09 后已接入 ASR sidecar 代理和 Android 系统 TTS 播报；需最终设备/sidecar 验证 |
 
 ## 当前建议
 
 1. 不再扩新功能，优先等并行 bug 修复线和 UI 线完成后做一次集成验收。
 2. 集成验收必须包含真实 API，不用 mock 结果替代生成质量结论。
-3. 提交材料里把主打亮点收成四件事：约束感知 RAG、SKU / 对比结构化体验、可解释 trace / feedback、guardrail / fallback 反幻觉。
-4. 对未做能力保持保守口径：购物车、多模态、语音、完整 claim-level judge 平台都作为后续方向，不写成已完成。
+3. 提交材料里把主打亮点收成三件事：证据约束 RAG 与反幻觉、场景化 Planner / 多轮对比、原生移动端多模态与语音可访问体验。
+4. 对未完成或需验证能力保持保守口径：购物车、下单、库存、实时优惠、图像向量搜同款和完整 claim-level judge 平台都作为后续方向；图片/语音/TTS 写成“已接入第一版，需最终验证”。
 5. 三亚场景组合可以作为新增答辩例子：失败 trace -> Planner 结构化计划 -> retrieval 跨类目执行 -> failure regression 和真实 API probe 双验证。

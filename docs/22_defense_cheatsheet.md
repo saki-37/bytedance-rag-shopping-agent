@@ -6,14 +6,14 @@
 
 ## 30 秒项目介绍
 
-这是一个原生 Android + FastAPI 的美妆 RAG 导购 Agent。用户输入肤质、预算、使用场景和排除条件后，后端先做结构化约束解析和商品检索，再调用 Doubao / Ark 生成受商品证据约束的导购回复，最后在 Android 端流式展示回答、商品卡片、图片、详情弹窗和轻量反馈按钮。
+这是一个原生 Android + FastAPI 的 RAG 智能导购 Agent。用户可以输入文字需求，也可以使用已接入的图片输入、ASR 语音输入和 TTS 播报；后端先做结构化约束解析和商品检索，再调用 Doubao / Ark 生成受商品证据约束的导购回复，最后在 Android 端流式展示回答、商品卡片、图片、详情弹窗和轻量反馈按钮。
 
-当前版本主线是“文字导购闭环”，不是购物车或拍照找货。我们更关注一件事：模型推荐必须能回到商品资料、价格、图片和注意事项上，而不是只生成一段看起来像导购的话。
+当前版本主线是“证据约束 RAG 导购闭环”，不是购物车或真实交易。我们更关注一件事：模型推荐必须能回到商品资料、价格、图片和注意事项上，而不是只生成一段看起来像导购的话。
 
 ## 3 句话架构链路
 
 1. Android 端只负责聊天体验、SSE 消费、商品卡片和详情弹窗；核心导购逻辑都在 FastAPI 后端。
-2. 后端先把用户 query 和必要历史合并成结构化状态，再用预算、肤质、功效、场景、排除词做硬过滤和多路召回，Chroma 向量检索只是其中一个召回通道，不替代硬约束。
+2. 后端先把用户 query、图片识别线索、购买对象上下文和必要历史合并成结构化状态，再用预算、肤质、功效、场景、排除词做硬过滤和多路召回，Chroma 向量检索只是其中一个召回通道，不替代硬约束。
 3. Doubao 只看到最终候选商品和证据文本；生成后还要经过 guardrail 校验，必要时二次改写或返回 evidence-aware fallback。
 
 ## 可靠性怎么讲
@@ -51,6 +51,9 @@
 | Claim 级证据怎么展示 | `data/eval/claim_audit_samples.json`、`scripts/render_claim_audit_report.py` | 5 个高风险人工标注样例、8 条 claim，逐条标出支持/不支持/需边界的证据 |
 | Android 端怎么接 | `client/android/app/src/main/...` | OkHttp 消费 SSE，Compose 渲染消息、商品卡片、详情和反馈按钮 |
 | 反馈闭环怎么做 | `server/app/feedback.py`、`ShoppingAgentClient.submitFeedback` | Android 提交 `有用/不准确`，后端写入本地 JSONL；debug 脚本可构造带 trace 的复盘记录 |
+| 图片输入怎么接 | `server/app/asr_routes.py`、`server/app/models.py`、`ShoppingAgentClient.uploadImage` | Android 上传图片，后端生成 `image_plan` / `query_text`，再把图片线索拼入现有 RAG |
+| 语音和 TTS 怎么接 | `server/app/asr_routes.py`、`TtsSpeaker.kt`、`TtsSettings.kt` | ASR 由后端代理本地 sidecar；TTS 使用 Android 系统 TextToSpeech |
+| 购买对象上下文怎么接 | `server/app/user_memory.py`、`ChatViewModel.kt` | Android 选择 recipient，后端把该对象的约束合入本轮检索 |
 
 ## Demo 讲解顺序
 
@@ -59,16 +62,17 @@
 3. 点商品卡片，展示图片、价格、适合人群、场景、卖点和注意事项。
 4. 可选点回答下方 `有用` / `不准确`，展示质量反馈闭环。
 5. 点 `信息不足追问`，展示系统不会在条件不足时强行推荐。
-6. 口头补一句可靠性：价格、图片和卡片字段来自数据源；模型回答会经过 guardrail 和 evidence-aware fallback。
-7. 如果评委追问反幻觉证据，可展示 claim-level audit 报告：SKU 价格、SPF/补涂、敏感肌、成分不存在和商业承诺都拆成逐条 claim 核对。
+6. 稳定时展示图片输入、语音输入或 TTS 播报中的一项；不稳定时只讲已接入和环境依赖。
+7. 口头补一句可靠性：价格、图片和卡片字段来自数据源；模型回答会经过 guardrail 和 evidence-aware fallback。
+8. 如果评委追问反幻觉证据，可展示 claim-level audit 报告：SKU 价格、SPF/补涂、敏感肌、成分不存在和商业承诺都拆成逐条 claim 核对。
 
 ## 当前边界
 
 当前版本不主打：
 
-1. 图片输入、语音输入。
-2. 购物车、下单、真实电商交易链路。
-3. 全品类完整标注。
+1. 购物车、下单、支付、库存、实时优惠等真实电商交易链路。
+2. Google Lens 式图搜图或图像向量搜同款；当前图片是 text-first `image_plan`，再接文本 RAG。
+3. 全品类完整深度标注；当前美妆是深度主线，服饰是第二品类样例，其余是 thin support。
 4. 完整 GraphRAG / Neo4j。
 5. 完整自动 claim-level groundedness judge 平台化；当前只有第一版人工标注样例和报告脚本。
 
