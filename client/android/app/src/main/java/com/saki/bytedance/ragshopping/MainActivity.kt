@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -78,6 +79,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -2871,24 +2873,27 @@ private fun InputBar(
     var showAttachmentMenu by remember { mutableStateOf(false) }
     var showRecipientMenu by remember { mutableStateOf(false) }
     var attachmentStatusText by remember { mutableStateOf<String?>(null) }
+    var pendingImagePreview by remember { mutableStateOf<Any?>(null) }
     var recordingElapsedSeconds by remember { mutableStateOf(0) }
     var waveformLevels by remember {
         mutableStateOf(List(VoiceWaveformBarCount) { 0.03f })
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         showAttachmentMenu = false
-        attachmentStatusText = if (uri != null) {
-            "已选择图片，图片理解链路待接入"
+        if (uri != null) {
+            pendingImagePreview = uri
+            attachmentStatusText = "已选择图片"
         } else {
-            "没有选择图片"
+            attachmentStatusText = "没有选择图片"
         }
     }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap: Bitmap? ->
         showAttachmentMenu = false
-        attachmentStatusText = if (bitmap != null) {
-            "已拍摄图片，图片理解链路待接入"
+        if (bitmap != null) {
+            pendingImagePreview = bitmap
+            attachmentStatusText = "已拍摄图片"
         } else {
-            "没有完成拍照"
+            attachmentStatusText = "没有完成拍照"
         }
     }
 
@@ -3029,6 +3034,15 @@ private fun InputBar(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
+                        pendingImagePreview?.let { preview ->
+                            PendingInputImagePreview(
+                                preview = preview,
+                                onRemove = {
+                                    pendingImagePreview = null
+                                    attachmentStatusText = null
+                                },
+                            )
+                        }
                         BasicTextField(
                             value = value,
                             onValueChange = {
@@ -3263,6 +3277,60 @@ private fun RecipientSelectionDialog(
             }
         },
     )
+}
+
+@Composable
+private fun PendingInputImagePreview(
+    preview: Any,
+    onRemove: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(76.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(AppGreenSoft),
+    ) {
+        when (preview) {
+            is Uri -> {
+                SubcomposeAsyncImage(
+                    model = preview,
+                    contentDescription = "已选择图片",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = { ProductImageFallback("图") },
+                    error = { ProductImageFallback("图") },
+                    success = { SubcomposeAsyncImageContent() },
+                )
+            }
+
+            is Bitmap -> {
+                Image(
+                    bitmap = preview.asImageBitmap(),
+                    contentDescription = "已拍摄图片",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(4.dp)
+                .size(22.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(SurfaceWhite.copy(alpha = 0.92f))
+                .clickable(onClick = onRemove),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = TablerXIcon,
+                contentDescription = "移除图片",
+                tint = Ink,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+    }
 }
 
 @Composable
