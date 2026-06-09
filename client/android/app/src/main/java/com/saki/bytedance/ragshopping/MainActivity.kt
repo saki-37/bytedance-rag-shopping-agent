@@ -1711,7 +1711,7 @@ private fun splitAssistantText(content: String, isStreaming: Boolean): List<Assi
     val endsWithLineBreak = normalizedContent.endsWith("\n")
     val rawLines = normalizedContent.split("\n")
 
-    return buildList {
+    return buildList<AssistantTextBlock> {
         rawLines.forEachIndexed { lineIndex, rawLine ->
             val line = rawLine.trim()
             if (line.isBlank()) return@forEachIndexed
@@ -1754,7 +1754,7 @@ private fun splitInlineRecommendationBlocks(line: String): List<String> {
         return listOf(line)
     }
 
-    return buildList {
+    return buildList<String> {
         var start = 0
         markerIndexes.forEach { markerIndex ->
             if (markerIndex > start) {
@@ -2968,7 +2968,7 @@ private fun InputBar(
 
     data class InputStatusLine(val text: String, val isError: Boolean)
     val currentVoiceError = voiceError
-    val inputStatusLines = buildList {
+    val inputStatusLines = buildList<InputStatusLine> {
         if (isTranscribing) {
             add(InputStatusLine("正在本地转写...", false))
         }
@@ -3216,7 +3216,7 @@ private fun RecipientSelectionDialog(
                                         style = MaterialTheme.typography.bodyMedium,
                                     )
                                     Text(
-                                        text = recipient.relationship.orBlank().ifEmpty { "关系未填写" },
+                                        text = (recipient.relationship ?: "").ifBlank { "关系未填写" },
                                         color = MutedText,
                                         style = MaterialTheme.typography.labelSmall,
                                     )
