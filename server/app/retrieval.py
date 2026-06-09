@@ -566,6 +566,9 @@ def retrieve(
     memory_profile: UserMemoryProfile | None = None,
     recipient_profile: RecipientProfile | None = None,
 ) -> RetrievalResult:
+    # RAG 主入口：确定性约束优先于语义召回。
+    # 预算、类目、明确排除项和必要功效会先作为硬过滤生效，
+    # 之后 keyword / vector / graph 分数才参与排序。
     intent = parse_query_intent(query)
     memory_applied: list[str] = []
     if memory_profile is not None:
@@ -578,6 +581,7 @@ def retrieve(
 
     _apply_catalog_product_references(intent, query, products)
     if intent.needs_clarification:
+        # 信息不足时先追问，不为了凑商品卡片而强行推荐。
         trace = RetrievalTrace(
             query=query,
             parsed_intent=intent,
@@ -601,6 +605,7 @@ def retrieve(
     hard_filtered_out: list[FilteredProduct] = []
     scored: list[tuple[float, dict, list[str]]] = []
 
+    # 这里刻意先排除、再打分：违反硬约束的商品不能因为向量命中而返回。
     for item in products:
         raw = item["raw"]
         is_referenced_product = raw["product_id"] in intent.referenced_product_ids
@@ -688,6 +693,8 @@ def retrieve(
             scored.append((score, item, reasons))
 
     if not scored:
+        # 如果没有正向匹配信号，保留通过硬过滤的商品，
+        # 让下游 fallback 仍然能基于证据回答，而不是编造。
         scored = [
             (0.1, item, ["fallback_after_hard_filters"])
             for item in products
@@ -731,6 +738,7 @@ def retrieve(
 
     cards = [_to_card(item, query, budget=budget) for item in selected]
     context = "\n\n".join(_context_block(item, budget=budget) for item in selected)
+    # RetrievalTrace 是可复验的证据链：记录过滤项、召回通道和商品卡片来源字段。
     trace = RetrievalTrace(
         query=query,
         parsed_intent=intent,

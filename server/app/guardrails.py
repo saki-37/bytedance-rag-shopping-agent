@@ -46,6 +46,9 @@ class GenerationGuardrailResult:
 
 
 def guard_answer(answer: str, user_message: str, cards: list[ProductCard]) -> GenerationGuardrailResult:
+    # 生成后的最后一道安全网。Prompt 能降低幻觉，但提交红线需要确定性校验：
+    # Android 收到回答前，先拦截无证据价格、库存、优惠、购买链接，
+    # 以及没有商品证据支持的“不含/不会/绝对安全”等断言。
     issues: list[str] = []
     stripped = answer.strip()
     if not stripped:
@@ -78,6 +81,9 @@ def guard_answer(answer: str, user_message: str, cards: list[ProductCard]) -> Ge
 
 
 def build_safe_answer(cards: list[ProductCard], user_message: str | None = None) -> str:
+    # 模型不可用或回答被拦截时使用的 evidence-bound 兜底。
+    # 只使用 ProductCard 字段和保守边界表达，保证 Demo 不中断，
+    # 同时不编造商品事实或商业承诺。
     user_message = user_message or ""
     if not cards:
         if _has_specific_constraints(user_message):

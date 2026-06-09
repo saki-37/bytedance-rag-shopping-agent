@@ -37,6 +37,9 @@ async def stream_answer(
     answer_directive: AnswerDirective | None = None,
     interaction_preferences: UserMemoryInteractionPreferences | None = None,
 ):
+    # 用户侧仍然看到 SSE 流式效果，但真实模型回答会先被完整收集。
+    # 这样 guardrail 可以在 token 到达 Android 之前拦截价格、库存、
+    # 优惠或资料外断言等风险内容。
     guardrail_user_context = _compose_guardrail_user_context(user_message, history)
     if settings.mock_llm or not settings.llm_configured:
         logger.info("Streaming mock LLM response")
@@ -71,6 +74,8 @@ async def stream_answer(
         raw_answer = ""
     guardrail = guard_answer(raw_answer, user_message=guardrail_user_context, cards=cards)
     if not guardrail.passed:
+        # repair 只给一次机会，并且仍然只能使用同一份商品证据；
+        # 如果改写后仍违规，guardrail.answer 已经是 evidence-bound 安全兜底。
         logger.warning("LLM answer blocked by generation guardrails: %s", guardrail.issues)
         guardrail = await _try_repair_answer(
             settings=settings,
@@ -236,6 +241,8 @@ def _build_generation_user_prompt(
     answer_directive: AnswerDirective | None = None,
     interaction_preferences: UserMemoryInteractionPreferences | None = None,
 ) -> str:
+    # Prompt 输入刻意收窄到可见商品顺序、可选回答指令和检索证据。
+    # 商品事实必须来自 context，而不是模型自己的潜在知识。
     return (
         f"用户问题：{user_message}\n\n"
         f"{_format_interaction_preferences(interaction_preferences)}\n\n"

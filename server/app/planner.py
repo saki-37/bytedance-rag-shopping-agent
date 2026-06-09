@@ -109,6 +109,9 @@ async def build_planned_retrieval_message(
     settings: Settings,
     request: ChatRequest,
 ) -> RetrievalMessageBuildResult:
+    # 先构造 rule-only 检索消息，保证系统始终有确定性的 RAG 主链路。
+    # LLM Planner 只能补充结构化 search slots 或对比指令，
+    # 不能成为基础检索链路的唯一依赖。
     rule_build = build_retrieval_message(request)
     planner_trace: dict[str, object] = {
         "enabled": True,
@@ -151,6 +154,8 @@ async def build_planned_retrieval_message(
     planner_trace["validated_plan"] = validated_plan
     planner_trace["validation_errors"] = validation_errors
     if not additions:
+        # 没有产生安全、通过 schema 校验增量的 plan 会被忽略，
+        # 避免 Planner 把商品事实或不可靠推断偷渡进检索 query。
         planner_trace["fallback_reason"] = "planner_no_valid_delta"
         return _finish_planner_trace(rule_build, planner_trace, started)
 

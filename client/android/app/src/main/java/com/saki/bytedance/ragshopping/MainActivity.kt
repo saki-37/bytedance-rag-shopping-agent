@@ -3312,7 +3312,7 @@ private fun InputBar(
                                     ) {
                                         if (value.isBlank() && !hasPendingImage) {
                                             Text(
-                                                text = "要求后续变更",
+                                                text = "说说想买什么、预算或要避开的点",
                                                 color = MutedText.copy(alpha = 0.32f),
                                                 style = MaterialTheme.typography.titleMedium,
                                             )
