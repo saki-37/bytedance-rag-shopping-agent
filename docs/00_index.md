@@ -39,6 +39,8 @@
 - [TTS 语音播报方案记录](32_tts_voice_broadcast_plan.md)
 - [首屏极速响应与临时聊天气泡方案](33_first_screen_fast_response_plan.md)
 - [用户记忆与本地偏好层方案](34_user_memory_profile_plan.md)
+- [安卓无障碍 P0 执行计划（语音播报 + 字号 + 低视力）](35_accessibility_p0_execution_plan.md)
+- [安卓无障碍 P0 执行清单（AI 伙伴工单）](36_accessibility_p0_execution_checklist.md)
 
 ## 当前里程碑
 
