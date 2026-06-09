@@ -133,8 +133,8 @@ private val MessageAssistantAvatarSize = 30.dp
 private const val VoiceWaveformBarCount = 18
 private const val VoiceWaveformSampleMillis = 80L
 private const val InputStatusAutoDismissMillis = 5_000L
-private val RecipientMenuStartPadding = 48.dp
-private val RecipientMenuBottomPadding = 88.dp
+private val RecipientMenuOffsetX = (-56).dp
+private val RecipientMenuOffsetY = 8.dp
 private val TablerSendIcon: ImageVector = ImageVector.Builder(
     name = "TablerSend",
     defaultWidth = 24.dp,
@@ -3447,7 +3447,7 @@ private fun RecipientSelectionMenu(
         expanded = visible,
         onDismissRequest = onDismiss,
         modifier = modifier.width(260.dp),
-        offset = DpOffset(RecipientMenuStartPadding, -RecipientMenuBottomPadding),
+        offset = DpOffset(RecipientMenuOffsetX, RecipientMenuOffsetY),
         properties = PopupProperties(focusable = false),
         shape = RoundedCornerShape(22.dp),
         containerColor = SurfaceWhite,
