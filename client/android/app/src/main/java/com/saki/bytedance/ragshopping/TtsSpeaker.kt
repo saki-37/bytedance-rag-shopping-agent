@@ -4,7 +4,6 @@ import android.content.Context
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.speech.tts.Voice
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -20,7 +19,6 @@ sealed interface TtsPlaybackState {
 
 class TtsSpeaker(
     context: Context,
-    initialVoicePreference: TtsVoicePreference,
 ) : TextToSpeech.OnInitListener {
     private val appContext = context.applicationContext
     private val _state = MutableStateFlow<TtsPlaybackState>(TtsPlaybackState.Initializing)
@@ -29,7 +27,6 @@ class TtsSpeaker(
     private val queuedUtteranceIds = mutableSetOf<String>()
     private var pendingRequest: TtsSpeakRequest? = null
     private var currentMessageId: String? = null
-    private var voicePreference = initialVoicePreference
     private var initialized = false
 
     val state: StateFlow<TtsPlaybackState> = _state
@@ -46,13 +43,6 @@ class TtsSpeaker(
             pendingRequest.also { pendingRequest = null }
         }
         request?.let { speak(it.messageId, it.text) }
-    }
-
-    fun setVoicePreference(preference: TtsVoicePreference) {
-        voicePreference = preference
-        if (initialized) {
-            configureVoice()
-        }
     }
 
     fun speak(messageId: String, rawText: String) {
@@ -119,9 +109,8 @@ class TtsSpeaker(
             _state.value = TtsPlaybackState.Error("当前设备缺少中文语音包")
             return false
         }
-        selectVoice()?.let { tts.setVoice(it) }
         tts.setSpeechRate(1.0f)
-        tts.setPitch(voicePreference.toFallbackPitch())
+        tts.setPitch(1.0f)
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String?) = Unit
 
@@ -158,54 +147,10 @@ class TtsSpeaker(
         }
     }
 
-    private fun selectVoice(): Voice? {
-        val voices = runCatching { tts.voices.orEmpty() }.getOrDefault(emptySet())
-        val chineseVoices = voices.filter { it.locale.isChineseLocale() }
-        val candidates = chineseVoices.ifEmpty { voices.toList() }
-        if (candidates.isEmpty()) return null
-
-        return candidates.maxByOrNull { voice ->
-            var score = 0
-            if (voice.locale.country.equals(Locale.CHINA.country, ignoreCase = true)) score += 30
-            if (!voice.isNetworkConnectionRequired) score += 20
-            score += voice.quality
-            score -= voice.latency
-            score += voicePreference.voiceNameScore(voice.name)
-            score
-        }
-    }
-
     private data class TtsSpeakRequest(
         val messageId: String,
         val text: String,
     )
-}
-
-private fun Locale.isChineseLocale(): Boolean {
-    return language.equals(Locale.CHINESE.language, ignoreCase = true) ||
-        language.equals("cmn", ignoreCase = true) ||
-        language.equals("yue", ignoreCase = true)
-}
-
-private fun TtsVoicePreference.voiceNameScore(voiceName: String): Int {
-    val normalized = voiceName.lowercase(Locale.ROOT)
-    return when (this) {
-        TtsVoicePreference.SystemDefault -> 0
-        TtsVoicePreference.FemalePreferred -> {
-            if (listOf("female", "woman", "girl", "xiaoxiao", "xiaoyi").any { normalized.contains(it) }) 18 else 0
-        }
-        TtsVoicePreference.MalePreferred -> {
-            if (listOf("male", "man", "boy", "yunxi", "xiaogang").any { normalized.contains(it) }) 18 else 0
-        }
-    }
-}
-
-private fun TtsVoicePreference.toFallbackPitch(): Float {
-    return when (this) {
-        TtsVoicePreference.SystemDefault -> 1.0f
-        TtsVoicePreference.FemalePreferred -> 1.08f
-        TtsVoicePreference.MalePreferred -> 0.94f
-    }
 }
 
 private fun String.toTtsReadableText(): String {

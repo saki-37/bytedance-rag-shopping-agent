@@ -287,7 +287,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     var ttsSettings by remember(context) { mutableStateOf(TtsSettingsStore.load(context)) }
     var autoSpokenMessageIds by remember { mutableStateOf(emptySet<String>()) }
     var stoppedSpeechMessageIds by remember { mutableStateOf(emptySet<String>()) }
-    val ttsSpeaker = remember(context) { TtsSpeaker(context, ttsSettings.voicePreference) }
+    val ttsSpeaker = remember(context) { TtsSpeaker(context) }
     val ttsPlaybackState by ttsSpeaker.state.collectAsState()
     val speakingMessageId = (ttsPlaybackState as? TtsPlaybackState.Speaking)?.messageId
     val latestMessage = state.messages.lastOrNull()
@@ -299,7 +299,6 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     fun updateTtsSettings(nextSettings: TtsSettings) {
         ttsSettings = nextSettings
         TtsSettingsStore.save(context, nextSettings)
-        ttsSpeaker.setVoicePreference(nextSettings.voicePreference)
         if (!nextSettings.autoSpeak) {
             ttsSpeaker.stop()
         }
@@ -329,10 +328,6 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
         onDispose {
             ttsSpeaker.shutdown()
         }
-    }
-
-    LaunchedEffect(ttsSettings.voicePreference, ttsSpeaker) {
-        ttsSpeaker.setVoicePreference(ttsSettings.voicePreference)
     }
 
     LaunchedEffect(
@@ -482,7 +477,6 @@ private fun Header(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TtsSettingsDialog(
     settings: TtsSettings,
@@ -526,31 +520,6 @@ private fun TtsSettingsDialog(
                         },
                     )
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "声音偏好",
-                        color = Ink,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        TtsVoicePreference.entries.forEach { preference ->
-                            TtsPreferenceChip(
-                                label = preference.label,
-                                selected = settings.voicePreference == preference,
-                                onClick = { onSettingsChange(settings.copy(voicePreference = preference)) },
-                            )
-                        }
-                    }
-                    Text(
-                        text = "设备不一定暴露男女声音色；找不到匹配时会回退系统默认。",
-                        color = MutedText,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
             }
         },
         confirmButton = {
@@ -558,20 +527,6 @@ private fun TtsSettingsDialog(
                 Text(text = "完成", color = AccentGreenDark, fontWeight = FontWeight.Bold)
             }
         },
-    )
-}
-
-@Composable
-private fun TtsPreferenceChip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Text(
-        text = label,
-        modifier = Modifier
-            .background(if (selected) Ink else SurfaceWhite, RoundedCornerShape(999.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 7.dp),
-        color = if (selected) SurfaceWhite else AccentGreenDark,
-        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-        style = MaterialTheme.typography.labelMedium,
     )
 }
 
