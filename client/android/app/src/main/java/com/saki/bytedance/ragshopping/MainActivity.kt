@@ -28,11 +28,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -43,6 +45,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -55,9 +58,9 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -92,9 +95,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
@@ -126,6 +133,8 @@ private val MessageAssistantAvatarSize = 30.dp
 private const val VoiceWaveformBarCount = 18
 private const val VoiceWaveformSampleMillis = 80L
 private const val InputStatusAutoDismissMillis = 5_000L
+private val RecipientMenuStartPadding = 48.dp
+private val RecipientMenuBottomPadding = 88.dp
 private val TablerSendIcon: ImageVector = ImageVector.Builder(
     name = "TablerSend",
     defaultWidth = 24.dp,
@@ -500,8 +509,10 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     }
 
     val selectedRecipientName = state.recipients.firstOrNull { it.recipientId == state.selectedRecipientId }?.displayName
+        .cleanEditorValue()
         ?.ifBlank { "对象" }
         ?: "对象"
+    var openRecipientManagerAfterSettingsClose by remember { mutableStateOf(false) }
 
     LaunchedEffect(showRecipientManager) {
         if (showRecipientManager) {
@@ -645,82 +656,94 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                     ttsSettings = ttsSettings,
                     onTtsSettingsClick = { showTtsSettings = true },
                 )
-                LazyColumn(
-                    state = listState,
+                Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    itemsIndexed(
-                        items = state.messages,
-                        key = { _, message -> message.id },
-                    ) { index, message ->
-                        val hasPriorUserMessage = state.messages
-                            .take(index)
-                            .any { it.role == Role.User && it.content.isNotBlank() }
-                        val isThinking = state.isLoading &&
-                            index == state.messages.lastIndex &&
-                            message.role == Role.Assistant &&
-                            message.content.isBlank()
-                        val isAssistantStreaming = state.isLoading &&
-                            index == state.messages.lastIndex &&
-                            message.role == Role.Assistant
-                        MessageBubble(
-                            message = message,
-                            showFeedback = !state.isLoading && hasPriorUserMessage && !message.isEphemeral,
-                            isThinking = isThinking,
-                            isStreaming = isAssistantStreaming,
-                            isSpeaking = message.id == speakingMessageId,
-                            assetBaseUrl = assetBaseUrl,
-                            onProductClick = { selectedProduct = it },
-                            onFeedback = viewModel::submitFeedback,
-                            onSpeechToggle = ::toggleMessageSpeech,
-                        )
-                    }
-                    item("bottom-anchor") {
-                        Spacer(modifier = Modifier.height(1.dp))
-                    }
-                }
-                InputBar(
-                    value = state.input,
-                    isLoading = state.isLoading,
-                    isTranscribing = state.isTranscribing,
-                    recipients = state.recipients,
-                    selectedRecipientId = state.selectedRecipientId,
-                    currentRecipientName = selectedRecipientName,
-                    statusText = state.statusText,
-                    asrStatusText = asrStatusDisplayText,
-                    speechStatusText = speechHintText,
-                    speechStatusIsError = speechHintText?.contains("失败") == true,
-                    recipientsLoading = state.recipientsLoading,
-                    recipientsSaving = state.recipientsSaving,
-                    recipientError = state.recipientError,
-                    onValueChange = viewModel::updateInput,
-                    onSend = { overrideMessage, pendingImage ->
-                        stopAnySpeech()
-                        if (pendingImage != null) {
-                            viewModel.sendWithImage(
-                                message = overrideMessage ?: state.input,
-                                localImageFile = pendingImage.uploadFile,
-                                localPreviewUri = pendingImage.localUri,
-                                source = pendingImage.source,
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            top = 16.dp,
+                            end = 16.dp,
+                            bottom = 190.dp,
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        itemsIndexed(
+                            items = state.messages,
+                            key = { _, message -> message.id },
+                        ) { index, message ->
+                            val hasPriorUserMessage = state.messages
+                                .take(index)
+                                .any { it.role == Role.User && it.content.isNotBlank() }
+                            val isThinking = state.isLoading &&
+                                index == state.messages.lastIndex &&
+                                message.role == Role.Assistant &&
+                                message.content.isBlank()
+                            val isAssistantStreaming = state.isLoading &&
+                                index == state.messages.lastIndex &&
+                                message.role == Role.Assistant
+                            MessageBubble(
+                                message = message,
+                                showFeedback = !state.isLoading && hasPriorUserMessage && !message.isEphemeral,
+                                isThinking = isThinking,
+                                isStreaming = isAssistantStreaming,
+                                isSpeaking = message.id == speakingMessageId,
+                                assetBaseUrl = assetBaseUrl,
+                                onProductClick = { selectedProduct = it },
+                                onFeedback = viewModel::submitFeedback,
+                                onSpeechToggle = ::toggleMessageSpeech,
                             )
-                        } else if (overrideMessage != null) {
-                            viewModel.sendPrompt(overrideMessage)
-                        } else {
-                            viewModel.send()
                         }
-                    },
-                    onQuickPrompt = { prompt ->
-                        stopAnySpeech()
-                        viewModel.sendPrompt(prompt)
-                    },
-                    onAudioRecorded = viewModel::transcribeAudio,
-                    onRecipientSelected = viewModel::selectRecipient,
-                    onOpenRecipientManagement = { showRecipientManager = true },
-                )
+                        item("bottom-anchor") {
+                            Spacer(modifier = Modifier.height(1.dp))
+                        }
+                    }
+                    InputBar(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth(),
+                        value = state.input,
+                        isLoading = state.isLoading,
+                        isTranscribing = state.isTranscribing,
+                        recipients = state.recipients,
+                        selectedRecipientId = state.selectedRecipientId,
+                        currentRecipientName = selectedRecipientName,
+                        statusText = state.statusText,
+                        asrStatusText = asrStatusDisplayText,
+                        speechStatusText = speechHintText,
+                        speechStatusIsError = speechHintText?.contains("失败") == true,
+                        recipientsLoading = state.recipientsLoading,
+                        recipientsSaving = state.recipientsSaving,
+                        recipientError = state.recipientError,
+                        onValueChange = viewModel::updateInput,
+                        onSend = { overrideMessage, pendingImage ->
+                            stopAnySpeech()
+                            if (pendingImage != null) {
+                                viewModel.sendWithImage(
+                                    message = overrideMessage ?: state.input,
+                                    localImageFile = pendingImage.uploadFile,
+                                    localPreviewUri = pendingImage.localUri,
+                                    source = pendingImage.source,
+                                )
+                            } else if (overrideMessage != null) {
+                                viewModel.sendPrompt(overrideMessage)
+                            } else {
+                                viewModel.send()
+                            }
+                        },
+                        onQuickPrompt = { prompt ->
+                            stopAnySpeech()
+                            viewModel.sendPrompt(prompt)
+                        },
+                        onAudioRecorded = viewModel::transcribeAudio,
+                        onRecipientSelected = viewModel::selectRecipient,
+                        onOpenRecipientManagement = { showRecipientManager = true },
+                    )
+                }
             }
             selectedProduct?.let { product ->
                 ProductDetailOverlay(product = product, assetBaseUrl = assetBaseUrl, onDismiss = { selectedProduct = null })
@@ -729,10 +752,15 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                 TtsSettingsDialog(
                     settings = ttsSettings,
                     onSettingsChange = ::updateTtsSettings,
-                    onDismiss = { showTtsSettings = false },
-                    onRecipientManagerClick = {
+                    onDismiss = {
                         showTtsSettings = false
-                        showRecipientManager = true
+                        if (openRecipientManagerAfterSettingsClose) {
+                            showRecipientManager = true
+                            openRecipientManagerAfterSettingsClose = false
+                        }
+                    },
+                    onRecipientManagerClick = {
+                        openRecipientManagerAfterSettingsClose = true
                     },
                 )
             }
@@ -806,18 +834,27 @@ private fun TtsSettingsDialog(
     val speechRateOptions = listOf(0.75f, 1.0f, 1.25f, 1.5f)
     val fontScaleOptions = listOf(FontScaleModeSystem, FontScaleMode11x, FontScaleMode125x, FontScaleMode15x)
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SurfaceCream,
-        title = {
-            Text(
-                text = "设置",
-                color = Ink,
-                fontWeight = FontWeight.Bold,
+    ReusableBottomSheetOverlay(
+        sheetKey = "tts-settings",
+        maxHeightFraction = 0.90f,
+        onDismiss = onDismiss,
+    ) { requestDismiss ->
+        ReusableBottomSheetCard(
+            maxHeightFraction = 0.90f,
+            onDismiss = requestDismiss,
+        ) {
+            BottomSheetHeader(
+                title = "设置",
+                subtitle = null,
+                onDismiss = requestDismiss,
             )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+            ) {
                 Text(
                     text = "语音与可访问性",
                     color = Ink,
@@ -933,21 +970,29 @@ private fun TtsSettingsDialog(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                TextButton(onClick = onRecipientManagerClick) {
+                TextButton(onClick = {
+                    requestDismiss()
+                    onRecipientManagerClick()
+                }) {
                     Text(
                         text = "常用购买对象",
                         color = AccentGreenDark,
                         fontWeight = FontWeight.Bold,
                     )
                 }
-                }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "完成", color = AccentGreenDark, fontWeight = FontWeight.Bold)
             }
-        },
-    )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = requestDismiss) {
+                    Text(text = "完成", color = AccentGreenDark, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -2479,7 +2524,106 @@ private fun StandardProductCardView(product: ProductCard, assetBaseUrl: String, 
 
 @Composable
 private fun ProductDetailOverlay(product: ProductCard, assetBaseUrl: String, onDismiss: () -> Unit) {
-    val visibilityState = remember(product.productId) {
+    ReusableBottomSheetOverlay(
+        sheetKey = product.productId,
+        onDismiss = onDismiss,
+        sheetContent = { requestDismiss ->
+            ProductDetailSheet(
+                product = product,
+                assetBaseUrl = assetBaseUrl,
+                onDismiss = requestDismiss,
+            )
+        },
+    )
+}
+
+@Composable
+private fun ProductDetailSheet(
+    product: ProductCard,
+    assetBaseUrl: String,
+    onDismiss: () -> Unit,
+) {
+    val knowledge = remember(product.description) { product.knowledgeSections() }
+    val variants = product.variants
+    var selectedVariantId by remember(product.productId, variants) { mutableStateOf(variants.firstOrNull()?.variantId.orEmpty()) }
+    val selectedVariant = variants.firstOrNull { it.variantId == selectedVariantId } ?: variants.firstOrNull()
+
+    ReusableBottomSheetCard(
+        maxHeightFraction = DetailSheetMaxHeight,
+        onDismiss = onDismiss,
+    ) {
+        BottomSheetHeader(
+            title = selectedVariant?.label?.takeIf { it.isNotBlank() } ?: product.title,
+            subtitle = product.brand,
+            onDismiss = onDismiss,
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            DetailHeroCard(product = product, selectedVariant = selectedVariant, assetBaseUrl = assetBaseUrl)
+            if (variants.isNotEmpty()) {
+                VariantSelectorCard(
+                    variants = variants,
+                    selectedVariant = selectedVariant,
+                    onSelect = { selectedVariantId = it.variantId },
+                )
+            }
+            DetailSectionCard(
+                title = "推荐理由",
+                values = listOf(selectedVariant?.reason ?: product.reason),
+                containerColor = Ink,
+                titleColor = AppGreen,
+                bodyColor = SurfaceWhite,
+                bullet = false,
+            )
+            if (selectedVariant != null) {
+                DetailSectionCard(
+                    title = "规格信息",
+                    values = selectedVariant.detailLines(),
+                    containerColor = SurfaceWhite,
+                    titleColor = AccentGreenDark,
+                    bullet = false,
+                )
+            }
+            DetailChipsCard("适合人群", product.suitableFor.ifEmpty { product.targetUsers })
+            DetailChipsCard("使用场景", product.useCases, containerColor = AppGreenSoft)
+            DetailChipsCard("核心卖点", product.sellingPoints)
+            DetailSectionCard("官方 FAQ", knowledge.officialFaq.take(2), numbered = true)
+            DetailSectionCard(
+                title = "用户精选评论",
+                values = knowledge.userReviews.take(2),
+                containerColor = AppGreenSoft,
+                titleColor = AccentGreenDark,
+                bullet = false,
+            )
+            DetailSectionCard(
+                title = "注意和避坑",
+                values = product.cautions + product.avoidFor,
+                containerColor = WarmSurface,
+                titleColor = ErrorText,
+            )
+            DetailSectionCard(
+                title = "资料依据",
+                values = listOf(knowledge.overview),
+                bullet = false,
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun ReusableBottomSheetOverlay(
+    sheetKey: Any,
+    maxHeightFraction: Float = DetailSheetMaxHeight,
+    onDismiss: () -> Unit,
+    sheetContent: @Composable (requestDismiss: () -> Unit) -> Unit,
+) {
+    val visibilityState = remember(sheetKey) {
         MutableTransitionState(false).apply {
             targetState = true
         }
@@ -2528,32 +2672,40 @@ private fun ProductDetailOverlay(product: ProductCard, assetBaseUrl: String, onD
                 animationSpec = tween(DetailSheetAnimationMillis),
             ) + fadeOut(animationSpec = tween(DetailSheetAnimationMillis)),
         ) {
-            ProductDetailSheet(
-                product = product,
-                assetBaseUrl = assetBaseUrl,
-                onDismiss = { requestDismiss() },
-            )
+            sheetContent(::requestDismiss)
         }
     }
 }
 
 @Composable
-private fun ProductDetailSheet(
-    product: ProductCard,
-    assetBaseUrl: String,
+private fun ReusableBottomSheetCard(
+    maxHeightFraction: Float,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
-    val knowledge = remember(product.description) { product.knowledgeSections() }
-    val variants = product.variants
-    var selectedVariantId by remember(product.productId, variants) { mutableStateOf(variants.firstOrNull()?.variantId.orEmpty()) }
-    val selectedVariant = variants.firstOrNull { it.variantId == selectedVariantId } ?: variants.firstOrNull()
+    val density = LocalDensity.current
+    val dismissThresholdPx = density.run { 80.dp.toPx() }
+    var dragOffset by remember { mutableStateOf(0f) }
 
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .fillMaxHeight(DetailSheetMaxHeight)
+            .fillMaxHeight(maxHeightFraction)
             .padding(start = 10.dp, top = 28.dp, end = 10.dp, bottom = 8.dp)
             .navigationBarsPadding()
+            .pointerInput(onDismiss) {
+                detectVerticalDragGestures(
+                    onVerticalDrag = { _, dragAmount ->
+                        dragOffset = (dragOffset + dragAmount).coerceAtLeast(0f)
+                        if (dragOffset > dismissThresholdPx) {
+                            onDismiss()
+                        }
+                    },
+                    onDragEnd = { dragOffset = 0f },
+                    onDragCancel = { dragOffset = 0f },
+                )
+            }
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
@@ -2564,99 +2716,65 @@ private fun ProductDetailSheet(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 24.dp, top = 20.dp, end = 16.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun BottomSheetHeader(
+    title: String,
+    subtitle: String?,
+    onDismiss: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 24.dp, top = 12.dp, end = 16.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .width(42.dp)
+                .height(4.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(BorderGreen.copy(alpha = 0.8f))
+                .align(Alignment.CenterHorizontally),
+        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                title.takeIf { it.isNotBlank() }?.let {
                     Text(
-                        text = product.brand,
-                        color = AccentGreenDark,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
-                    Text(
-                        text = selectedVariant?.label?.takeIf { it.isNotBlank() } ?: product.title,
+                        text = it,
                         color = Ink,
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(AppGreenSoft, RoundedCornerShape(999.dp))
-                        .clickable(onClick = onDismiss),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        imageVector = TablerXIcon,
-                        contentDescription = "关闭",
-                        tint = Ink,
-                        modifier = Modifier.size(18.dp),
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        text = subtitle,
+                        color = AccentGreenDark,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelLarge,
                     )
                 }
             }
-            Column(
+            Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 24.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .size(32.dp)
+                    .background(AppGreenSoft, RoundedCornerShape(999.dp))
+                    .clickable(onClick = onDismiss),
+                contentAlignment = Alignment.Center,
             ) {
-                DetailHeroCard(product = product, selectedVariant = selectedVariant, assetBaseUrl = assetBaseUrl)
-                if (variants.isNotEmpty()) {
-                    VariantSelectorCard(
-                        variants = variants,
-                        selectedVariant = selectedVariant,
-                        onSelect = { selectedVariantId = it.variantId },
-                    )
-                }
-                DetailSectionCard(
-                    title = "推荐理由",
-                    values = listOf(selectedVariant?.reason ?: product.reason),
-                    containerColor = Ink,
-                    titleColor = AppGreen,
-                    bodyColor = SurfaceWhite,
-                    bullet = false,
+                Icon(
+                    imageVector = TablerXIcon,
+                    contentDescription = "关闭",
+                    tint = Ink,
+                    modifier = Modifier.size(18.dp),
                 )
-                if (selectedVariant != null) {
-                    DetailSectionCard(
-                        title = "规格信息",
-                        values = selectedVariant.detailLines(),
-                        containerColor = SurfaceWhite,
-                        titleColor = AccentGreenDark,
-                        bullet = false,
-                    )
-                }
-                DetailChipsCard("适合人群", product.suitableFor.ifEmpty { product.targetUsers })
-                DetailChipsCard("使用场景", product.useCases, containerColor = AppGreenSoft)
-                DetailChipsCard("核心卖点", product.sellingPoints)
-                DetailSectionCard("官方 FAQ", knowledge.officialFaq.take(2), numbered = true)
-                DetailSectionCard(
-                    title = "用户精选评论",
-                    values = knowledge.userReviews.take(2),
-                    containerColor = AppGreenSoft,
-                    titleColor = AccentGreenDark,
-                    bullet = false,
-                )
-                DetailSectionCard(
-                    title = "注意和避坑",
-                    values = product.cautions + product.avoidFor,
-                    containerColor = WarmSurface,
-                    titleColor = ErrorText,
-                )
-                DetailSectionCard(
-                    title = "资料依据",
-                    values = listOf(knowledge.overview),
-                    bullet = false,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
@@ -2936,6 +3054,7 @@ private fun ProductCard.knowledgeSections(): KnowledgeSections {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun InputBar(
+    modifier: Modifier = Modifier,
     value: String,
     isLoading: Boolean,
     isTranscribing: Boolean,
@@ -3111,156 +3230,187 @@ private fun InputBar(
     val hasPendingImage = pendingImage != null
     val canSendText = !isLoading && (value.isNotBlank() || hasPendingImage) && !isRecording
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
+    Box(
+        modifier = modifier
             .navigationBarsPadding()
             .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        if (statusText != null) {
-            LoadingStatusCard(statusText = statusText)
-        }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            DemoPrompts.forEach { (label, prompt) ->
-                Text(
-                    text = label,
-                    modifier = Modifier
-                        .background(AppGreenSoft, RoundedCornerShape(999.dp))
-                        .clickable(enabled = !isLoading) {
-                            showAttachmentMenu = false
-                            onQuickPrompt(prompt)
-                        }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    color = AccentGreenDark,
-                    style = MaterialTheme.typography.labelMedium,
-                )
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (statusText != null) {
+                LoadingStatusCard(statusText = statusText)
             }
-        }
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = SurfaceCream),
-                shape = RoundedCornerShape(30.dp),
-                border = BorderStroke(1.dp, BorderGreen.copy(alpha = 0.9f)),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            ) {
-                if (isRecording) {
-                    RecordingInputRow(
-                        waveformLevels = waveformLevels,
-                        elapsedSeconds = recordingElapsedSeconds,
-                        onStop = ::stopRecording,
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                DemoPrompts.forEach { (label, prompt) ->
+                    Text(
+                        text = label,
+                        modifier = Modifier
+                            .background(AppGreenSoft, RoundedCornerShape(999.dp))
+                            .clickable(enabled = !isLoading) {
+                                showAttachmentMenu = false
+                                onQuickPrompt(prompt)
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        color = AccentGreenDark,
+                        style = MaterialTheme.typography.labelMedium,
                     )
-                } else {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        pendingImage?.let { image ->
-                            PendingInputImagePreview(
-                                preview = image.preview,
-                                onRemove = {
-                                    image.uploadFile.delete()
-                                    pendingImage = null
-                                    attachmentStatusText = null
-                                },
-                            )
-                        }
-                        BasicTextField(
-                            value = value,
-                            onValueChange = {
-                                attachmentStatusText = null
-                                onValueChange(it)
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 76.dp, max = 152.dp)
-                                .padding(horizontal = 4.dp, vertical = 4.dp),
-                            minLines = 2,
-                            maxLines = 5,
-                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = Ink),
-                            cursorBrush = SolidColor(AccentGreenDark),
-                            decorationBox = { innerTextField ->
-                                Box(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    contentAlignment = Alignment.TopStart,
-                                ) {
-                                    if (value.isBlank() && !hasPendingImage) {
-                                        Text(
-                                            text = "要求后续变更",
-                                            color = MutedText.copy(alpha = 0.32f),
-                                            style = MaterialTheme.typography.titleMedium,
-                                        )
-                                    }
-                                    innerTextField()
-                                }
-                            },
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+            ) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = SurfaceCream),
+                    shape = RoundedCornerShape(30.dp),
+                    border = BorderStroke(1.dp, BorderGreen.copy(alpha = 0.9f)),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                ) {
+                    if (isRecording) {
+                        RecordingInputRow(
+                            waveformLevels = waveformLevels,
+                            elapsedSeconds = recordingElapsedSeconds,
+                            onStop = ::stopRecording,
                         )
-                                if (inputStatusLines.isNotEmpty()) {
-                                    Column(
-                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    } else {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            pendingImage?.let { image ->
+                                PendingInputImagePreview(
+                                    preview = image.preview,
+                                    onRemove = {
+                                        image.uploadFile.delete()
+                                        pendingImage = null
+                                        attachmentStatusText = null
+                                    },
+                                )
+                            }
+                            BasicTextField(
+                                value = value,
+                                onValueChange = {
+                                    attachmentStatusText = null
+                                    onValueChange(it)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 76.dp, max = 152.dp)
+                                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                                minLines = 2,
+                                maxLines = 5,
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(color = Ink),
+                                cursorBrush = SolidColor(AccentGreenDark),
+                                decorationBox = { innerTextField ->
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentAlignment = Alignment.TopStart,
                                     ) {
-                                        inputStatusLines.forEach { status ->
-                                            val leadingIcon = when {
-                                                status.isError -> TablerAlertTriangleIcon
-                                                status.key.startsWith("speech:") -> TablerVolumeIcon
-                                                status.key.startsWith("asr") -> TablerMicrophoneIcon
-                                                else -> TablerPhotoIcon
-                                            }
-                                            DismissibleInputStatusPill(
-                                                text = status.text,
-                                                isError = status.isError,
-                                                leadingIcon = leadingIcon,
-                                                autoDismiss = status.key != "asr-transcribing",
-                                                onDismiss = {
-                                                    dismissedInputStatusKeys = dismissedInputStatusKeys + status.key
-                                                },
+                                        if (value.isBlank() && !hasPendingImage) {
+                                            Text(
+                                                text = "要求后续变更",
+                                                color = MutedText.copy(alpha = 0.32f),
+                                                style = MaterialTheme.typography.titleMedium,
                                             )
                                         }
+                                        innerTextField()
                                     }
-                                }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(44.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            InputToolbarButton(
-                                imageVector = TablerPlusIcon,
-                                contentDescription = "添加图片",
-                                enabled = canUseInputTools,
-                                selected = showAttachmentMenu,
-                                onClick = { showAttachmentMenu = !showAttachmentMenu },
-                            )
-                            AssistantInputChip(
-                                label = currentRecipientName,
-                                enabled = !isLoading && !isTranscribing,
-                                onClick = { showRecipientMenu = true },
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            VoiceRecordButton(
-                                isRecording = false,
-                                isTranscribing = isTranscribing,
-                                enabled = canUseInputTools,
-                                onClick = ::toggleRecording,
-                            )
-                            SendRoundButton(
-                                isLoading = isLoading,
-                                enabled = canSendText,
-                                onClick = {
-                                    showAttachmentMenu = false
-                                    val imageToSend = pendingImage
-                                    val overrideMessage = if (value.isBlank() && imageToSend != null) {
-                                        "我上传了一张图片，帮我看看并推荐类似商品"
-                                    } else {
-                                        null
-                                    }
-                                    pendingImage = null
-                                    attachmentStatusText = null
-                                    onSend(overrideMessage, imageToSend)
                                 },
                             )
+                            if (inputStatusLines.isNotEmpty()) {
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    inputStatusLines.forEach { status ->
+                                        val leadingIcon = when {
+                                            status.isError -> TablerAlertTriangleIcon
+                                            status.key.startsWith("speech:") -> TablerVolumeIcon
+                                            status.key.startsWith("asr") -> TablerMicrophoneIcon
+                                            else -> TablerPhotoIcon
+                                        }
+                                        DismissibleInputStatusPill(
+                                            text = status.text,
+                                            isError = status.isError,
+                                            leadingIcon = leadingIcon,
+                                            autoDismiss = status.key != "asr-transcribing",
+                                            onDismiss = {
+                                                dismissedInputStatusKeys = dismissedInputStatusKeys + status.key
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(44.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                InputToolbarButton(
+                                    imageVector = TablerPlusIcon,
+                                    contentDescription = "添加图片",
+                                    enabled = canUseInputTools,
+                                    selected = showAttachmentMenu,
+                                    onClick = { showAttachmentMenu = !showAttachmentMenu },
+                                )
+                                Box {
+                                    AssistantInputChip(
+                                        label = currentRecipientName,
+                                        enabled = !isLoading && !isTranscribing,
+                                        onClick = {
+                                            showAttachmentMenu = false
+                                            showRecipientMenu = !showRecipientMenu
+                                        },
+                                    )
+                                    RecipientSelectionMenu(
+                                        visible = showRecipientMenu,
+                                        recipients = recipients,
+                                        selectedRecipientId = selectedRecipientId,
+                                        isLoading = recipientsLoading,
+                                        isSaving = recipientsSaving,
+                                        error = recipientError,
+                                        onDismiss = {
+                                            showRecipientMenu = false
+                                        },
+                                        onSelect = { recipientId ->
+                                            showRecipientMenu = false
+                                            onRecipientSelected(recipientId)
+                                        },
+                                        onManageRecipients = {
+                                            showRecipientMenu = false
+                                            onOpenRecipientManagement()
+                                        },
+                                    )
+                                }
+                                Spacer(modifier = Modifier.weight(1f))
+                                VoiceRecordButton(
+                                    isRecording = false,
+                                    isTranscribing = isTranscribing,
+                                    enabled = canUseInputTools,
+                                    onClick = ::toggleRecording,
+                                )
+                                SendRoundButton(
+                                    isLoading = isLoading,
+                                    enabled = canSendText,
+                                    onClick = {
+                                        showAttachmentMenu = false
+                                        val imageToSend = pendingImage
+                                        val overrideMessage = if (value.isBlank() && imageToSend != null) {
+                                            "我上传了一张图片，帮我看看并推荐类似商品"
+                                        } else {
+                                            null
+                                        }
+                                        pendingImage = null
+                                        attachmentStatusText = null
+                                        onSend(overrideMessage, imageToSend)
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -3268,7 +3418,6 @@ private fun InputBar(
             AttachmentActionMenu(
                 visible = showAttachmentMenu,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
                     .padding(start = 8.dp, bottom = 56.dp),
                 onCameraClick = {
                     cameraLauncher.launch(null)
@@ -3277,148 +3426,141 @@ private fun InputBar(
                     galleryLauncher.launch("image/*")
                 },
             )
-            if (showRecipientMenu) {
-                RecipientSelectionDialog(
-                    recipients = recipients,
-                    selectedRecipientId = selectedRecipientId,
-                    isLoading = recipientsLoading,
-                    isSaving = recipientsSaving,
-                    error = recipientError,
-                    onDismiss = { showRecipientMenu = false },
-                    onSelect = { recipientId ->
-                        showRecipientMenu = false
-                        onRecipientSelected(recipientId)
-                    },
-                    onManageRecipients = {
-                        showRecipientMenu = false
-                        onOpenRecipientManagement()
-                    },
-                )
-            }
         }
     }
-    Spacer(modifier = Modifier.height(4.dp))
 }
 
 @Composable
-private fun RecipientSelectionDialog(
+private fun RecipientSelectionMenu(
+    visible: Boolean,
     recipients: List<RecipientProfile>,
     selectedRecipientId: String,
     isLoading: Boolean,
     isSaving: Boolean,
     error: String?,
+    modifier: Modifier = Modifier,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit,
     onManageRecipients: () -> Unit,
 ) {
-    AlertDialog(
+    DropdownMenu(
+        expanded = visible,
         onDismissRequest = onDismiss,
-        containerColor = SurfaceCream,
-        title = {
+        modifier = modifier.width(260.dp),
+        offset = DpOffset(RecipientMenuStartPadding, -RecipientMenuBottomPadding),
+        properties = PopupProperties(focusable = false),
+        shape = RoundedCornerShape(22.dp),
+        containerColor = SurfaceWhite,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
+        border = BorderStroke(1.dp, BorderGreen),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Text(
                 text = "切换购买对象",
                 color = Ink,
                 fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyLarge,
             )
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (isLoading && recipients.isEmpty()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(
-                            color = AccentGreenDark,
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "加载常用对象中...", color = Ink)
-                    }
+            if (isLoading && recipients.isEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        color = AccentGreenDark,
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "加载常用对象中...", color = Ink)
                 }
-                if (recipients.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 280.dp)
-                            .verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        recipients.forEach { recipient ->
-                            val isCurrent = recipient.recipientId == selectedRecipientId
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(
-                                        if (isCurrent) {
-                                            AppGreenSoft
-                                        } else {
-                                            SurfaceWhite
-                                        },
-                                    )
-                                    .clickable { onSelect(recipient.recipientId) }
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column {
-                                    Text(
-                                        text = recipient.displayName.ifBlank { "对象" },
-                                        color = Ink,
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                    )
-                                    Text(
-                                        text = recipient.relationship.orBlank().ifEmpty { "关系未填写" },
-                                        color = MutedText,
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                }
-                                if (isCurrent) {
-                                    Text(
-                                        text = "当前",
-                                        color = AccentGreenDark,
-                                        fontWeight = FontWeight.Bold,
-                                        style = MaterialTheme.typography.labelSmall,
-                                    )
-                                }
+            }
+            if (recipients.isNotEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 280.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    recipients.forEach { recipient ->
+                        val isCurrent = recipient.recipientId == selectedRecipientId
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(if (isCurrent) AppGreenSoft else SurfaceWhite)
+                                .clickable { onSelect(recipient.recipientId) }
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column {
+                                val displayName = recipient.displayName.cleanEditorValue().ifBlank { "对象" }
+                                val relationship = recipient.relationship.cleanEditorValue().ifBlank { "关系未填写" }
+                                Text(
+                                    text = displayName,
+                                    color = Ink,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    text = relationship,
+                                    color = MutedText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
+                            }
+                            if (isCurrent) {
+                                Text(
+                                    text = "当前",
+                                    color = AccentGreenDark,
+                                    fontWeight = FontWeight.Bold,
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
                             }
                         }
                     }
                 }
-                if (error != null) {
-                    Text(
-                        text = "状态：$error",
-                        color = ErrorText,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
-                if (!isLoading && recipients.isEmpty() && error == null) {
-                    Text(
-                        text = "暂无常用购买对象，请先到设置中创建",
-                        color = MutedText,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
-                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onManageRecipients, enabled = !isSaving) {
+            if (error != null) {
                 Text(
-                    text = "管理常用对象",
-                    color = AccentGreenDark,
+                    text = "状态：$error",
+                    color = ErrorText,
+                    style = MaterialTheme.typography.labelSmall,
                 )
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "关闭", color = Ink)
+            if (!isLoading && recipients.isEmpty() && error == null) {
+                Text(
+                    text = "暂无常用购买对象，请先到设置中创建",
+                    color = MutedText,
+                    style = MaterialTheme.typography.labelSmall,
+                )
             }
-        },
-    )
+            HorizontalDivider()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onManageRecipients, enabled = !isSaving) {
+                    Text(
+                        text = "管理常用对象",
+                        color = AccentGreenDark,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -3714,30 +3856,33 @@ private fun RecipientManagementDialog(
         }
     }
 
-    fun save() {
+    fun save(requestDismiss: () -> Unit) {
         val normalized = normalizeRecipientProfilesForEditor(draftRecipients.map { it.toRecipientProfile() })
         draftRecipients = normalized.map { it.toRecipientEditorState() }
         draftSelectedRecipientId = resolveSelectedRecipientIdForEditor(normalized, draftSelectedRecipientId)
         onSave(normalized, draftSelectedRecipientId)
-        onDismiss()
+        requestDismiss()
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = SurfaceCream,
-        title = {
-            Text(
-                text = "常用购买对象",
-                color = Ink,
-                fontWeight = FontWeight.Bold,
+    ReusableBottomSheetOverlay(
+        sheetKey = "recipient-management",
+        maxHeightFraction = 0.92f,
+        onDismiss = onDismiss,
+    ) { requestDismiss ->
+        ReusableBottomSheetCard(
+            maxHeightFraction = 0.92f,
+            onDismiss = requestDismiss,
+        ) {
+            BottomSheetHeader(
+                title = "常用购买对象",
+                subtitle = null,
+                onDismiss = requestDismiss,
             )
-        },
-        text = {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 420.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 if (isLoading && draftRecipients.isEmpty()) {
@@ -3773,16 +3918,16 @@ private fun RecipientManagementDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     RecipientField(
                                         label = "显示名",
-                                        value = recipient.displayName,
+                                        value = recipient.displayName.cleanEditorValue(),
                                         onValueChange = { value ->
-                                            updateRecipient(index) { it.copy(displayName = value) }
+                                            updateRecipient(index) { it.copy(displayName = value.cleanEditorValue()) }
                                         },
                                     )
                                     RecipientField(
                                         label = "关系",
-                                        value = recipient.relationship,
+                                        value = recipient.relationship.cleanEditorValue(),
                                         onValueChange = { value ->
-                                            updateRecipient(index) { it.copy(relationship = value) }
+                                            updateRecipient(index) { it.copy(relationship = value.cleanEditorValue()) }
                                         },
                                     )
                                 }
@@ -3808,29 +3953,27 @@ private fun RecipientManagementDialog(
                                     }
                                 }
                             }
-
-                                HorizontalDivider()
-
-                                Text(
-                                    text = "收货信息",
-                                    color = Ink,
-                                    fontWeight = FontWeight.Bold,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                                RecipientField(
-                                    label = "电话",
-                                    value = recipient.phone,
-                                    onValueChange = { value ->
-                                        updateRecipient(index) { it.copy(phone = value) }
-                                    },
-                                )
+                            HorizontalDivider()
+                            Text(
+                                text = "收货信息",
+                                color = Ink,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                            RecipientField(
+                                label = "电话",
+                                value = recipient.phone.cleanEditorValue(),
+                                onValueChange = { value ->
+                                    updateRecipient(index) { it.copy(phone = value.cleanEditorValue()) }
+                                },
+                            )
                             RecipientField(
                                 label = "地址",
-                                value = recipient.address,
+                                value = recipient.address.cleanEditorValue(),
                                 singleLine = false,
                                 minLines = 2,
                                 onValueChange = { value ->
-                                    updateRecipient(index) { it.copy(address = value) }
+                                    updateRecipient(index) { it.copy(address = value.cleanEditorValue()) }
                                 },
                             )
 
@@ -3866,21 +4009,22 @@ private fun RecipientManagementDialog(
                     )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = { save() }, enabled = !isSaving) {
-                Text(
-                    text = if (isSaving) "保存中..." else "保存",
-                    color = AccentGreenDark,
-                )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 14.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = { save(requestDismiss) }, enabled = !isSaving) {
+                    Text(
+                        text = if (isSaving) "保存中..." else "保存",
+                        color = AccentGreenDark,
+                    )
+                }
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "关闭", color = Ink)
-            }
-        },
-    )
+        }
+    }
 }
 
 @Composable
@@ -3892,6 +4036,8 @@ private fun RecipientField(
     enabled: Boolean = true,
     onValueChange: (String) -> Unit,
 ) {
+    val cleanedValue = value.cleanEditorValue()
+
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -3902,7 +4048,7 @@ private fun RecipientField(
             style = MaterialTheme.typography.labelMedium,
         )
         BasicTextField(
-            value = value,
+            value = cleanedValue,
             enabled = enabled,
             onValueChange = onValueChange,
             modifier = Modifier
@@ -3917,7 +4063,7 @@ private fun RecipientField(
             maxLines = if (singleLine) 1 else 4,
             decorationBox = { innerTextField ->
                 Box {
-                    if (value.isBlank()) {
+                    if (cleanedValue.isBlank()) {
                         Text(
                             text = "未填写",
                             color = MutedText.copy(alpha = 0.42f),
@@ -4092,6 +4238,11 @@ private fun normalizeRecipientProfilesForEditor(input: List<RecipientProfile>): 
     return deduped.values.toList()
 }
 
+private fun String?.cleanEditorValue(): String {
+    val trimmed = this?.trim().orEmpty()
+    return if (trimmed.equals("null", ignoreCase = true)) "" else trimmed
+}
+
 private fun resolveSelectedRecipientIdForEditor(
     recipients: List<RecipientProfile>,
     selectedRecipientId: String,
@@ -4148,51 +4299,51 @@ private fun formatRecipientPreferenceMap(input: Map<String, Double>): String {
 private fun RecipientProfile.toRecipientEditorState(): RecipientEditorState {
     return RecipientEditorState(
         recipientId = recipientId,
-        displayName = displayName,
-        relationship = relationship.orEmpty(),
-        allergies = constraints.allergies.joinToString(", "),
-        avoidTerms = constraints.avoidTerms.joinToString(", "),
-        brandExclude = constraints.brandExclude.joinToString(", "),
-        budgetMax = constraints.budgetMax?.toString().orEmpty(),
-        accessibilityNeeds = constraints.accessibilityNeeds.joinToString(", "),
-        preferredCategories = formatRecipientPreferenceMap(longTermPreferences.preferredCategories),
-        preferredTags = formatRecipientPreferenceMap(longTermPreferences.preferredTags),
-        priceSensitivity = longTermPreferences.priceSensitivity?.toString().orEmpty(),
-        skinType = bodyProfile.skinType.orEmpty(),
-        shoeSize = bodyProfile.shoeSize.orEmpty(),
-        clothingSize = bodyProfile.clothingSize.orEmpty(),
-        phone = shipping.phone.orEmpty(),
-        address = shipping.address.orEmpty(),
+        displayName = displayName.cleanEditorValue(),
+        relationship = relationship.cleanEditorValue(),
+        allergies = constraints.allergies.joinToString(", ").cleanEditorValue(),
+        avoidTerms = constraints.avoidTerms.joinToString(", ").cleanEditorValue(),
+        brandExclude = constraints.brandExclude.joinToString(", ").cleanEditorValue(),
+        budgetMax = constraints.budgetMax?.toString().orEmpty().cleanEditorValue(),
+        accessibilityNeeds = constraints.accessibilityNeeds.joinToString(", ").cleanEditorValue(),
+        preferredCategories = formatRecipientPreferenceMap(longTermPreferences.preferredCategories).cleanEditorValue(),
+        preferredTags = formatRecipientPreferenceMap(longTermPreferences.preferredTags).cleanEditorValue(),
+        priceSensitivity = longTermPreferences.priceSensitivity?.toString().orEmpty().cleanEditorValue(),
+        skinType = bodyProfile.skinType.cleanEditorValue(),
+        shoeSize = bodyProfile.shoeSize.cleanEditorValue(),
+        clothingSize = bodyProfile.clothingSize.cleanEditorValue(),
+        phone = shipping.phone.cleanEditorValue(),
+        address = shipping.address.cleanEditorValue(),
     )
 }
 
 private fun RecipientEditorState.toRecipientProfile(): RecipientProfile {
     return RecipientProfile(
         recipientId = recipientId.ifBlank { "custom-${System.currentTimeMillis()}" },
-        displayName = displayName.ifBlank { recipientId.ifBlank { "对象" } },
-        relationship = relationship.ifBlank { null },
+        displayName = displayName.cleanEditorValue().ifBlank { recipientId.ifBlank { "对象" } },
+        relationship = relationship.cleanEditorValue().ifBlank { null },
         constraints = RecipientConstraints(
-            allergies = parseRecipientStringList(allergies),
-            avoidTerms = parseRecipientStringList(avoidTerms),
-            brandExclude = parseRecipientStringList(brandExclude),
-            budgetMax = parseRecipientDouble(budgetMax),
-            accessibilityNeeds = parseRecipientStringList(accessibilityNeeds),
+            allergies = parseRecipientStringList(allergies.cleanEditorValue()),
+            avoidTerms = parseRecipientStringList(avoidTerms.cleanEditorValue()),
+            brandExclude = parseRecipientStringList(brandExclude.cleanEditorValue()),
+            budgetMax = parseRecipientDouble(budgetMax.cleanEditorValue()),
+            accessibilityNeeds = parseRecipientStringList(accessibilityNeeds.cleanEditorValue()),
         ),
         longTermPreferences = RecipientLongTermPreferences(
-            preferredCategories = parseRecipientPreferenceMap(preferredCategories),
-            preferredTags = parseRecipientPreferenceMap(preferredTags),
-            priceSensitivity = parseRecipientDouble(priceSensitivity),
+            preferredCategories = parseRecipientPreferenceMap(preferredCategories.cleanEditorValue()),
+            preferredTags = parseRecipientPreferenceMap(preferredTags.cleanEditorValue()),
+            priceSensitivity = parseRecipientDouble(priceSensitivity.cleanEditorValue()),
         ),
         shipping = RecipientShipping(
             addressLabel = null,
             recipientName = null,
-            phone = phone.trim().ifBlank { null },
-            address = address.trim().ifBlank { null },
+            phone = phone.cleanEditorValue().ifBlank { null },
+            address = address.cleanEditorValue().ifBlank { null },
         ),
         bodyProfile = RecipientBodyProfile(
-            skinType = skinType.trim().ifBlank { null },
-            shoeSize = shoeSize.trim().ifBlank { null },
-            clothingSize = clothingSize.trim().ifBlank { null },
+            skinType = skinType.cleanEditorValue().ifBlank { null },
+            shoeSize = shoeSize.cleanEditorValue().ifBlank { null },
+            clothingSize = clothingSize.cleanEditorValue().ifBlank { null },
         ),
     )
 }
