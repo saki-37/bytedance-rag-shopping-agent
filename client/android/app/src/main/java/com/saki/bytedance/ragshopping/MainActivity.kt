@@ -52,6 +52,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -62,7 +63,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -197,6 +200,60 @@ private val TablerMicrophoneIcon: ImageVector = ImageVector.Builder(
         horizontalLineTo(16f)
     }
 }.build()
+private val TablerVolumeIcon: ImageVector = ImageVector.Builder(
+    name = "TablerVolume",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(4f, 10f)
+        horizontalLineTo(8f)
+        lineTo(13f, 5f)
+        verticalLineTo(19f)
+        lineTo(8f, 14f)
+        horizontalLineTo(4f)
+        close()
+        moveTo(16f, 9f)
+        curveTo(17.2f, 10.2f, 17.2f, 13.8f, 16f, 15f)
+        moveTo(18.5f, 6.5f)
+        curveTo(21.5f, 9.5f, 21.5f, 14.5f, 18.5f, 17.5f)
+    }
+}.build()
+private val TablerVolumeOffIcon: ImageVector = ImageVector.Builder(
+    name = "TablerVolumeOff",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(4f, 10f)
+        horizontalLineTo(8f)
+        lineTo(13f, 5f)
+        verticalLineTo(19f)
+        lineTo(8f, 14f)
+        horizontalLineTo(4f)
+        close()
+        moveTo(18f, 9f)
+        lineTo(22f, 13f)
+        moveTo(22f, 9f)
+        lineTo(18f, 13f)
+    }
+}.build()
 
 private val DemoPrompts = listOf(
     "油皮通勤防晒" to "我是油皮，想要200元以内通勤防晒",
@@ -222,11 +279,77 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
+    val context = LocalContext.current
     val state by viewModel.state.collectAsState()
     val listState = rememberLazyListState()
     var selectedProduct by remember { mutableStateOf<ProductCard?>(null) }
+    var showTtsSettings by remember { mutableStateOf(false) }
+    var ttsSettings by remember(context) { mutableStateOf(TtsSettingsStore.load(context)) }
+    var autoSpokenMessageIds by remember { mutableStateOf(emptySet<String>()) }
+    var stoppedSpeechMessageIds by remember { mutableStateOf(emptySet<String>()) }
+    val ttsSpeaker = remember(context) { TtsSpeaker(context, ttsSettings.voicePreference) }
+    val ttsPlaybackState by ttsSpeaker.state.collectAsState()
+    val speakingMessageId = (ttsPlaybackState as? TtsPlaybackState.Speaking)?.messageId
     val latestMessage = state.messages.lastOrNull()
+    val latestSpeakableAssistant = state.messages.lastOrNull {
+        it.role == Role.Assistant && it.content.isNotBlank()
+    }
     val assetBaseUrl = "${state.backendBaseUrl.trimEnd('/')}/assets"
+
+    fun updateTtsSettings(nextSettings: TtsSettings) {
+        ttsSettings = nextSettings
+        TtsSettingsStore.save(context, nextSettings)
+        ttsSpeaker.setVoicePreference(nextSettings.voicePreference)
+        if (!nextSettings.autoSpeak) {
+            ttsSpeaker.stop()
+        }
+    }
+
+    fun speakMessage(message: ChatMessage) {
+        if (message.role != Role.Assistant || message.content.isBlank()) return
+        stoppedSpeechMessageIds = stoppedSpeechMessageIds - message.id
+        autoSpokenMessageIds = autoSpokenMessageIds + message.id
+        ttsSpeaker.speak(message.id, message.content)
+    }
+
+    fun toggleMessageSpeech(message: ChatMessage) {
+        if (speakingMessageId == message.id) {
+            stoppedSpeechMessageIds = stoppedSpeechMessageIds + message.id
+            ttsSpeaker.stop()
+        } else {
+            speakMessage(message)
+        }
+    }
+
+    fun stopAnySpeech() {
+        ttsSpeaker.stop()
+    }
+
+    DisposableEffect(ttsSpeaker) {
+        onDispose {
+            ttsSpeaker.shutdown()
+        }
+    }
+
+    LaunchedEffect(ttsSettings.voicePreference, ttsSpeaker) {
+        ttsSpeaker.setVoicePreference(ttsSettings.voicePreference)
+    }
+
+    LaunchedEffect(
+        latestSpeakableAssistant?.id,
+        state.isLoading,
+        ttsSettings.autoSpeak,
+    ) {
+        val assistantMessage = latestSpeakableAssistant ?: return@LaunchedEffect
+        if (
+            !state.isLoading &&
+            ttsSettings.autoSpeak &&
+            assistantMessage.id !in autoSpokenMessageIds &&
+            assistantMessage.id !in stoppedSpeechMessageIds
+        ) {
+            speakMessage(assistantMessage)
+        }
+    }
 
     LaunchedEffect(state.messages.size, latestMessage?.content?.length, latestMessage?.products?.size) {
         listState.scrollToItem(state.messages.size)
@@ -238,7 +361,10 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                 .fillMaxSize()
                 .blur(if (selectedProduct != null) DetailBackdropBlurRadius else 0.dp),
         ) {
-            Header()
+            Header(
+                ttsSettings = ttsSettings,
+                onTtsSettingsClick = { showTtsSettings = true },
+            )
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -266,9 +392,11 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                         showFeedback = !state.isLoading && hasPriorUserMessage && !message.isEphemeral,
                         isThinking = isThinking,
                         isStreaming = isAssistantStreaming,
+                        isSpeaking = message.id == speakingMessageId,
                         assetBaseUrl = assetBaseUrl,
                         onProductClick = { selectedProduct = it },
                         onFeedback = viewModel::submitFeedback,
+                        onSpeechToggle = ::toggleMessageSpeech,
                     )
                 }
                 item("bottom-anchor") {
@@ -282,19 +410,35 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                 statusText = state.statusText,
                 asrStatusText = state.asrStatusText,
                 onValueChange = viewModel::updateInput,
-                onSend = viewModel::send,
-                onQuickPrompt = viewModel::sendPrompt,
+                onSend = {
+                    stopAnySpeech()
+                    viewModel.send()
+                },
+                onQuickPrompt = { prompt ->
+                    stopAnySpeech()
+                    viewModel.sendPrompt(prompt)
+                },
                 onAudioRecorded = viewModel::transcribeAudio,
             )
         }
         selectedProduct?.let { product ->
             ProductDetailOverlay(product = product, assetBaseUrl = assetBaseUrl, onDismiss = { selectedProduct = null })
         }
+        if (showTtsSettings) {
+            TtsSettingsDialog(
+                settings = ttsSettings,
+                onSettingsChange = ::updateTtsSettings,
+                onDismiss = { showTtsSettings = false },
+            )
+        }
     }
 }
 
 @Composable
-private fun Header() {
+private fun Header(
+    ttsSettings: TtsSettings,
+    onTtsSettingsClick: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -302,12 +446,34 @@ private fun Header() {
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(
-            text = "RAG智能导购",
-            color = Ink,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.headlineSmall,
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "RAG智能导购",
+                color = Ink,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.weight(1f),
+            )
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(SurfaceWhite)
+                    .clickable(onClick = onTtsSettingsClick),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (ttsSettings.autoSpeak) TablerVolumeIcon else TablerVolumeOffIcon,
+                    contentDescription = "语音播报设置",
+                    tint = AccentGreenDark,
+                    modifier = Modifier.size(21.dp),
+                )
+            }
+        }
         Text(
             text = "美妆、服饰、数码和食品生活都能问，预算、场景和避雷点可以直接说",
             color = AccentGreenDark,
@@ -316,15 +482,110 @@ private fun Header() {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TtsSettingsDialog(
+    settings: TtsSettings,
+    onSettingsChange: (TtsSettings) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SurfaceCream,
+        title = {
+            Text(
+                text = "语音播报",
+                color = Ink,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "自动朗读 AI 回复",
+                            color = Ink,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            text = "关闭后仍可点助手头像手动朗读单条回复",
+                            color = MutedText,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    Switch(
+                        checked = settings.autoSpeak,
+                        onCheckedChange = { checked ->
+                            onSettingsChange(settings.copy(autoSpeak = checked))
+                        },
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "声音偏好",
+                        color = Ink,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        TtsVoicePreference.entries.forEach { preference ->
+                            TtsPreferenceChip(
+                                label = preference.label,
+                                selected = settings.voicePreference == preference,
+                                onClick = { onSettingsChange(settings.copy(voicePreference = preference)) },
+                            )
+                        }
+                    }
+                    Text(
+                        text = "设备不一定暴露男女声音色；找不到匹配时会回退系统默认。",
+                        color = MutedText,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "完成", color = AccentGreenDark, fontWeight = FontWeight.Bold)
+            }
+        },
+    )
+}
+
+@Composable
+private fun TtsPreferenceChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text = label,
+        modifier = Modifier
+            .background(if (selected) Ink else SurfaceWhite, RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        color = if (selected) SurfaceWhite else AccentGreenDark,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        style = MaterialTheme.typography.labelMedium,
+    )
+}
+
 @Composable
 private fun MessageBubble(
     message: ChatMessage,
     showFeedback: Boolean,
     isThinking: Boolean,
     isStreaming: Boolean,
+    isSpeaking: Boolean,
     assetBaseUrl: String,
     onProductClick: (ProductCard) -> Unit,
     onFeedback: (String, FeedbackType) -> Unit,
+    onSpeechToggle: (ChatMessage) -> Unit,
 ) {
     val alignment = if (message.role == Role.User) Alignment.End else Alignment.Start
     val background = when (message.role) {
@@ -394,11 +655,12 @@ private fun MessageBubble(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.Top,
             ) {
-                GuideAssistantImage(
+                AssistantAvatarControl(
+                    isSpeaking = isSpeaking,
+                    enabled = message.content.isNotBlank(),
+                    onClick = { onSpeechToggle(message) },
                     modifier = Modifier
-                        .size(MessageAssistantAvatarSize)
                         .padding(top = 2.dp),
-                    cornerRadius = 10.dp,
                 )
                 Card(
                     colors = CardDefaults.cardColors(containerColor = background),
@@ -419,6 +681,69 @@ private fun MessageBubble(
                 modifier = Modifier.fillMaxWidth(if (message.role == Role.User) 0.86f else 1f),
             ) {
                 cardContent()
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssistantAvatarControl(
+    isSpeaking: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val transition = rememberInfiniteTransition(label = "assistant-speaking")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+        ),
+        label = "assistant-speaking-phase",
+    )
+    val pulse = if (phase <= 0.5f) phase * 2f else (1f - phase) * 2f
+
+    Box(
+        modifier = modifier
+            .size(38.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (isSpeaking) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(13.dp))
+                    .background(AppGreenSoft.copy(alpha = 0.52f + 0.28f * pulse)),
+            )
+        }
+        GuideAssistantImage(
+            modifier = Modifier
+                .size(MessageAssistantAvatarSize)
+                .align(Alignment.Center),
+            cornerRadius = 10.dp,
+        )
+        if (isSpeaking) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 2.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                repeat(3) { index ->
+                    val barPhase = ((phase + index * 0.22f) % 1f)
+                    val barPulse = if (barPhase <= 0.5f) barPhase * 2f else (1f - barPhase) * 2f
+                    Box(
+                        modifier = Modifier
+                            .width(3.dp)
+                            .height((4 + 6 * barPulse).dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(AccentGreenDark.copy(alpha = 0.45f)),
+                    )
+                }
             }
         }
     }
