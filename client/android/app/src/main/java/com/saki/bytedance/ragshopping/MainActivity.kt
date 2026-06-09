@@ -673,9 +673,13 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                     recipientsSaving = state.recipientsSaving,
                     recipientError = state.recipientError,
                     onValueChange = viewModel::updateInput,
-                    onSend = {
+                    onSend = { overrideMessage ->
                         stopAnySpeech()
-                        viewModel.send()
+                        if (overrideMessage != null) {
+                            viewModel.sendPrompt(overrideMessage)
+                        } else {
+                            viewModel.send()
+                        }
                     },
                     onQuickPrompt = { prompt ->
                         stopAnySpeech()
@@ -2861,7 +2865,7 @@ private fun InputBar(
     recipientsSaving: Boolean,
     recipientError: String?,
     onValueChange: (String) -> Unit,
-    onSend: () -> Unit,
+    onSend: (String?) -> Unit,
     onQuickPrompt: (String) -> Unit,
     onAudioRecorded: (File) -> Unit,
     onRecipientSelected: (String) -> Unit,
@@ -2987,7 +2991,8 @@ private fun InputBar(
     }
     val isRecording = recordingSession != null
     val canUseInputTools = !isLoading && !isTranscribing
-    val canSendText = !isLoading && value.isNotBlank() && !isRecording
+    val hasPendingImage = pendingImagePreview != null
+    val canSendText = !isLoading && (value.isNotBlank() || hasPendingImage) && !isRecording
 
     Column(
         modifier = Modifier
@@ -3062,7 +3067,7 @@ private fun InputBar(
                                     modifier = Modifier.fillMaxWidth(),
                                     contentAlignment = Alignment.TopStart,
                                 ) {
-                                    if (value.isBlank()) {
+                                    if (value.isBlank() && !hasPendingImage) {
                                         Text(
                                             text = "要求后续变更",
                                             color = MutedText.copy(alpha = 0.32f),
@@ -3116,7 +3121,14 @@ private fun InputBar(
                                 enabled = canSendText,
                                 onClick = {
                                     showAttachmentMenu = false
-                                    onSend()
+                                    val overrideMessage = if (value.isBlank() && pendingImagePreview != null) {
+                                        "我上传了一张图片，帮我看看并推荐类似商品"
+                                    } else {
+                                        null
+                                    }
+                                    pendingImagePreview = null
+                                    attachmentStatusText = null
+                                    onSend(overrideMessage)
                                 },
                             )
                         }
