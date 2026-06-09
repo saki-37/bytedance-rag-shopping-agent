@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -78,6 +79,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -123,6 +125,7 @@ private val DetailInfoChipMinWidth = 64.dp
 private val MessageAssistantAvatarSize = 30.dp
 private const val VoiceWaveformBarCount = 18
 private const val VoiceWaveformSampleMillis = 80L
+private const val InputStatusAutoDismissMillis = 5_000L
 private val TablerSendIcon: ImageVector = ImageVector.Builder(
     name = "TablerSend",
     defaultWidth = 24.dp,
@@ -186,6 +189,30 @@ private val TablerPlusIcon: ImageVector = ImageVector.Builder(
         verticalLineTo(19f)
         moveTo(5f, 12f)
         horizontalLineTo(19f)
+    }
+}.build()
+private val TablerAlertTriangleIcon: ImageVector = ImageVector.Builder(
+    name = "TablerAlertTriangle",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(12f, 4f)
+        lineTo(20f, 20f)
+        lineTo(4f, 20f)
+        close()
+        moveTo(12f, 9f)
+        lineTo(12f, 13f)
+        moveTo(12f, 16f)
+        lineTo(12f, 16.01f)
     }
 }.build()
 private val TablerChevronDownIcon: ImageVector = ImageVector.Builder(
@@ -671,9 +698,20 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                     recipientsSaving = state.recipientsSaving,
                     recipientError = state.recipientError,
                     onValueChange = viewModel::updateInput,
-                    onSend = {
+                    onSend = { overrideMessage, pendingImage ->
                         stopAnySpeech()
-                        viewModel.send()
+                        if (pendingImage != null) {
+                            viewModel.sendWithImage(
+                                message = overrideMessage ?: state.input,
+                                localImageFile = pendingImage.uploadFile,
+                                localPreviewUri = pendingImage.localUri,
+                                source = pendingImage.source,
+                            )
+                        } else if (overrideMessage != null) {
+                            viewModel.sendPrompt(overrideMessage)
+                        } else {
+                            viewModel.send()
+                        }
                     },
                     onQuickPrompt = { prompt ->
                         stopAnySpeech()
@@ -995,6 +1033,24 @@ private fun MessageBubble(
                     }
                 }
 
+                message.role == Role.User && message.images.isNotEmpty() -> {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        message.images.forEach { image ->
+                            UserMessageImage(
+                                image = image,
+                                assetBaseUrl = assetBaseUrl,
+                            )
+                        }
+                        if (message.content.isNotBlank()) {
+                            Text(
+                                text = message.content,
+                                color = textColor,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                    }
+                }
+
                 isThinking -> {
                     ThinkingIndicator()
                 }
@@ -1053,6 +1109,34 @@ private fun MessageBubble(
             }
         }
     }
+}
+
+@Composable
+private fun UserMessageImage(
+    image: ChatImage,
+    assetBaseUrl: String,
+) {
+    val model = when {
+        !image.localUri.isNullOrBlank() -> image.localUri
+        !image.previewUrl.isNullOrBlank() -> "${assetBaseUrl.trimEnd('/')}${image.previewUrl}"
+        else -> null
+    }
+
+    if (model == null) return
+
+    SubcomposeAsyncImage(
+        model = model,
+        contentDescription = "用户上传图片",
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(160.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(SurfaceWhite.copy(alpha = 0.12f)),
+        loading = { ProductImageFallback("图") },
+        error = { ProductImageFallback("图") },
+        success = { SubcomposeAsyncImageContent() },
+    )
 }
 
 @Composable
@@ -1397,6 +1481,13 @@ private data class ProductComparisonDimension(
     val values: List<String>,
 )
 
+private data class PendingInputImage(
+    val preview: Any,
+    val uploadFile: File,
+    val localUri: String?,
+    val source: ImageSource,
+)
+
 private val MarkdownHeadingRegex = Regex("""^\s*(#{1,6})\s+(.+)$""")
 private val MarkdownOrderedListRegex = Regex("""^\s*(\d+)[.)]\s+(.+)$""")
 private val MarkdownUnorderedListRegex = Regex("""^\s*[-*•]\s+(.+)$""")
@@ -1711,7 +1802,7 @@ private fun splitAssistantText(content: String, isStreaming: Boolean): List<Assi
     val endsWithLineBreak = normalizedContent.endsWith("\n")
     val rawLines = normalizedContent.split("\n")
 
-    return buildList<AssistantTextBlock> {
+    return buildList {
         rawLines.forEachIndexed { lineIndex, rawLine ->
             val line = rawLine.trim()
             if (line.isBlank()) return@forEachIndexed
@@ -1754,7 +1845,7 @@ private fun splitInlineRecommendationBlocks(line: String): List<String> {
         return listOf(line)
     }
 
-    return buildList<String> {
+    return buildList {
         var start = 0
         markerIndexes.forEach { markerIndex ->
             if (markerIndex > start) {
@@ -2859,7 +2950,7 @@ private fun InputBar(
     recipientsSaving: Boolean,
     recipientError: String?,
     onValueChange: (String) -> Unit,
-    onSend: () -> Unit,
+    onSend: (String?, PendingInputImage?) -> Unit,
     onQuickPrompt: (String) -> Unit,
     onAudioRecorded: (File) -> Unit,
     onRecipientSelected: (String) -> Unit,
@@ -2871,24 +2962,50 @@ private fun InputBar(
     var showAttachmentMenu by remember { mutableStateOf(false) }
     var showRecipientMenu by remember { mutableStateOf(false) }
     var attachmentStatusText by remember { mutableStateOf<String?>(null) }
+    var dismissedInputStatusKeys by remember { mutableStateOf(emptySet<String>()) }
+    var pendingImage by remember { mutableStateOf<PendingInputImage?>(null) }
     var recordingElapsedSeconds by remember { mutableStateOf(0) }
     var waveformLevels by remember {
         mutableStateOf(List(VoiceWaveformBarCount) { 0.03f })
     }
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         showAttachmentMenu = false
-        attachmentStatusText = if (uri != null) {
-            "已选择图片，图片理解链路待接入"
+        if (uri != null) {
+            runCatching {
+                val file = copyUriToCacheImage(context, uri)
+                pendingImage?.uploadFile?.delete()
+                pendingImage = PendingInputImage(
+                    preview = uri,
+                    uploadFile = file,
+                    localUri = uri.toString(),
+                    source = ImageSource.Gallery,
+                )
+                attachmentStatusText = "已选择图片"
+            }.onFailure { error ->
+                attachmentStatusText = "图片读取失败：${error.localizedMessage ?: "请重新选择"}"
+            }
         } else {
-            "没有选择图片"
+            attachmentStatusText = "没有选择图片"
         }
     }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap: Bitmap? ->
         showAttachmentMenu = false
-        attachmentStatusText = if (bitmap != null) {
-            "已拍摄图片，图片理解链路待接入"
+        if (bitmap != null) {
+            runCatching {
+                val file = writeBitmapToCacheImage(context, bitmap)
+                pendingImage?.uploadFile?.delete()
+                pendingImage = PendingInputImage(
+                    preview = bitmap,
+                    uploadFile = file,
+                    localUri = null,
+                    source = ImageSource.Camera,
+                )
+                attachmentStatusText = "已拍摄图片"
+            }.onFailure { error ->
+                attachmentStatusText = "拍照图片保存失败：${error.localizedMessage ?: "请重新拍摄"}"
+            }
         } else {
-            "没有完成拍照"
+            attachmentStatusText = "没有完成拍照"
         }
     }
 
@@ -2966,23 +3083,33 @@ private fun InputBar(
         }
     }
 
-    data class InputStatusLine(val text: String, val isError: Boolean)
+    data class InputStatusLine(
+        val key: String,
+        val text: String,
+        val isError: Boolean,
+    )
     val currentVoiceError = voiceError
-    val inputStatusLines = buildList<InputStatusLine> {
+    val rawInputStatusLines = buildList {
         if (isTranscribing) {
-            add(InputStatusLine("正在本地转写...", false))
+            add(InputStatusLine("asr-transcribing", "正在本地转写...", false))
         }
         if (currentVoiceError != null) {
-            add(InputStatusLine(currentVoiceError, true))
+            add(InputStatusLine("voice-error:$currentVoiceError", currentVoiceError, true))
         } else {
-            asrStatusText?.let { add(InputStatusLine(it, it.startsWith("转写失败"))) }
-            speechStatusText?.let { add(InputStatusLine(it, speechStatusIsError)) }
-            attachmentStatusText?.let { add(InputStatusLine(it, false)) }
+            asrStatusText?.let { add(InputStatusLine("asr:$it", it, it.startsWith("转写失败"))) }
+            speechStatusText?.let { add(InputStatusLine("speech:$it", it, speechStatusIsError)) }
+            attachmentStatusText?.let { add(InputStatusLine("attachment:$it", it, false)) }
         }
     }
+    LaunchedEffect(rawInputStatusLines.map { it.key }) {
+        val activeKeys = rawInputStatusLines.map { it.key }.toSet()
+        dismissedInputStatusKeys = dismissedInputStatusKeys.intersect(activeKeys)
+    }
+    val inputStatusLines = rawInputStatusLines.filter { it.key !in dismissedInputStatusKeys }
     val isRecording = recordingSession != null
     val canUseInputTools = !isLoading && !isTranscribing
-    val canSendText = !isLoading && value.isNotBlank() && !isRecording
+    val hasPendingImage = pendingImage != null
+    val canSendText = !isLoading && (value.isNotBlank() || hasPendingImage) && !isRecording
 
     Column(
         modifier = Modifier
@@ -3029,6 +3156,16 @@ private fun InputBar(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
+                        pendingImage?.let { image ->
+                            PendingInputImagePreview(
+                                preview = image.preview,
+                                onRemove = {
+                                    image.uploadFile.delete()
+                                    pendingImage = null
+                                    attachmentStatusText = null
+                                },
+                            )
+                        }
                         BasicTextField(
                             value = value,
                             onValueChange = {
@@ -3048,7 +3185,7 @@ private fun InputBar(
                                     modifier = Modifier.fillMaxWidth(),
                                     contentAlignment = Alignment.TopStart,
                                 ) {
-                                    if (value.isBlank()) {
+                                    if (value.isBlank() && !hasPendingImage) {
                                         Text(
                                             text = "要求后续变更",
                                             color = MutedText.copy(alpha = 0.32f),
@@ -3059,18 +3196,29 @@ private fun InputBar(
                                 }
                             },
                         )
-                        if (inputStatusLines.isNotEmpty()) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                inputStatusLines.forEach { status ->
-                                    InputStatusPill(
-                                        text = status.text,
-                                        isError = status.isError,
-                                    )
+                                if (inputStatusLines.isNotEmpty()) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        inputStatusLines.forEach { status ->
+                                            val leadingIcon = when {
+                                                status.isError -> TablerAlertTriangleIcon
+                                                status.key.startsWith("speech:") -> TablerVolumeIcon
+                                                status.key.startsWith("asr") -> TablerMicrophoneIcon
+                                                else -> TablerPhotoIcon
+                                            }
+                                            DismissibleInputStatusPill(
+                                                text = status.text,
+                                                isError = status.isError,
+                                                leadingIcon = leadingIcon,
+                                                autoDismiss = status.key != "asr-transcribing",
+                                                onDismiss = {
+                                                    dismissedInputStatusKeys = dismissedInputStatusKeys + status.key
+                                                },
+                                            )
+                                        }
+                                    }
                                 }
-                            }
-                        }
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -3102,7 +3250,15 @@ private fun InputBar(
                                 enabled = canSendText,
                                 onClick = {
                                     showAttachmentMenu = false
-                                    onSend()
+                                    val imageToSend = pendingImage
+                                    val overrideMessage = if (value.isBlank() && imageToSend != null) {
+                                        "我上传了一张图片，帮我看看并推荐类似商品"
+                                    } else {
+                                        null
+                                    }
+                                    pendingImage = null
+                                    attachmentStatusText = null
+                                    onSend(overrideMessage, imageToSend)
                                 },
                             )
                         }
@@ -3216,7 +3372,7 @@ private fun RecipientSelectionDialog(
                                         style = MaterialTheme.typography.bodyMedium,
                                     )
                                     Text(
-                                        text = (recipient.relationship ?: "").ifBlank { "关系未填写" },
+                                        text = recipient.relationship.orBlank().ifEmpty { "关系未填写" },
                                         color = MutedText,
                                         style = MaterialTheme.typography.labelSmall,
                                     )
@@ -3266,9 +3422,88 @@ private fun RecipientSelectionDialog(
 }
 
 @Composable
+private fun PendingInputImagePreview(
+    preview: Any,
+    onRemove: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(76.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(AppGreenSoft),
+    ) {
+        when (preview) {
+            is Uri -> {
+                SubcomposeAsyncImage(
+                    model = preview,
+                    contentDescription = "已选择图片",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    loading = { ProductImageFallback("图") },
+                    error = { ProductImageFallback("图") },
+                    success = { SubcomposeAsyncImageContent() },
+                )
+            }
+
+            is Bitmap -> {
+                Image(
+                    bitmap = preview.asImageBitmap(),
+                    contentDescription = "已拍摄图片",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(4.dp)
+                .size(22.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .background(SurfaceWhite.copy(alpha = 0.92f))
+                .clickable(onClick = onRemove),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = TablerXIcon,
+                contentDescription = "移除图片",
+                tint = Ink,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun DismissibleInputStatusPill(
+    text: String,
+    isError: Boolean,
+    leadingIcon: ImageVector,
+    autoDismiss: Boolean,
+    onDismiss: () -> Unit,
+) {
+    if (autoDismiss) {
+        LaunchedEffect(text, isError) {
+            delay(InputStatusAutoDismissMillis)
+            onDismiss()
+        }
+    }
+
+    InputStatusPill(
+        text = text,
+        isError = isError,
+        leadingIcon = leadingIcon,
+        onDismiss = onDismiss,
+    )
+}
+
+@Composable
 private fun InputStatusPill(
     text: String,
     isError: Boolean,
+    leadingIcon: ImageVector,
+    onDismiss: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -3279,7 +3514,7 @@ private fun InputStatusPill(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
-            imageVector = if (isError) TablerXIcon else TablerPhotoIcon,
+            imageVector = leadingIcon,
             contentDescription = null,
             tint = if (isError) ErrorText else AccentGreenDark,
             modifier = Modifier.size(15.dp),
@@ -3291,6 +3526,15 @@ private fun InputStatusPill(
             maxLines = 2,
             overflow = TextOverflow.Visible,
             style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.weight(1f),
+        )
+        Icon(
+            imageVector = TablerXIcon,
+            contentDescription = "关闭提示",
+            tint = if (isError) ErrorText else MutedText,
+            modifier = Modifier
+                .size(15.dp)
+                .clickable(onClick = onDismiss),
         )
     }
 }
@@ -4017,6 +4261,25 @@ private fun createMediaRecorder(context: Context): MediaRecorder {
         @Suppress("DEPRECATION")
         MediaRecorder()
     }
+}
+
+private fun copyUriToCacheImage(context: Context, uri: Uri): File {
+    val outputFile = File.createTempFile("pending_image_", ".jpg", context.cacheDir)
+    context.contentResolver.openInputStream(uri).use { input ->
+        requireNotNull(input) { "无法读取图片" }
+        outputFile.outputStream().use { output ->
+            input.copyTo(output)
+        }
+    }
+    return outputFile
+}
+
+private fun writeBitmapToCacheImage(context: Context, bitmap: Bitmap): File {
+    val outputFile = File.createTempFile("pending_camera_", ".jpg", context.cacheDir)
+    outputFile.outputStream().use { output ->
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
+    }
+    return outputFile
 }
 
 private fun hasRecordAudioPermission(context: Context): Boolean {

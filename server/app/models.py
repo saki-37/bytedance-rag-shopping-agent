@@ -1,7 +1,7 @@
-from typing import Literal
+from typing import Literal, Any
 from datetime import UTC, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ChatMessage(BaseModel):
@@ -10,12 +10,67 @@ class ChatMessage(BaseModel):
     product_ids: list[str] = Field(default_factory=list)
 
 
+class ChatImageRef(BaseModel):
+    image_id: str
+    mime_type: str | None = None
+    source: Literal["camera", "gallery", "unknown"] = "unknown"
+    preview_url: str | None = None
+    summary: str | None = None
+    query_text: str | None = None
+    image_plan: dict[str, Any] = Field(default_factory=dict)
+
+
 class ChatRequest(BaseModel):
-    message: str = Field(min_length=1)
+    message: str = ""
+    images: list[ChatImageRef] = Field(default_factory=list)
     user_id: str | None = None
     recipient_id: str | None = None
     conversation_id: str | None = None
     history: list[ChatMessage] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_text_or_image(self) -> "ChatRequest":
+        if not self.message.strip() and not self.images:
+            raise ValueError("message or images is required")
+        if self.images:
+            self.message = _compose_image_augmented_message(self.message, self.images)
+        return self
+
+
+def _compose_image_augmented_message(message: str, images: list[ChatImageRef]) -> str:
+    clean_message = message.strip()
+    image_lines: list[str] = []
+    for index, image in enumerate(images[:3], start=1):
+        plan = image.image_plan or {}
+        query_text = (image.query_text or "").strip()
+        summary = (image.summary or "").strip()
+        if not query_text:
+            query_text = str(plan.get("query_text") or "").strip()
+        if not summary:
+            summary = str(plan.get("summary") or plan.get("text") or "").strip()
+        if query_text:
+            image_lines.append(f"图片{index}识别线索：{query_text}")
+        elif summary:
+            image_lines.append(f"图片{index}识别线索：{summary}")
+        else:
+            image_lines.append(f"图片{index}识别线索：用户上传了一张商品/需求相关图片，image_id={image.image_id}")
+    image_context = "\n".join(image_lines)
+    if clean_message:
+        return f"{image_context}\n用户补充需求：{clean_message}"
+    return image_context
+
+
+class UploadedImageResponse(BaseModel):
+    image_id: str
+    mime_type: str
+    width: int | None = None
+    height: int | None = None
+    size_bytes: int
+    preview_url: str
+    expires_at: str
+    summary: str = ""
+    query_text: str = ""
+    image_plan: dict[str, Any] = Field(default_factory=dict)
 
 
 def _utcnow_iso() -> str:

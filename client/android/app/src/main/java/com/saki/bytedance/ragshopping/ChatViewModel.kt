@@ -56,6 +56,82 @@ class ChatViewModel(
         sendMessage(message.trim())
     }
 
+    fun sendWithImage(
+        message: String,
+        localImageFile: File,
+        localPreviewUri: String?,
+        source: ImageSource,
+    ) {
+        if (state.value.isLoading) return
+
+        val cleanMessage = message.trim()
+        val fallbackMessage = cleanMessage.ifBlank { "我上传了一张图片，帮我看看并推荐类似商品" }
+
+        cancelQuickReplyTyping()
+
+        val history = state.value.messages
+            .filter {
+                it.content.isNotBlank() &&
+                    !it.isEphemeral &&
+                    it.role in setOf(Role.User, Role.Assistant)
+            }
+            .drop(1)
+
+        val localImage = ChatImage(
+            localUri = localPreviewUri,
+            source = source,
+        )
+
+        _state.update {
+            it.copy(
+                input = "",
+                isLoading = true,
+                statusText = null,
+                asrStatusText = null,
+                pendingProducts = emptyList(),
+                messages = it.messages + ChatMessage(Role.User, fallbackMessage, images = listOf(localImage)) + ChatMessage(Role.Assistant, ""),
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                val uploaded = client.uploadImage(localImageFile)
+                val uploadedImage = ChatImage(
+                    localUri = localPreviewUri,
+                    previewUrl = uploaded.previewUrl,
+                    imageId = uploaded.imageId,
+                    mimeType = uploaded.mimeType,
+                    source = source,
+                    summary = uploaded.summary,
+                    queryText = uploaded.queryText,
+                    imagePlanJson = uploaded.imagePlan.toString(),
+                )
+
+                client.streamChat(
+                    message = fallbackMessage,
+                    history = history,
+                    recipientId = state.value.selectedRecipientId,
+                    images = listOf(uploadedImage),
+                    onEvent = { event ->
+                        when (event) {
+                            is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
+                            is StreamEvent.Status -> appendStatus(event.value)
+                            is StreamEvent.Products -> rememberProducts(event.value)
+                            is StreamEvent.QuickReply -> appendQuickReply(event.text, event.ephemeral)
+                            is StreamEvent.Token -> appendToken(event.value)
+                            is StreamEvent.Error -> appendError(event.message)
+                            StreamEvent.Done -> finishAssistantTurn()
+                        }
+                    }
+                )
+            } catch (error: Exception) {
+                appendError(error.localizedMessage ?: "图片上传或发送失败")
+            } finally {
+                localImageFile.delete()
+            }
+        }
+    }
+
     fun submitFeedback(messageId: String, feedback: FeedbackType) {
         val snapshot = state.value
         val assistantIndex = snapshot.messages.indexOfFirst { it.id == messageId }

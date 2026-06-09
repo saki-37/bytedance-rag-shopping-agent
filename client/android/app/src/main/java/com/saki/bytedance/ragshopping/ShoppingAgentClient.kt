@@ -28,6 +28,15 @@ sealed interface StreamEvent {
     data class Connection(val baseUrl: String) : StreamEvent
 }
 
+data class UploadedChatImage(
+    val imageId: String,
+    val mimeType: String,
+    val previewUrl: String,
+    val summary: String,
+    val queryText: String,
+    val imagePlan: JSONObject,
+)
+
 class ShoppingAgentClient(
     private val baseUrls: List<String> = BackendConfig.CandidateBaseUrls,
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
@@ -47,6 +56,7 @@ class ShoppingAgentClient(
         message: String,
         history: List<ChatMessage> = emptyList(),
         recipientId: String? = null,
+        images: List<ChatImage> = emptyList(),
         onEvent: suspend (StreamEvent) -> Unit,
     ) {
         withContext(Dispatchers.IO) {
@@ -55,6 +65,7 @@ class ShoppingAgentClient(
                 .put("user_id", DEFAULT_USER_ID)
                 .put("conversation_id", DEFAULT_CONVERSATION_ID)
                 .put("history", history.toPayloadHistory())
+                .put("images", images.toPayloadImages())
                 .apply {
                     if (!recipientId.isNullOrBlank()) {
                         put("recipient_id", recipientId)
@@ -85,6 +96,59 @@ class ShoppingAgentClient(
                 }
             }
             onEvent(StreamEvent.Error(userFacingNetworkError(lastError)))
+        }
+    }
+
+    suspend fun uploadImage(
+        imageFile: File,
+        mimeType: String = "image/jpeg",
+    ): UploadedChatImage {
+        return withContext(Dispatchers.IO) {
+            val mediaType = mimeType.toMediaType()
+            var lastError: IOException? = null
+
+            for (baseUrl in orderedBaseUrls()) {
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("user_id", DEFAULT_USER_ID)
+                    .addFormDataPart("conversation_id", DEFAULT_CONVERSATION_ID)
+                    .addFormDataPart("file", imageFile.name, imageFile.asRequestBody(mediaType))
+                    .build()
+
+                val request = Request.Builder()
+                    .url("$baseUrl/api/multimodal/images")
+                    .header("Connection", "close")
+                    .post(requestBody)
+                    .build()
+
+                Log.d(TAG, "POST $baseUrl/api/multimodal/images")
+
+                try {
+                    okHttpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            val messageText = "HTTP ${response.code}"
+                            Log.w(TAG, "$messageText $body")
+                            throw IllegalStateException(messageText)
+                        }
+                        activeBaseUrl = baseUrl
+                        val json = JSONObject(body)
+                        return@withContext UploadedChatImage(
+                            imageId = json.optString("image_id"),
+                            mimeType = json.optString("mime_type", mimeType),
+                            previewUrl = json.optString("preview_url"),
+                            summary = json.optString("summary"),
+                            queryText = json.optString("query_text"),
+                            imagePlan = json.optJSONObject("image_plan") ?: JSONObject(),
+                        )
+                    }
+                } catch (exception: IOException) {
+                    Log.w(TAG, "Image upload failed for $baseUrl", exception)
+                    lastError = exception
+                }
+            }
+
+            throw IllegalStateException(userFacingNetworkError(lastError))
         }
     }
 
@@ -383,6 +447,28 @@ class ShoppingAgentClient(
                         .put("product_ids", JSONArray(message.products.map { it.productId }))
                 )
             }
+        return array
+    }
+
+    private fun List<ChatImage>.toPayloadImages(): JSONArray {
+        val array = JSONArray()
+        forEach { image ->
+            val item = JSONObject()
+                .put("image_id", image.imageId.orEmpty())
+                .put("mime_type", image.mimeType ?: JSONObject.NULL)
+                .put("source", image.source.apiValue)
+                .put("preview_url", image.previewUrl ?: JSONObject.NULL)
+                .put("summary", image.summary ?: JSONObject.NULL)
+                .put("query_text", image.queryText ?: JSONObject.NULL)
+
+            val plan = image.imagePlanJson
+                ?.takeIf { it.isNotBlank() }
+                ?.let { runCatching { JSONObject(it) }.getOrNull() }
+                ?: JSONObject()
+
+            item.put("image_plan", plan)
+            array.put(item)
+        }
         return array
     }
 
