@@ -15,6 +15,7 @@ from app.models import (
     ProductCard,
     ProductVariantCard,
     QueryIntent,
+    RecipientProfile,
     UserMemoryProfile,
     RetrievalChannels,
     RetrievalHit,
@@ -563,11 +564,17 @@ def retrieve(
     limit: int = 3,
     index_dir: Path | None = None,
     memory_profile: UserMemoryProfile | None = None,
+    recipient_profile: RecipientProfile | None = None,
 ) -> RetrievalResult:
     intent = parse_query_intent(query)
     memory_applied: list[str] = []
     if memory_profile is not None:
-        intent, memory_applied = _apply_memory_profile(intent, memory_profile, now=datetime.now(UTC))
+        intent, memory_applied = _apply_memory_profile(
+            intent,
+            memory_profile,
+            now=datetime.now(UTC),
+            recipient_profile=recipient_profile,
+        )
 
     _apply_catalog_product_references(intent, query, products)
     if intent.needs_clarification:
@@ -753,15 +760,17 @@ def _apply_memory_profile(
     intent: QueryIntent,
     memory_profile: UserMemoryProfile,
     now: datetime,
+    recipient_profile: RecipientProfile | None = None,
 ) -> tuple[QueryIntent, list[str]]:
     applied: list[str] = []
-    constraints = memory_profile.constraints
+    recipient = recipient_profile or _recipient_for_profile(memory_profile)
+    constraints = recipient.constraints
     if constraints.budget_max is not None:
         current_budget = intent.universal_constraints.budget_max
         if current_budget is None or constraints.budget_max < current_budget:
             intent.universal_constraints.budget_max = constraints.budget_max
             applied.append(f"budget_max:{constraints.budget_max:g}")
-    avoid_terms = [term.strip().lower() for term in constraints.avoid_terms + constraints.allergies if term.strip()]
+    avoid_terms = _unique_lower_stripped(constraints.avoid_terms + constraints.allergies)
     if avoid_terms:
         for term in avoid_terms:
             if term not in intent.exclude_terms:
@@ -776,15 +785,11 @@ def _apply_memory_profile(
             )
             applied.append(f"brand_exclude:{','.join(cleaned_brand_exclude)}")
 
-    for tag, weight in _top_typed_preferences(memory_profile.long_term_preferences.preferred_tags, limit=4, min_weight=0.4):
-        if tag and tag not in intent.soft_preferences:
-            intent.soft_preferences.append(tag)
-            applied.append(f"long_term_tag:{tag}:{weight:g}")
-    for category, weight in _top_typed_preferences(memory_profile.long_term_preferences.preferred_categories, limit=2, min_weight=0.55):
+    for category, weight in _top_typed_preferences(recipient.long_term_preferences.preferred_categories, limit=2, min_weight=0.55):
         mapped_category = _raw_category_from_label(category)
         if mapped_category and mapped_category not in intent.soft_preferences:
             intent.soft_preferences.append(mapped_category)
-            applied.append(f"long_term_category:{mapped_category}:{weight:g}")
+            applied.append(f"recipient_long_term_category:{mapped_category}:{weight:g}")
 
     for interest in _active_memory_snapshots(memory_profile.short_term_snapshots.recent_interests, now=now):
         if interest["key"] and interest["key"] not in intent.soft_preferences:
@@ -796,9 +801,26 @@ def _apply_memory_profile(
             intent.exclude_terms.append(avoidance["key"])
             applied.append(f"recent_avoidance:{avoidance['key']}:{avoidance['weight']:.2f}")
 
+    for tag, weight in _top_typed_preferences(recipient.long_term_preferences.preferred_tags, limit=4, min_weight=0.4):
+        if tag and tag not in intent.soft_preferences:
+            intent.soft_preferences.append(tag)
+            applied.append(f"recipient_long_term_tag:{tag}:{weight:g}")
+
     intent.soft_preferences = _unique_strings(intent.soft_preferences)
     intent.exclude_terms = _unique_lower_stripped(intent.exclude_terms)
     return intent, applied
+
+
+def _recipient_for_profile(memory_profile: UserMemoryProfile) -> RecipientProfile:
+    if memory_profile.recipients:
+        return memory_profile.recipients[0]
+    return RecipientProfile(
+        recipient_id="self",
+        display_name="自己",
+        relationship="self",
+        constraints=memory_profile.constraints,
+        long_term_preferences=memory_profile.long_term_preferences,
+    )
 
 
 def _top_typed_preferences(

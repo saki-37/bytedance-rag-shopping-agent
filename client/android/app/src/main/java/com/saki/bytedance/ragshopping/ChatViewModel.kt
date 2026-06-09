@@ -14,6 +14,11 @@ data class ChatUiState(
     val input: String = "",
     val backendBaseUrl: String = BackendConfig.DefaultBaseUrl,
     val pendingProducts: List<ProductCard> = emptyList(),
+    val recipients: List<RecipientProfile> = listOf(defaultRecipientProfile()),
+    val selectedRecipientId: String = "self",
+    val recipientsLoading: Boolean = false,
+    val recipientsSaving: Boolean = false,
+    val recipientError: String? = null,
     val messages: List<ChatMessage> = listOf(
         ChatMessage(
             role = Role.Assistant,
@@ -32,6 +37,11 @@ class ChatViewModel(
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state
     private var quickReplyTypingJob: Job? = null
+    private val defaultUserId = ShoppingAgentClient.DEFAULT_USER_ID
+
+    init {
+        loadRecipients()
+    }
 
     fun updateInput(value: String) {
         _state.update { it.copy(input = value, asrStatusText = null) }
@@ -181,15 +191,124 @@ class ChatViewModel(
         }
 
         viewModelScope.launch {
-            client.streamChat(message, history) { event ->
-                when (event) {
-                    is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
-                    is StreamEvent.Status -> appendStatus(event.value)
-                    is StreamEvent.Products -> rememberProducts(event.value)
-                    is StreamEvent.QuickReply -> appendQuickReply(event.text, event.ephemeral)
-                    is StreamEvent.Token -> appendToken(event.value)
-                    is StreamEvent.Error -> appendError(event.message)
-                    StreamEvent.Done -> finishAssistantTurn()
+            client.streamChat(
+                message = message,
+                history = history,
+                recipientId = state.value.selectedRecipientId,
+                onEvent = { event ->
+                    when (event) {
+                        is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
+                        is StreamEvent.Status -> appendStatus(event.value)
+                        is StreamEvent.Products -> rememberProducts(event.value)
+                        is StreamEvent.QuickReply -> appendQuickReply(event.text, event.ephemeral)
+                        is StreamEvent.Token -> appendToken(event.value)
+                        is StreamEvent.Error -> appendError(event.message)
+                        StreamEvent.Done -> finishAssistantTurn()
+                    }
+                }
+            )
+        }
+    }
+
+    fun loadRecipients() {
+        _state.update { it.copy(recipientsLoading = true, recipientError = null) }
+        viewModelScope.launch {
+            runCatching {
+                client.getRecipients(defaultUserId)
+            }.onSuccess { response ->
+                val normalizedRecipients = normalizeRecipientProfiles(response.recipients)
+                _state.update { current ->
+                    current.copy(
+                        recipients = normalizedRecipients,
+                        selectedRecipientId = resolveSelectedRecipientId(normalizedRecipients, response.selectedRecipientId),
+                        recipientsLoading = false,
+                        recipientError = null,
+                    )
+                }
+            }.onFailure { error ->
+                val fallback = normalizeRecipientProfiles(_state.value.recipients)
+                _state.update { current ->
+                    current.copy(
+                        recipients = fallback,
+                        selectedRecipientId = resolveSelectedRecipientId(fallback, current.selectedRecipientId),
+                        recipientsLoading = false,
+                        recipientError = error.localizedMessage ?: "获取常用对象失败",
+                    )
+                }
+            }
+        }
+    }
+
+    fun selectRecipient(recipientId: String) {
+        val currentState = _state.value
+        val normalizedRecipients = normalizeRecipientProfiles(currentState.recipients)
+        val nextRecipientId = resolveSelectedRecipientId(normalizedRecipients, recipientId)
+        if (currentState.selectedRecipientId == nextRecipientId) return
+
+        _state.update {
+            it.copy(
+                selectedRecipientId = nextRecipientId,
+                recipientsSaving = true,
+                recipientError = null,
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                client.putSelectedRecipient(userId = defaultUserId, selectedRecipientId = nextRecipientId)
+            }.onSuccess { response ->
+                val normalized = normalizeRecipientProfiles(response.recipients)
+                _state.update { current ->
+                    current.copy(
+                        recipients = normalized,
+                        selectedRecipientId = resolveSelectedRecipientId(normalized, response.selectedRecipientId),
+                        recipientsSaving = false,
+                        recipientError = null,
+                    )
+                }
+            }.onFailure { error ->
+                _state.update { current ->
+                    current.copy(
+                        selectedRecipientId = resolveSelectedRecipientId(normalizedRecipients, current.selectedRecipientId),
+                        recipientsSaving = false,
+                        recipientError = error.localizedMessage ?: "切换对象失败",
+                    )
+                }
+            }
+        }
+    }
+
+    fun saveRecipients(updatedRecipients: List<RecipientProfile>, selectedRecipientId: String?) {
+        val normalizedRecipients = normalizeRecipientProfiles(updatedRecipients)
+        val normalizedSelection = resolveSelectedRecipientId(normalizedRecipients, selectedRecipientId)
+        _state.update {
+            it.copy(
+                recipientsSaving = true,
+                recipientError = null,
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                client.putRecipients(
+                    userId = defaultUserId,
+                    recipients = normalizedRecipients,
+                    selectedRecipientId = normalizedSelection,
+                )
+            }.onSuccess { response ->
+                val normalized = normalizeRecipientProfiles(response.recipients)
+                _state.update { current ->
+                    current.copy(
+                        recipients = normalized,
+                        selectedRecipientId = resolveSelectedRecipientId(normalized, response.selectedRecipientId),
+                        recipientsSaving = false,
+                        recipientError = null,
+                    )
+                }
+            }.onFailure { error ->
+                _state.update { current ->
+                    current.copy(
+                        recipientsSaving = false,
+                        recipientError = error.localizedMessage ?: "保存常用对象失败",
+                    )
                 }
             }
         }
@@ -333,3 +452,38 @@ class ChatViewModel(
         return "${existing.trimEnd()} $cleanText"
     }
 }
+
+private fun normalizeRecipientProfiles(input: List<RecipientProfile>): List<RecipientProfile> {
+    val deduped = linkedMapOf<String, RecipientProfile>()
+    input.forEach { candidate ->
+        val trimmedId = candidate.recipientId.trim()
+        if (trimmedId.isBlank()) return@forEach
+        deduped[trimmedId] = candidate.copy(
+            recipientId = trimmedId,
+            displayName = candidate.displayName.ifBlank { trimmedId },
+        )
+    }
+    if (!deduped.containsKey("self")) {
+        deduped["self"] = defaultRecipientProfile()
+    }
+    return deduped.values.toList()
+}
+
+private fun resolveSelectedRecipientId(
+    recipients: List<RecipientProfile>,
+    selectedRecipientId: String?,
+): String {
+    val candidate = selectedRecipientId?.trim().orEmpty()
+    if (candidate.isNotBlank() && recipients.any { it.recipientId == candidate }) {
+        return candidate
+    }
+    return recipients.firstOrNull { it.recipientId == "self" }?.recipientId
+        ?: recipients.firstOrNull()?.recipientId
+        ?: "self"
+}
+
+private fun defaultRecipientProfile() = RecipientProfile(
+    recipientId = "self",
+    displayName = "自己",
+    relationship = "self",
+)

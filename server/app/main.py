@@ -25,8 +25,16 @@ from app.models import (
     FeedbackResponse,
     HealthResponse,
     MemoryTrace,
+    RecipientManagementProfile,
+    RecipientSelectionRequest,
+    RecipientShippingSummary,
+    RecipientProfile,
+    UserMemoryShipping,
+    RecipientsResponse,
+    RecipientsUpdateRequest,
     PlannerTrace,
     ProductCard,
+    UserMemoryProfile,
 )
 from app.planner import build_planned_retrieval_message
 from app.retrieval import retrieve
@@ -35,8 +43,10 @@ from app.user_memory import (
     MEMORY_PROVIDER_DISABLED,
     build_memory_augmented_request,
     build_memory_trace,
+    resolve_recipient_profile,
     get_memory_provider,
     resolve_user_id,
+    MemoryUpdateEvent,
 )
 from app.trace_logger import new_trace_id, write_runtime_trace
 
@@ -93,15 +103,18 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
         async def build_retrieval_context() -> tuple[Any, str, Any, AnswerDirective | None]:
             nonlocal memory_profile, memory_trace, interaction_prefs
             memory_profile = memory_provider.get_profile(resolved_user_id)
+            selected_recipient = resolve_recipient_profile(memory_profile, request.recipient_id)
             retrieval_request, _, applied_constraints, applied_short_term_signals = build_memory_augmented_request(
                 request,
                 memory_profile,
+                recipient_profile=selected_recipient,
             )
             provider_name = MEMORY_PROVIDER_DISABLED if isinstance(memory_provider, DisabledMemoryProvider) else settings.memory_provider
             memory_trace = build_memory_trace(
                 provider=provider_name,
                 user_id=resolved_user_id,
                 memory_profile=memory_profile,
+                recipient_profile=selected_recipient,
                 applied_constraints=applied_constraints,
                 applied_short_term_signals=applied_short_term_signals,
                 applied_preferences=memory_profile.interaction_preferences.model_dump(mode="json"),
@@ -117,6 +130,7 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 enriched_products,
                 index_dir=settings.index_dir,
                 memory_profile=memory_profile,
+                recipient_profile=selected_recipient,
             )
             _attach_conversation_trace(result_inner.trace, retrieval_build_inner.trace)
             answer_directive_inner = _build_answer_directive(request, retrieval_build_inner.trace, result_inner.cards)
@@ -245,12 +259,18 @@ async def debug_retrieve(request: ChatRequest) -> dict:
     started_at = time.perf_counter()
     resolved_user_id = resolve_user_id(request)
     memory_profile = memory_provider.get_profile(resolved_user_id)
-    retrieval_request, _, applied_constraints, applied_short_term_signals = build_memory_augmented_request(request, memory_profile)
+    resolved_recipient = resolve_recipient_profile(memory_profile, request.recipient_id)
+    retrieval_request, _, applied_constraints, applied_short_term_signals = build_memory_augmented_request(
+        request,
+        memory_profile,
+        recipient_profile=resolved_recipient,
+    )
     provider_name = MEMORY_PROVIDER_DISABLED if isinstance(memory_provider, DisabledMemoryProvider) else settings.memory_provider
     memory_trace = build_memory_trace(
         provider=provider_name,
         user_id=resolved_user_id,
         memory_profile=memory_profile,
+        recipient_profile=resolved_recipient,
         applied_constraints=applied_constraints,
         applied_short_term_signals=applied_short_term_signals,
         applied_preferences=memory_profile.interaction_preferences.model_dump(mode="json"),
@@ -264,6 +284,7 @@ async def debug_retrieve(request: ChatRequest) -> dict:
         enriched_products,
         index_dir=settings.index_dir,
         memory_profile=memory_profile,
+        recipient_profile=resolved_recipient,
     )
     _attach_conversation_trace(result.trace, retrieval_build.trace)
     answer_directive = _build_answer_directive(request, retrieval_build.trace, result.cards)
@@ -303,8 +324,182 @@ def submit_feedback(request: FeedbackRequest) -> FeedbackResponse:
     return save_feedback(settings, request)
 
 
+@app.get("/api/user-memory/{user_id}/recipients", response_model=RecipientsResponse)
+def get_user_recipients(user_id: str) -> RecipientsResponse:
+    return _recipients_response(_load_user_profile(user_id))
+
+
+@app.put("/api/user-memory/{user_id}/recipients", response_model=RecipientsResponse)
+def put_recipients(user_id: str, request: RecipientsUpdateRequest) -> RecipientsResponse:
+    current_profile = _load_user_profile(user_id)
+    merged_recipients = _merge_management_recipients(
+        current_recipients=current_profile.recipients,
+        updated_recipients=request.recipients,
+    )
+    next_profile = _with_updated_recipients(
+        profile=current_profile,
+        recipients=merged_recipients,
+        selected_recipient_id=request.selected_recipient_id,
+    )
+    updated_profile = memory_provider.update_profile(user_id, MemoryUpdateEvent(profile=next_profile))
+    return _recipients_response(updated_profile)
+
+
+@app.put("/api/user-memory/{user_id}/selected-recipient", response_model=RecipientsResponse)
+def put_selected_recipient(user_id: str, request: RecipientSelectionRequest) -> RecipientsResponse:
+    current_profile = _load_user_profile(user_id)
+    next_profile = _with_updated_recipients(
+        profile=current_profile,
+        recipients=current_profile.recipients,
+        selected_recipient_id=request.selected_recipient_id,
+    )
+    updated_profile = memory_provider.update_profile(user_id, MemoryUpdateEvent(profile=next_profile))
+    return _recipients_response(updated_profile)
+
+
 def _event(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _load_user_profile(user_id: str) -> UserMemoryProfile:
+    return memory_provider.get_profile(user_id)
+
+
+def _recipients_response(profile: UserMemoryProfile) -> RecipientsResponse:
+    selected_recipient = resolve_recipient_profile(profile)
+    return RecipientsResponse(
+        user_id=profile.user_id,
+        selected_recipient_id=_to_management_recipient_id(
+            recipients=profile.recipients,
+            selected_recipient_id=selected_recipient.recipient_id,
+        ),
+        recipients=[_to_management_recipient(recipient) for recipient in profile.recipients],
+        updated_at=profile.updated_at,
+    )
+
+
+def _to_management_recipient(recipient: RecipientProfile) -> RecipientManagementProfile:
+    return RecipientManagementProfile(
+        display_name=recipient.display_name,
+        relationship=recipient.relationship,
+        shipping=RecipientShippingSummary(
+            phone=recipient.shipping.phone,
+            address=recipient.shipping.address,
+        ),
+    )
+
+
+def _merge_management_recipients(
+    current_recipients: list[RecipientProfile],
+    updated_recipients: list[RecipientManagementProfile],
+) -> list[RecipientProfile]:
+    merged: list[RecipientProfile] = []
+    for index, updated in enumerate(updated_recipients):
+        current = current_recipients[index] if index < len(current_recipients) else None
+
+        updated_display_name = updated.display_name or (current.display_name if current else "")
+        if current is None:
+            merged.append(
+                RecipientProfile(
+                    recipient_id=f"custom-{index}-{time.time_ns()}",
+                    display_name=updated_display_name,
+                    relationship=updated.relationship,
+                    shipping=recipient_shipping_from_update(
+                        phone=updated.shipping.phone,
+                        address=updated.shipping.address,
+                    ),
+                ),
+            )
+            continue
+
+        updated_shipping = current.shipping
+        if updated.shipping.phone is not None:
+            updated_shipping = updated_shipping.model_copy(update={"phone": updated.shipping.phone})
+        if updated.shipping.address is not None:
+            updated_shipping = updated_shipping.model_copy(update={"address": updated.shipping.address})
+
+        merged.append(
+            current.model_copy(
+                update={
+                    "display_name": updated_display_name,
+                    "relationship": updated.relationship,
+                    "shipping": updated_shipping,
+                },
+            )
+        )
+    return merged
+
+
+def recipient_shipping_from_update(
+    *,
+    phone: str | None,
+    address: str | None,
+) -> UserMemoryShipping:
+    return UserMemoryShipping(phone=phone, address=address)
+
+
+def _with_updated_recipients(
+    profile: UserMemoryProfile,
+    recipients: list[RecipientProfile],
+    selected_recipient_id: str | None,
+) -> UserMemoryProfile:
+    next_selected_id = _resolve_selected_recipient_id(
+        recipients=recipients,
+        selected_recipient_id=selected_recipient_id,
+        fallback_recipient_id=profile.selected_recipient_id,
+    )
+    return UserMemoryProfile(
+        user_id=profile.user_id,
+        constraints=profile.constraints,
+        long_term_preferences=profile.long_term_preferences,
+        recipients=recipients,
+        selected_recipient_id=next_selected_id,
+        short_term_snapshots=profile.short_term_snapshots,
+        interaction_preferences=profile.interaction_preferences,
+        governance=profile.governance,
+        source_events=profile.source_events,
+        updated_at=profile.updated_at,
+    )
+
+
+def _resolve_selected_recipient_id(
+    recipients: list[RecipientProfile],
+    selected_recipient_id: str | None,
+    fallback_recipient_id: str,
+) -> str:
+    if not recipients:
+        return fallback_recipient_id or "self"
+
+    candidate = (selected_recipient_id or fallback_recipient_id).strip()
+    if candidate == "self":
+        return "self"
+
+    if candidate.startswith("recipient-"):
+        index_text = candidate.removeprefix("recipient-")
+        if index_text.isdigit():
+            candidate_index = int(index_text)
+            if 0 <= candidate_index < len(recipients):
+                return recipients[candidate_index].recipient_id
+
+    if candidate and any(candidate == recipient.recipient_id for recipient in recipients):
+        return candidate
+
+    for recipient in recipients:
+        if recipient.recipient_id == "self":
+            return recipient.recipient_id
+    return recipients[0].recipient_id
+
+
+def _to_management_recipient_id(
+    recipients: list[RecipientProfile],
+    selected_recipient_id: str,
+) -> str:
+    if selected_recipient_id == "self":
+        return "self"
+    for index, recipient in enumerate(recipients):
+        if recipient.recipient_id == selected_recipient_id:
+            return f"recipient-{index}"
+    return "self"
 
 
 def _quick_reply_payload(
@@ -455,6 +650,7 @@ def _request_trace_snapshot(request: ChatRequest) -> dict[str, Any]:
     return {
         "message": request.message,
         "user_id": request.user_id,
+        "recipient_id": request.recipient_id,
         "conversation_id": request.conversation_id,
         "history": [item.model_dump(mode="json") for item in request.history],
     }

@@ -13,6 +13,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     user_id: str | None = None
+    recipient_id: str | None = None
     conversation_id: str | None = None
     history: list[ChatMessage] = Field(default_factory=list)
 
@@ -48,6 +49,41 @@ class UserMemoryShortTermSnapshots(BaseModel):
     recent_avoidance: list[MemorySnapshot] = Field(default_factory=list)
 
 
+class UserMemoryShipping(BaseModel):
+    address_label: str | None = None
+    recipient_name: str | None = None
+    phone: str | None = None
+    address: str | None = None
+
+
+class RecipientBodyProfile(BaseModel):
+    skin_type: str | None = None
+    shoe_size: str | None = None
+    clothing_size: str | None = None
+
+
+class RecipientProfile(BaseModel):
+    recipient_id: str
+    display_name: str
+    relationship: str | None = None
+    constraints: UserMemoryConstraints = Field(default_factory=UserMemoryConstraints)
+    long_term_preferences: UserMemoryLongTermPreferences = Field(default_factory=UserMemoryLongTermPreferences)
+    shipping: UserMemoryShipping = Field(default_factory=UserMemoryShipping)
+    body_profile: RecipientBodyProfile = Field(default_factory=RecipientBodyProfile)
+    updated_at: str = Field(default_factory=_utcnow_iso)
+
+
+class RecipientShippingSummary(BaseModel):
+    phone: str | None = None
+    address: str | None = None
+
+
+class RecipientManagementProfile(BaseModel):
+    display_name: str
+    relationship: str | None = None
+    shipping: RecipientShippingSummary = Field(default_factory=RecipientShippingSummary)
+
+
 class UserMemoryInteractionPreferences(BaseModel):
     answer_length: Literal["brief", "normal", "detailed"] = "normal"
     explanation_depth: Literal["short", "medium", "full"] = "medium"
@@ -74,6 +110,8 @@ class UserMemoryProfile(BaseModel):
     updated_at: str = Field(default_factory=_utcnow_iso)
     constraints: UserMemoryConstraints = Field(default_factory=UserMemoryConstraints)
     long_term_preferences: UserMemoryLongTermPreferences = Field(default_factory=UserMemoryLongTermPreferences)
+    recipients: list[RecipientProfile] = Field(default_factory=list)
+    selected_recipient_id: str = "self"
     short_term_snapshots: UserMemoryShortTermSnapshots = Field(default_factory=UserMemoryShortTermSnapshots)
     interaction_preferences: UserMemoryInteractionPreferences = Field(default_factory=UserMemoryInteractionPreferences)
     governance: UserMemoryGovernance = Field(default_factory=UserMemoryGovernance)
@@ -84,6 +122,8 @@ class MemoryTrace(BaseModel):
     provider: str
     user_id: str
     enabled: bool = True
+    selected_recipient_id: str | None = None
+    recipient_memory_trace: dict[str, object] = Field(default_factory=dict)
     applied_constraints: dict[str, object] = Field(default_factory=dict)
     applied_short_term_signals: list[str] = Field(default_factory=list)
     applied_preferences: dict[str, object] = Field(default_factory=dict)
@@ -271,3 +311,19 @@ class FeedbackResponse(BaseModel):
     ok: bool
     record_id: str
     feedback: Literal["helpful", "inaccurate"]
+
+
+class RecipientsUpdateRequest(BaseModel):
+    recipients: list[RecipientManagementProfile] = Field(default_factory=list)
+    selected_recipient_id: str | None = None
+
+
+class RecipientSelectionRequest(BaseModel):
+    selected_recipient_id: str
+
+
+class RecipientsResponse(BaseModel):
+    user_id: str
+    selected_recipient_id: str
+    recipients: list[RecipientManagementProfile] = Field(default_factory=list)
+    updated_at: str = Field(default_factory=_utcnow_iso)

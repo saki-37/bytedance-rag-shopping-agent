@@ -41,6 +41,9 @@
 - [用户记忆与本地偏好层方案](34_user_memory_profile_plan.md)
 - [安卓无障碍 P0 执行计划（语音播报 + 字号 + 低视力）](35_accessibility_p0_execution_plan.md)
 - [安卓无障碍 P0 执行清单（AI 伙伴工单）](36_accessibility_p0_execution_checklist.md)
+- [输入框改版与多模态后续分工](37_input_bar_multimodal_followups.md)
+- [购买对象上下文切换方案](38_recipient_context_switch_plan.md)
+- [多模态图片输入 MVP 接入方案](39_multimodal_image_input_mvp_plan.md)
 
 ## 当前里程碑
 

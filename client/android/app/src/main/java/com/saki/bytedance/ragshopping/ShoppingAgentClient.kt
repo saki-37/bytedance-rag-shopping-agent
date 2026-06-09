@@ -14,7 +14,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import kotlin.text.Charsets.UTF_8
 
 sealed interface StreamEvent {
     data class Status(val value: String) : StreamEvent
@@ -44,13 +46,20 @@ class ShoppingAgentClient(
     suspend fun streamChat(
         message: String,
         history: List<ChatMessage> = emptyList(),
+        recipientId: String? = null,
         onEvent: suspend (StreamEvent) -> Unit,
     ) {
         withContext(Dispatchers.IO) {
             val payload = JSONObject()
                 .put("message", message)
-                .put("conversation_id", "android-demo")
+                .put("user_id", DEFAULT_USER_ID)
+                .put("conversation_id", DEFAULT_CONVERSATION_ID)
                 .put("history", history.toPayloadHistory())
+                .apply {
+                    if (!recipientId.isNullOrBlank()) {
+                        put("recipient_id", recipientId)
+                    }
+                }
                 .toString()
             var lastError: IOException? = null
             for (baseUrl in orderedBaseUrls()) {
@@ -76,6 +85,112 @@ class ShoppingAgentClient(
                 }
             }
             onEvent(StreamEvent.Error(userFacingNetworkError(lastError)))
+        }
+    }
+
+    suspend fun getRecipients(userId: String = DEFAULT_USER_ID): RecipientsResponse {
+        return withContext(Dispatchers.IO) {
+            val encodedUserId = encodeUserId(userId)
+            var lastError: IOException? = null
+            for (baseUrl in orderedBaseUrls()) {
+                val request = Request.Builder()
+                    .url("$baseUrl/api/user-memory/$encodedUserId/recipients")
+                    .header("Connection", "close")
+                    .get()
+                    .build()
+                try {
+                    okHttpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            val messageText = "HTTP ${response.code}"
+                            Log.w(TAG, "$messageText $body")
+                            throw IllegalStateException(messageText)
+                        }
+                        activeBaseUrl = baseUrl
+                        return@withContext parseRecipientsResponse(JSONObject(body))
+                    }
+                } catch (exception: IOException) {
+                    Log.w(TAG, "Recipients query failed for $baseUrl", exception)
+                    lastError = exception
+                }
+            }
+            throw IllegalStateException(userFacingNetworkError(lastError))
+        }
+    }
+
+    suspend fun putRecipients(
+        userId: String = DEFAULT_USER_ID,
+        recipients: List<RecipientProfile>,
+        selectedRecipientId: String? = null,
+    ): RecipientsResponse {
+        return withContext(Dispatchers.IO) {
+            val encodedUserId = encodeUserId(userId)
+            val requestPayload = JSONObject()
+                .put("recipients", recipients.toPayloadRecipients())
+                .apply {
+                    if (selectedRecipientId != null) {
+                        put("selected_recipient_id", selectedRecipientId)
+                    }
+                }
+                .toString()
+            var lastError: IOException? = null
+            for (baseUrl in orderedBaseUrls()) {
+                val request = Request.Builder()
+                    .url("$baseUrl/api/user-memory/$encodedUserId/recipients")
+                    .header("Connection", "close")
+                    .put(requestPayload.toRequestBody(jsonMediaType))
+                    .build()
+                try {
+                    okHttpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            val messageText = "HTTP ${response.code}"
+                            Log.w(TAG, "$messageText $body")
+                            throw IllegalStateException(messageText)
+                        }
+                        activeBaseUrl = baseUrl
+                        return@withContext parseRecipientsResponse(JSONObject(body))
+                    }
+                } catch (exception: IOException) {
+                    Log.w(TAG, "Recipients save failed for $baseUrl", exception)
+                    lastError = exception
+                }
+            }
+            throw IllegalStateException(userFacingNetworkError(lastError))
+        }
+    }
+
+    suspend fun putSelectedRecipient(
+        userId: String = DEFAULT_USER_ID,
+        selectedRecipientId: String,
+    ): RecipientsResponse {
+        return withContext(Dispatchers.IO) {
+            val encodedUserId = encodeUserId(userId)
+            val requestPayload = RecipientSelectionRequest(selectedRecipientId = selectedRecipientId).toJsonPayload().toString()
+            var lastError: IOException? = null
+            for (baseUrl in orderedBaseUrls()) {
+                val request = Request.Builder()
+                    .url("$baseUrl/api/user-memory/$encodedUserId/selected-recipient")
+                    .header("Connection", "close")
+                    .put(requestPayload.toRequestBody(jsonMediaType))
+                    .build()
+                try {
+                    okHttpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            val messageText = "HTTP ${response.code}"
+                            Log.w(TAG, "$messageText $body")
+                            throw IllegalStateException(messageText)
+                        }
+                        activeBaseUrl = baseUrl
+                        return@withContext parseRecipientsResponse(JSONObject(body))
+                    }
+                } catch (exception: IOException) {
+                    Log.w(TAG, "Recipient switch failed for $baseUrl", exception)
+                    lastError = exception
+                }
+            }
+            throw IllegalStateException(userFacingNetworkError(lastError))
         }
     }
 
@@ -372,6 +487,220 @@ class ShoppingAgentClient(
         return List(array.length()) { index -> array.optString(index) }.filter { it.isNotBlank() }
     }
 
+    private fun parseRecipientConstraintList(array: JSONArray?): List<String> {
+        return parseStringList(array)
+    }
+
+    private fun parseRecipientFloatMap(json: JSONObject?): Map<String, Double> {
+        if (json == null) return emptyMap()
+        val result = mutableMapOf<String, Double>()
+        val keys = json.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val raw = json.optDouble(key)
+            result[key] = if (raw.isFinite()) raw else 1.0
+        }
+        return result
+    }
+
+    private fun parseRecipientConstraints(json: JSONObject?): RecipientConstraints {
+        if (json == null) return RecipientConstraints()
+        return RecipientConstraints(
+            allergies = parseRecipientConstraintList(json.optJSONArray("allergies")),
+            avoidTerms = parseRecipientConstraintList(json.optJSONArray("avoid_terms")),
+            brandExclude = parseRecipientConstraintList(json.optJSONArray("brand_exclude")),
+            budgetMax = json.optDouble("budget_max").takeIf { it.isFinite() && !json.isNull("budget_max") },
+            accessibilityNeeds = parseRecipientConstraintList(json.optJSONArray("accessibility_needs")),
+        )
+    }
+
+    private fun parseRecipientLongTermPreferences(json: JSONObject?): RecipientLongTermPreferences {
+        if (json == null) return RecipientLongTermPreferences()
+        return RecipientLongTermPreferences(
+            preferredCategories = parseRecipientFloatMap(json.optJSONObject("preferred_categories")),
+            preferredTags = parseRecipientFloatMap(json.optJSONObject("preferred_tags")),
+            priceSensitivity = json.optDouble("price_sensitivity").takeIf { it.isFinite() && !json.isNull("price_sensitivity") },
+        )
+    }
+
+    private fun parseRecipientBodyProfile(json: JSONObject?): RecipientBodyProfile {
+        if (json == null) return RecipientBodyProfile()
+        return RecipientBodyProfile(
+            skinType = json.optString("skin_type").takeIf { it.isNotBlank() },
+            shoeSize = json.optString("shoe_size").takeIf { it.isNotBlank() },
+            clothingSize = json.optString("clothing_size").takeIf { it.isNotBlank() },
+        )
+    }
+
+    private fun parseRecipientShipping(json: JSONObject?): RecipientShipping {
+        if (json == null) return RecipientShipping()
+        return RecipientShipping(
+            phone = json.optString("phone").takeIf { it.isNotBlank() },
+            address = json.optString("address").takeIf { it.isNotBlank() },
+        )
+    }
+
+    private fun parseRecipientProfiles(array: JSONArray?): List<RecipientProfile> {
+        if (array == null) return emptyList()
+        return buildList {
+        for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val displayName = item.optString("display_name").ifBlank { "对象" }
+                val isDefaultSelf = displayName == "自己" || item.optString("relationship") == "self"
+                val fallbackId = if (isDefaultSelf) {
+                    "self"
+                } else {
+                    "recipient-${index}"
+                }
+                add(
+                    RecipientProfile(
+                        recipientId = fallbackId,
+                        displayName = displayName,
+                        relationship = item.optString("relationship").takeIf { it.isNotBlank() },
+                        constraints = parseRecipientConstraints(item.optJSONObject("constraints")),
+                        longTermPreferences = parseRecipientLongTermPreferences(item.optJSONObject("long_term_preferences")),
+                        shipping = parseRecipientShipping(item.optJSONObject("shipping")),
+                        bodyProfile = parseRecipientBodyProfile(item.optJSONObject("body_profile")),
+                        updatedAt = item.optString("updated_at").takeIf { it.isNotBlank() },
+                    )
+                )
+            }
+        }
+    }
+
+    private fun parseRecipientsResponse(json: JSONObject): RecipientsResponse {
+        return RecipientsResponse(
+            userId = json.optString("user_id"),
+            selectedRecipientId = json.optString("selected_recipient_id"),
+            recipients = parseRecipientProfiles(json.optJSONArray("recipients")),
+            updatedAt = json.optString("updated_at").takeIf { it.isNotBlank() },
+        )
+    }
+
+    private fun RecipientConstraints.toPayloadJson(): JSONObject {
+        return JSONObject()
+            .put("allergies", JSONArray(allergies))
+            .put("avoid_terms", JSONArray(avoidTerms))
+            .put("brand_exclude", JSONArray(brandExclude))
+            .put(
+                "budget_max",
+                budgetMax
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+            .put("accessibility_needs", JSONArray(accessibilityNeeds))
+    }
+
+    private fun RecipientLongTermPreferences.toPayloadJson(): JSONObject {
+        return JSONObject()
+            .put("preferred_categories", JSONObject(preferredCategories))
+            .put("preferred_tags", JSONObject(preferredTags))
+            .put(
+                "price_sensitivity",
+                priceSensitivity
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+    }
+
+    private fun RecipientBodyProfile.toPayloadJson(): JSONObject {
+        return JSONObject()
+            .put(
+                "skin_type",
+                skinType
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+            .put(
+                "shoe_size",
+                shoeSize
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+            .put(
+                "clothing_size",
+                clothingSize
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+    }
+
+    private fun RecipientShipping.toPayloadJson(): JSONObject {
+        return JSONObject()
+            .put(
+                "address_label",
+                addressLabel
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+            .put(
+                "recipient_name",
+                recipientName
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+            .put(
+                "phone",
+                phone
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+            .put(
+                "address",
+                address
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+    }
+
+    private fun RecipientShipping.toManagementPayloadJson(): JSONObject {
+        return JSONObject()
+            .put(
+                "phone",
+                phone
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+            .put(
+                "address",
+                address
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+    }
+
+    private fun RecipientProfile.toPayloadJson(): JSONObject {
+        return JSONObject()
+            .put("display_name", displayName)
+            .put(
+                "relationship",
+                relationship
+                    ?.let { it }
+                    ?: JSONObject.NULL,
+            )
+            .put("shipping", shipping.toManagementPayloadJson())
+    }
+
+    private fun List<RecipientProfile>.toPayloadRecipients(): JSONArray {
+        return JSONArray().apply {
+            forEach { recipient ->
+                put(recipient.toPayloadJson())
+            }
+        }
+    }
+
+    private fun RecipientSelectionRequest.toJsonPayload(): JSONObject {
+        return JSONObject().put("selected_recipient_id", selectedRecipientId)
+    }
+
+    private fun encodeUserId(userId: String): String {
+        return try {
+            URLEncoder.encode(userId, UTF_8.name())
+        } catch (exception: Exception) {
+            userId
+        }
+    }
+
     private fun parseStringMap(json: JSONObject?): Map<String, String> {
         if (json == null) return emptyMap()
         val values = mutableMapOf<String, String>()
@@ -383,7 +712,9 @@ class ShoppingAgentClient(
         return values.filterValues { it.isNotBlank() }
     }
 
-    private companion object {
+    companion object {
+        const val DEFAULT_USER_ID = "android-demo"
+        const val DEFAULT_CONVERSATION_ID = "android-demo"
         const val TAG = "ShoppingAgentClient"
     }
 

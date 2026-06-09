@@ -51,6 +51,60 @@ data class AsrTranscriptionResult(
     val traceId: String?,
 )
 
+data class RecipientConstraints(
+    val allergies: List<String> = emptyList(),
+    val avoidTerms: List<String> = emptyList(),
+    val brandExclude: List<String> = emptyList(),
+    val budgetMax: Double? = null,
+    val accessibilityNeeds: List<String> = emptyList(),
+)
+
+data class RecipientLongTermPreferences(
+    val preferredCategories: Map<String, Double> = emptyMap(),
+    val preferredTags: Map<String, Double> = emptyMap(),
+    val priceSensitivity: Double? = null,
+)
+
+data class RecipientBodyProfile(
+    val skinType: String? = null,
+    val shoeSize: String? = null,
+    val clothingSize: String? = null,
+)
+
+data class RecipientShipping(
+    val addressLabel: String? = null,
+    val recipientName: String? = null,
+    val phone: String? = null,
+    val address: String? = null,
+)
+
+data class RecipientProfile(
+    val recipientId: String,
+    val displayName: String,
+    val relationship: String? = null,
+    val constraints: RecipientConstraints = RecipientConstraints(),
+    val longTermPreferences: RecipientLongTermPreferences = RecipientLongTermPreferences(),
+    val shipping: RecipientShipping = RecipientShipping(),
+    val bodyProfile: RecipientBodyProfile = RecipientBodyProfile(),
+    val updatedAt: String? = null,
+)
+
+data class RecipientsResponse(
+    val userId: String,
+    val selectedRecipientId: String,
+    val recipients: List<RecipientProfile> = emptyList(),
+    val updatedAt: String? = null,
+)
+
+data class RecipientSelectionRequest(
+    val selectedRecipientId: String,
+)
+
+data class RecipientsUpdateRequest(
+    val recipients: List<RecipientProfile> = emptyList(),
+    val selectedRecipientId: String? = null,
+)
+
 enum class Role {
     User,
     Assistant,
