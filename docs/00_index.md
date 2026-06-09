@@ -36,6 +36,7 @@
 - [2026-06-08 评分表进度快照](29_scoring_progress_snapshot_20260608.md)
 - [场景化组合推荐 Planner 实现记录](30_scene_bundle_planner_implementation.md)
 - [本地 ASR 后端接入方案](31_local_asr_backend_integration.md)
+- [TTS 语音播报方案记录](32_tts_voice_broadcast_plan.md)
 
 ## 当前里程碑
 
