@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -51,17 +52,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -167,6 +165,157 @@ private val TablerXIcon: ImageVector = ImageVector.Builder(
         lineTo(6f, 18f)
         moveTo(6f, 6f)
         lineTo(18f, 18f)
+    }
+}.build()
+private val TablerPlusIcon: ImageVector = ImageVector.Builder(
+    name = "TablerPlus",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(12f, 5f)
+        verticalLineTo(19f)
+        moveTo(5f, 12f)
+        horizontalLineTo(19f)
+    }
+}.build()
+private val TablerChevronDownIcon: ImageVector = ImageVector.Builder(
+    name = "TablerChevronDown",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(6f, 9f)
+        lineTo(12f, 15f)
+        lineTo(18f, 9f)
+    }
+}.build()
+private val TablerArrowUpIcon: ImageVector = ImageVector.Builder(
+    name = "TablerArrowUp",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(12f, 19f)
+        verticalLineTo(5f)
+        moveTo(5f, 12f)
+        lineTo(12f, 5f)
+        lineTo(19f, 12f)
+    }
+}.build()
+private val TablerCameraIcon: ImageVector = ImageVector.Builder(
+    name = "TablerCamera",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(5f, 7f)
+        horizontalLineTo(8f)
+        lineTo(10f, 5f)
+        horizontalLineTo(14f)
+        lineTo(16f, 7f)
+        horizontalLineTo(19f)
+        curveTo(20.1f, 7f, 21f, 7.9f, 21f, 9f)
+        verticalLineTo(18f)
+        curveTo(21f, 19.1f, 20.1f, 20f, 19f, 20f)
+        horizontalLineTo(5f)
+        curveTo(3.9f, 20f, 3f, 19.1f, 3f, 18f)
+        verticalLineTo(9f)
+        curveTo(3f, 7.9f, 3.9f, 7f, 5f, 7f)
+        close()
+        moveTo(12f, 11f)
+        curveTo(10.3f, 11f, 9f, 12.3f, 9f, 14f)
+        curveTo(9f, 15.7f, 10.3f, 17f, 12f, 17f)
+        curveTo(13.7f, 17f, 15f, 15.7f, 15f, 14f)
+        curveTo(15f, 12.3f, 13.7f, 11f, 12f, 11f)
+        close()
+    }
+}.build()
+private val TablerPhotoIcon: ImageVector = ImageVector.Builder(
+    name = "TablerPhoto",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(5f, 5f)
+        horizontalLineTo(19f)
+        curveTo(20.1f, 5f, 21f, 5.9f, 21f, 7f)
+        verticalLineTo(19f)
+        curveTo(21f, 20.1f, 20.1f, 21f, 19f, 21f)
+        horizontalLineTo(5f)
+        curveTo(3.9f, 21f, 3f, 20.1f, 3f, 19f)
+        verticalLineTo(7f)
+        curveTo(3f, 5.9f, 3.9f, 5f, 5f, 5f)
+        close()
+        moveTo(8f, 10f)
+        curveTo(8.6f, 10f, 9f, 9.6f, 9f, 9f)
+        curveTo(9f, 8.4f, 8.6f, 8f, 8f, 8f)
+        curveTo(7.4f, 8f, 7f, 8.4f, 7f, 9f)
+        curveTo(7f, 9.6f, 7.4f, 10f, 8f, 10f)
+        close()
+        moveTo(21f, 16f)
+        lineTo(16f, 12f)
+        lineTo(5f, 21f)
+    }
+}.build()
+private val TablerStopIcon: ImageVector = ImageVector.Builder(
+    name = "TablerStop",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(fill = SolidColor(Color.Black)) {
+        moveTo(8f, 7f)
+        horizontalLineTo(16f)
+        curveTo(16.6f, 7f, 17f, 7.4f, 17f, 8f)
+        verticalLineTo(16f)
+        curveTo(17f, 16.6f, 16.6f, 17f, 16f, 17f)
+        horizontalLineTo(8f)
+        curveTo(7.4f, 17f, 7f, 16.6f, 7f, 16f)
+        verticalLineTo(8f)
+        curveTo(7f, 7.4f, 7.4f, 7f, 8f, 7f)
+        close()
     }
 }.build()
 private val TablerMicrophoneIcon: ImageVector = ImageVector.Builder(
@@ -287,20 +436,52 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     var ttsSettings by remember(context) { mutableStateOf(TtsSettingsStore.load(context)) }
     var autoSpokenMessageIds by remember { mutableStateOf(emptySet<String>()) }
     var stoppedSpeechMessageIds by remember { mutableStateOf(emptySet<String>()) }
+    var speechHintText by remember { mutableStateOf<String?>(null) }
+    var isLastSpeechStateSpeaking by remember { mutableStateOf(false) }
+    var wasManuallyStopped by remember { mutableStateOf(false) }
     val ttsSpeaker = remember(context) { TtsSpeaker(context) }
     val ttsPlaybackState by ttsSpeaker.state.collectAsState()
     val speakingMessageId = (ttsPlaybackState as? TtsPlaybackState.Speaking)?.messageId
+    val speechEnabled = ttsSettings.ttsEnabled
     val latestMessage = state.messages.lastOrNull()
     val latestSpeakableAssistant = state.messages.lastOrNull {
         it.role == Role.Assistant && it.content.isNotBlank()
     }
     val assetBaseUrl = "${state.backendBaseUrl.trimEnd('/')}/assets"
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val contentFontScale = when (ttsSettings.fontScaleMode) {
+        FontScaleMode11x -> 1.1f
+        FontScaleMode125x -> 1.25f
+        FontScaleMode15x -> 1.5f
+        else -> 1f
+    }
+    val adjustedDensity = androidx.compose.ui.unit.Density(
+        density = density.density,
+        fontScale = density.fontScale * contentFontScale,
+    )
+    val asrStatusDisplayText = if (ttsSettings.speechHintVisibility) {
+        when (val source = state.asrStatusText) {
+            null -> null
+            "正在本地转写..." -> if (ttsSettings.ttsStatusAnnouncementEnabled) "转写中，请稍候" else "转写中"
+            "已转写，可修改后发送" -> if (ttsSettings.ttsStatusAnnouncementEnabled) "转写完成，可修改后发送" else "已转写"
+            else -> if (ttsSettings.ttsStatusAnnouncementEnabled) source else source.trim()
+        }
+    } else {
+        null
+    }
 
     fun updateTtsSettings(nextSettings: TtsSettings) {
         ttsSettings = nextSettings
         TtsSettingsStore.save(context, nextSettings)
-        if (!nextSettings.autoSpeak) {
+        if (!nextSettings.ttsEnabled) {
             ttsSpeaker.stop()
+            speechHintText = if (nextSettings.ttsStatusAnnouncementEnabled) {
+                "语音播报已关闭"
+            } else {
+                "播报关闭"
+            }
+        } else {
+            speechHintText = null
         }
     }
 
@@ -308,12 +489,24 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
         if (message.role != Role.Assistant || message.content.isBlank()) return
         stoppedSpeechMessageIds = stoppedSpeechMessageIds - message.id
         autoSpokenMessageIds = autoSpokenMessageIds + message.id
-        ttsSpeaker.speak(message.id, message.content)
+        wasManuallyStopped = false
+        speechHintText = if (ttsSettings.ttsStatusAnnouncementEnabled) {
+            "正在播放 AI 回复"
+        } else {
+            "播放中"
+        }
+        ttsSpeaker.speak(
+            messageId = message.id,
+            rawText = message.content,
+            verboseMode = ttsSettings.ttsVerboseMode,
+            speechRate = ttsSettings.ttsSpeechRate,
+        )
     }
 
     fun toggleMessageSpeech(message: ChatMessage) {
         if (speakingMessageId == message.id) {
             stoppedSpeechMessageIds = stoppedSpeechMessageIds + message.id
+            wasManuallyStopped = true
             ttsSpeaker.stop()
         } else {
             speakMessage(message)
@@ -321,6 +514,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     }
 
     fun stopAnySpeech() {
+        wasManuallyStopped = true
         ttsSpeaker.stop()
     }
 
@@ -331,14 +525,63 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     }
 
     LaunchedEffect(
+        ttsPlaybackState,
+        ttsSettings.ttsStatusAnnouncementEnabled,
+        ttsSettings.speechHintVisibility,
+    ) {
+        if (!ttsSettings.speechHintVisibility) {
+            speechHintText = if (!speechEnabled) {
+                if (ttsSettings.ttsStatusAnnouncementEnabled) "语音播报已关闭" else "播报关闭"
+            } else {
+                null
+            }
+            isLastSpeechStateSpeaking = false
+            return@LaunchedEffect
+        }
+
+        when (val state = ttsPlaybackState) {
+            is TtsPlaybackState.Speaking -> {
+                isLastSpeechStateSpeaking = true
+                speechHintText = if (ttsSettings.ttsStatusAnnouncementEnabled) {
+                    "正在播放语音反馈"
+                } else {
+                    "播放中"
+                }
+            }
+            is TtsPlaybackState.Idle -> {
+                if (isLastSpeechStateSpeaking) {
+                    speechHintText = if (wasManuallyStopped) {
+                        wasManuallyStopped = false
+                        if (ttsSettings.ttsStatusAnnouncementEnabled) "播放已停止" else "已停止"
+                    } else {
+                        if (ttsSettings.ttsStatusAnnouncementEnabled) "播放完成" else "已结束"
+                    }
+                }
+                isLastSpeechStateSpeaking = false
+            }
+            is TtsPlaybackState.Error -> {
+                isLastSpeechStateSpeaking = false
+                speechHintText = if (ttsSettings.ttsStatusAnnouncementEnabled) {
+                    "播放失败：${state.message}"
+                } else {
+                    "播放失败"
+                }
+            }
+            is TtsPlaybackState.Initializing -> {
+                speechHintText = if (ttsSettings.ttsStatusAnnouncementEnabled) "语音服务初始化中" else "语音服务中"
+            }
+        }
+    }
+
+    LaunchedEffect(
         latestSpeakableAssistant?.id,
         state.isLoading,
-        ttsSettings.autoSpeak,
+        ttsSettings.ttsEnabled,
     ) {
         val assistantMessage = latestSpeakableAssistant ?: return@LaunchedEffect
         if (
             !state.isLoading &&
-            ttsSettings.autoSpeak &&
+            speechEnabled &&
             assistantMessage.id !in autoSpokenMessageIds &&
             assistantMessage.id !in stoppedSpeechMessageIds
         ) {
@@ -350,81 +593,87 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
         listState.scrollToItem(state.messages.size)
     }
 
-    Surface(color = AppGreen, modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .blur(if (selectedProduct != null) DetailBackdropBlurRadius else 0.dp),
-        ) {
-            Header(
-                ttsSettings = ttsSettings,
-                onTtsSettingsClick = { showTtsSettings = true },
-            )
-            LazyColumn(
-                state = listState,
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides adjustedDensity,
+    ) {
+        Surface(color = AppGreen, modifier = Modifier.fillMaxSize()) {
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .fillMaxSize()
+                    .blur(if (selectedProduct != null) DetailBackdropBlurRadius else 0.dp),
             ) {
-                itemsIndexed(
-                    items = state.messages,
-                    key = { _, message -> message.id },
-                ) { index, message ->
-                    val hasPriorUserMessage = state.messages
-                        .take(index)
-                        .any { it.role == Role.User && it.content.isNotBlank() }
-                    val isThinking = state.isLoading &&
-                        index == state.messages.lastIndex &&
-                        message.role == Role.Assistant &&
-                        message.content.isBlank()
-                    val isAssistantStreaming = state.isLoading &&
-                        index == state.messages.lastIndex &&
-                        message.role == Role.Assistant
-                    MessageBubble(
-                        message = message,
-                        showFeedback = !state.isLoading && hasPriorUserMessage && !message.isEphemeral,
-                        isThinking = isThinking,
-                        isStreaming = isAssistantStreaming,
-                        isSpeaking = message.id == speakingMessageId,
-                        assetBaseUrl = assetBaseUrl,
-                        onProductClick = { selectedProduct = it },
-                        onFeedback = viewModel::submitFeedback,
-                        onSpeechToggle = ::toggleMessageSpeech,
-                    )
+                Header(
+                    ttsSettings = ttsSettings,
+                    onTtsSettingsClick = { showTtsSettings = true },
+                )
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    itemsIndexed(
+                        items = state.messages,
+                        key = { _, message -> message.id },
+                    ) { index, message ->
+                        val hasPriorUserMessage = state.messages
+                            .take(index)
+                            .any { it.role == Role.User && it.content.isNotBlank() }
+                        val isThinking = state.isLoading &&
+                            index == state.messages.lastIndex &&
+                            message.role == Role.Assistant &&
+                            message.content.isBlank()
+                        val isAssistantStreaming = state.isLoading &&
+                            index == state.messages.lastIndex &&
+                            message.role == Role.Assistant
+                        MessageBubble(
+                            message = message,
+                            showFeedback = !state.isLoading && hasPriorUserMessage && !message.isEphemeral,
+                            isThinking = isThinking,
+                            isStreaming = isAssistantStreaming,
+                            isSpeaking = message.id == speakingMessageId,
+                            assetBaseUrl = assetBaseUrl,
+                            onProductClick = { selectedProduct = it },
+                            onFeedback = viewModel::submitFeedback,
+                            onSpeechToggle = ::toggleMessageSpeech,
+                        )
+                    }
+                    item("bottom-anchor") {
+                        Spacer(modifier = Modifier.height(1.dp))
+                    }
                 }
-                item("bottom-anchor") {
-                    Spacer(modifier = Modifier.height(1.dp))
-                }
+                InputBar(
+                    value = state.input,
+                    isLoading = state.isLoading,
+                    isTranscribing = state.isTranscribing,
+                    statusText = state.statusText,
+                    asrStatusText = asrStatusDisplayText,
+                    speechStatusText = speechHintText,
+                    speechStatusIsError = speechHintText?.contains("失败") == true,
+                    onValueChange = viewModel::updateInput,
+                    onSend = {
+                        stopAnySpeech()
+                        viewModel.send()
+                    },
+                    onQuickPrompt = { prompt ->
+                        stopAnySpeech()
+                        viewModel.sendPrompt(prompt)
+                    },
+                    onAudioRecorded = viewModel::transcribeAudio,
+                )
             }
-            InputBar(
-                value = state.input,
-                isLoading = state.isLoading,
-                isTranscribing = state.isTranscribing,
-                statusText = state.statusText,
-                asrStatusText = state.asrStatusText,
-                onValueChange = viewModel::updateInput,
-                onSend = {
-                    stopAnySpeech()
-                    viewModel.send()
-                },
-                onQuickPrompt = { prompt ->
-                    stopAnySpeech()
-                    viewModel.sendPrompt(prompt)
-                },
-                onAudioRecorded = viewModel::transcribeAudio,
-            )
-        }
-        selectedProduct?.let { product ->
-            ProductDetailOverlay(product = product, assetBaseUrl = assetBaseUrl, onDismiss = { selectedProduct = null })
-        }
-        if (showTtsSettings) {
-            TtsSettingsDialog(
-                settings = ttsSettings,
-                onSettingsChange = ::updateTtsSettings,
-                onDismiss = { showTtsSettings = false },
-            )
+            selectedProduct?.let { product ->
+                ProductDetailOverlay(product = product, assetBaseUrl = assetBaseUrl, onDismiss = { selectedProduct = null })
+            }
+            if (showTtsSettings) {
+                TtsSettingsDialog(
+                    settings = ttsSettings,
+                    onSettingsChange = ::updateTtsSettings,
+                    onDismiss = { showTtsSettings = false },
+                )
+            }
         }
     }
 }
@@ -453,19 +702,12 @@ private fun Header(
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.weight(1f),
             )
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(15.dp))
-                    .background(SurfaceWhite)
-                    .clickable(onClick = onTtsSettingsClick),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = if (ttsSettings.autoSpeak) TablerVolumeIcon else TablerVolumeOffIcon,
-                    contentDescription = "语音播报设置",
-                    tint = AccentGreenDark,
-                    modifier = Modifier.size(21.dp),
+            TextButton(onClick = onTtsSettingsClick) {
+                Text(
+                    text = "设置",
+                    color = Ink,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelLarge,
                 )
             }
         }
@@ -483,44 +725,137 @@ private fun TtsSettingsDialog(
     onSettingsChange: (TtsSettings) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val speechRateOptions = listOf(0.75f, 1.0f, 1.25f, 1.5f)
+    val fontScaleOptions = listOf(FontScaleModeSystem, FontScaleMode11x, FontScaleMode125x, FontScaleMode15x)
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SurfaceCream,
         title = {
             Text(
-                text = "语音播报",
+                text = "设置",
                 color = Ink,
                 fontWeight = FontWeight.Bold,
             )
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Text(
+                    text = "语音与可访问性",
+                    color = Ink,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                SettingRow(
+                    title = "语音播报",
+                    description = if (settings.ttsEnabled) "开启后新回复自动播报" else "关闭后仍可手动朗读单条回复",
+                    checked = settings.ttsEnabled,
+                    onCheckedChange = { checked ->
+                        onSettingsChange(settings.copy(ttsEnabled = checked))
+                    },
+                )
+                SettingRow(
+                    title = "详细播报（视障友好）",
+                    description = "增加更多结构化提示",
+                    checked = settings.ttsVerboseMode,
+                    onCheckedChange = { checked ->
+                        onSettingsChange(settings.copy(ttsVerboseMode = checked))
+                    },
+                )
+                SettingRow(
+                    title = "状态播报（听障文字化）",
+                    description = "开启后显示转写与播放状态文字",
+                    checked = settings.ttsStatusAnnouncementEnabled,
+                    onCheckedChange = { checked ->
+                        onSettingsChange(settings.copy(ttsStatusAnnouncementEnabled = checked))
+                    },
+                )
+                Text(
+                    text = "语音速度",
+                    color = Ink,
+                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    speechRateOptions.forEach { rate ->
+                        val selected = kotlin.math.abs(settings.ttsSpeechRate - rate) < 0.001f
                         Text(
-                            text = "自动朗读 AI 回复",
-                            color = Ink,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        Text(
-                            text = "关闭后仍可点助手头像手动朗读单条回复",
-                            color = MutedText,
-                            style = MaterialTheme.typography.labelSmall,
+                            text = when (rate) {
+                                0.75f -> "慢速"
+                                1.0f -> "正常"
+                                1.25f -> "偏快"
+                                else -> "快速"
+                            },
+                            color = if (selected) SurfaceWhite else Ink,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (selected) AccentGreenDark else AppGreenSoft)
+                                .clickable { onSettingsChange(settings.copy(ttsSpeechRate = rate)) }
+                                .padding(vertical = 10.dp),
                         )
                     }
-                    Switch(
-                        checked = settings.autoSpeak,
-                        onCheckedChange = { checked ->
-                            onSettingsChange(settings.copy(autoSpeak = checked))
-                        },
-                    )
                 }
-            }
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .background(BorderGreen.copy(alpha = 0.35f)),
+                )
+                Text(
+                    text = "字号策略",
+                    color = Ink,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    fontScaleOptions.forEach { fontScale ->
+                        val selected = settings.fontScaleMode == fontScale
+                        Text(
+                            text = when (fontScale) {
+                                FontScaleModeSystem -> "跟随系统"
+                                FontScaleMode11x -> "1.1x"
+                                FontScaleMode125x -> "1.25x"
+                                else -> "1.5x"
+                            },
+                            color = if (selected) SurfaceWhite else Ink,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(if (selected) AccentGreenDark else AppGreenSoft)
+                                .clickable {
+                                    onSettingsChange(settings.copy(fontScaleMode = fontScale))
+                                }
+                                .padding(vertical = 10.dp),
+                        )
+                    }
+                }
+                SettingRow(
+                    title = "语音状态说明",
+                    description = "开启后显示关键状态文本提示",
+                    checked = settings.speechHintVisibility,
+                    onCheckedChange = { checked ->
+                        onSettingsChange(settings.copy(speechHintVisibility = checked))
+                    },
+                )
+                Text(
+                    text = "示例：请说出你的问题后点发送。转写中…已转写：...。正在播放…已停止播放。",
+                    color = MutedText,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                }
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
@@ -528,6 +863,38 @@ private fun TtsSettingsDialog(
             }
         },
     )
+}
+
+@Composable
+private fun SettingRow(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Ink,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = description,
+                color = MutedText,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
+    }
 }
 
 @Composable
@@ -1531,9 +1898,13 @@ private fun VoiceStatusCard(
 }
 
 @Composable
-private fun VoiceWaveform(levels: List<Float>, color: Color) {
+private fun VoiceWaveform(
+    levels: List<Float>,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        modifier = Modifier.width(82.dp),
+        modifier = modifier.width(82.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -1586,13 +1957,13 @@ private fun VoiceRecordButton(
     val buttonEnabled = enabled && !isTranscribing
     Box(
         modifier = Modifier
-            .size(46.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .size(40.dp)
+            .clip(RoundedCornerShape(999.dp))
             .background(
                 when {
                     isRecording -> ErrorSurface
-                    buttonEnabled -> AppGreenSoft
-                    else -> BorderGreen
+                    isTranscribing -> AppGreenSoft
+                    else -> Color.Transparent
                 }
             )
             .clickable(enabled = buttonEnabled) { onClick() },
@@ -1608,7 +1979,11 @@ private fun VoiceRecordButton(
             Icon(
                 imageVector = TablerMicrophoneIcon,
                 contentDescription = if (isRecording) "停止录音" else "开始录音",
-                tint = if (isRecording) ErrorText else AccentGreenDark,
+                tint = when {
+                    isRecording -> ErrorText
+                    buttonEnabled -> MutedText
+                    else -> MutedText.copy(alpha = 0.32f)
+                },
                 modifier = Modifier.size(21.dp),
             )
         }
@@ -1844,7 +2219,6 @@ private fun ProductTagChip(label: String) {
             .padding(horizontal = 8.dp, vertical = 3.dp),
         color = AccentGreenDark,
         maxLines = 1,
-        softWrap = false,
         style = MaterialTheme.typography.labelSmall,
     )
 }
@@ -1879,6 +2253,7 @@ private fun VariantCardTab(
                 color = if (selected) Ink else AccentGreenDark,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                 maxLines = 1,
+                softWrap = true,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.labelSmall,
             )
@@ -2232,7 +2607,7 @@ private fun VariantSelectorCard(
                         color = if (selected) SurfaceWhite else AccentGreenDark,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                         maxLines = 1,
-                        softWrap = false,
+                        softWrap = true,
                         style = MaterialTheme.typography.labelMedium,
                     )
                 }
@@ -2387,7 +2762,6 @@ private fun InfoChip(label: String, warm: Boolean = false) {
             .padding(horizontal = 10.dp, vertical = 5.dp),
         color = if (warm) AccentGreenDark else Ink,
         maxLines = 1,
-        softWrap = false,
         style = MaterialTheme.typography.labelSmall,
     )
 }
@@ -2429,6 +2803,8 @@ private fun InputBar(
     isTranscribing: Boolean,
     statusText: String?,
     asrStatusText: String?,
+    speechStatusText: String?,
+    speechStatusIsError: Boolean,
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     onQuickPrompt: (String) -> Unit,
@@ -2437,17 +2813,39 @@ private fun InputBar(
     val context = LocalContext.current
     var recordingSession by remember { mutableStateOf<VoiceRecordingSession?>(null) }
     var voiceError by remember { mutableStateOf<String?>(null) }
+    var showAttachmentMenu by remember { mutableStateOf(false) }
+    var attachmentStatusText by remember { mutableStateOf<String?>(null) }
+    var recordingElapsedSeconds by remember { mutableStateOf(0) }
     var waveformLevels by remember {
         mutableStateOf(List(VoiceWaveformBarCount) { 0.03f })
+    }
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        showAttachmentMenu = false
+        attachmentStatusText = if (uri != null) {
+            "已选择图片，图片理解链路待接入"
+        } else {
+            "没有选择图片"
+        }
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        showAttachmentMenu = false
+        attachmentStatusText = if (bitmap != null) {
+            "已拍摄图片，图片理解链路待接入"
+        } else {
+            "没有完成拍照"
+        }
     }
 
     fun startRecording() {
         if (isLoading || isTranscribing || recordingSession != null) return
+        showAttachmentMenu = false
+        attachmentStatusText = null
         voiceError = null
         runCatching {
             startVoiceRecording(context)
         }.onSuccess { session ->
             waveformLevels = List(VoiceWaveformBarCount) { 0.03f }
+            recordingElapsedSeconds = 0
             recordingSession = session
         }.onFailure { error ->
             voiceError = "录音启动失败：${error.localizedMessage ?: "请检查麦克风权限"}"
@@ -2488,6 +2886,10 @@ private fun InputBar(
         }
     }
 
+    BackHandler(enabled = showAttachmentMenu) {
+        showAttachmentMenu = false
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             recordingSession?.discard()
@@ -2496,112 +2898,449 @@ private fun InputBar(
 
     LaunchedEffect(recordingSession) {
         val session = recordingSession ?: return@LaunchedEffect
+        val startedAtMillis = System.currentTimeMillis()
         while (recordingSession === session) {
             waveformLevels = (waveformLevels + session.amplitudeLevel()).takeLast(VoiceWaveformBarCount)
+            recordingElapsedSeconds = ((System.currentTimeMillis() - startedAtMillis) / 1000L).toInt()
             delay(VoiceWaveformSampleMillis)
         }
     }
 
-    val voiceStatusText = when {
-        recordingSession != null -> "正在录音，再点一次停止"
-        isTranscribing -> "正在本地转写..."
-        voiceError != null -> voiceError
-        asrStatusText != null -> asrStatusText
-        else -> null
+    data class InputStatusLine(val text: String, val isError: Boolean)
+    val inputStatusLines = buildList {
+        if (isTranscribing) {
+            add(InputStatusLine("正在本地转写...", false))
+        }
+        if (voiceError != null) {
+            add(InputStatusLine(voiceError, true))
+        } else {
+            asrStatusText?.let { add(InputStatusLine(it, it.startsWith("转写失败"))) }
+            speechStatusText?.let { add(InputStatusLine(it, speechStatusIsError)) }
+            attachmentStatusText?.let { add(InputStatusLine(it, false)) }
+        }
     }
-    val isVoiceStatusError = voiceError != null || asrStatusText?.startsWith("转写失败") == true
+    val isRecording = recordingSession != null
+    val canUseInputTools = !isLoading && !isTranscribing
+    val canSendText = !isLoading && value.isNotBlank() && !isRecording
 
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(12.dp),
-        colors = CardDefaults.cardColors(containerColor = SurfaceCream),
-        shape = RoundedCornerShape(24.dp),
-        border = BorderStroke(1.dp, BorderGreen),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            .navigationBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            if (statusText != null) {
-                LoadingStatusCard(statusText = statusText)
-            }
-            if (voiceStatusText != null) {
-                VoiceStatusCard(
-                    text = voiceStatusText,
-                    isError = isVoiceStatusError,
-                    waveformLevels = if (recordingSession != null) waveformLevels else emptyList(),
+        if (statusText != null) {
+            LoadingStatusCard(statusText = statusText)
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            DemoPrompts.forEach { (label, prompt) ->
+                Text(
+                    text = label,
+                    modifier = Modifier
+                        .background(AppGreenSoft, RoundedCornerShape(999.dp))
+                        .clickable(enabled = !isLoading) {
+                            showAttachmentMenu = false
+                            onQuickPrompt(prompt)
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    color = AccentGreenDark,
+                    style = MaterialTheme.typography.labelMedium,
                 )
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DemoPrompts.forEach { (label, prompt) ->
-                    Text(
-                        text = label,
-                        modifier = Modifier
-                            .background(AppGreenSoft, RoundedCornerShape(999.dp))
-                            .clickable(enabled = !isLoading) { onQuickPrompt(prompt) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        color = AccentGreenDark,
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                }
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+        }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = SurfaceCream),
+                shape = RoundedCornerShape(30.dp),
+                border = BorderStroke(1.dp, BorderGreen.copy(alpha = 0.9f)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
             ) {
-                OutlinedTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    modifier = Modifier.weight(1f),
-                    minLines = 1,
-                    maxLines = 3,
-                    placeholder = { Text("例如：我是油皮，想要200元以内通勤防晒") },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentGreenDark,
-                        unfocusedBorderColor = BorderGreen,
-                        focusedContainerColor = SurfaceWhite,
-                        unfocusedContainerColor = SurfaceWhite,
-                        cursorColor = Ink,
-                    ),
-                    shape = RoundedCornerShape(18.dp),
-                )
-                VoiceRecordButton(
-                    isRecording = recordingSession != null,
-                    isTranscribing = isTranscribing,
-                    enabled = !isLoading,
-                    onClick = ::toggleRecording,
-                )
-                Button(
-                    onClick = onSend,
-                    enabled = !isLoading && value.isNotBlank(),
-                    contentPadding = PaddingValues(horizontal = 0.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Ink,
-                        contentColor = SurfaceWhite,
-                        disabledContainerColor = BorderGreen,
-                        disabledContentColor = MutedText,
-                    ),
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = MutedText,
-                            strokeWidth = 2.dp,
+                if (isRecording) {
+                    RecordingInputRow(
+                        waveformLevels = waveformLevels,
+                        elapsedSeconds = recordingElapsedSeconds,
+                        onStop = ::stopRecording,
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        BasicTextField(
+                            value = value,
+                            onValueChange = {
+                                attachmentStatusText = null
+                                onValueChange(it)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 76.dp, max = 152.dp)
+                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                            minLines = 2,
+                            maxLines = 5,
+                            textStyle = MaterialTheme.typography.bodyLarge.copy(color = Ink),
+                            cursorBrush = SolidColor(AccentGreenDark),
+                            decorationBox = { innerTextField ->
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.TopStart,
+                                ) {
+                                    if (value.isBlank()) {
+                                        Text(
+                                            text = "要求后续变更",
+                                            color = MutedText.copy(alpha = 0.32f),
+                                            style = MaterialTheme.typography.titleMedium,
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
                         )
-                    } else {
-                        Icon(
-                            imageVector = TablerSendIcon,
-                            contentDescription = "发送",
-                            modifier = Modifier.size(22.dp),
-                        )
+                        if (inputStatusLines.isNotEmpty()) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                inputStatusLines.forEach { status ->
+                                    InputStatusPill(
+                                        text = status.text,
+                                        isError = status.isError,
+                                    )
+                                }
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            InputToolbarButton(
+                                imageVector = TablerPlusIcon,
+                                contentDescription = "添加图片",
+                                enabled = canUseInputTools,
+                                selected = showAttachmentMenu,
+                                onClick = { showAttachmentMenu = !showAttachmentMenu },
+                            )
+                            AssistantInputChip()
+                            Spacer(modifier = Modifier.weight(1f))
+                            ModelModeChip()
+                            VoiceRecordButton(
+                                isRecording = false,
+                                isTranscribing = isTranscribing,
+                                enabled = canUseInputTools,
+                                onClick = ::toggleRecording,
+                            )
+                            SendRoundButton(
+                                isLoading = isLoading,
+                                enabled = canSendText,
+                                onClick = {
+                                    showAttachmentMenu = false
+                                    onSend()
+                                },
+                            )
+                        }
                     }
                 }
             }
+            AttachmentActionMenu(
+                visible = showAttachmentMenu,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 8.dp, bottom = 56.dp),
+                onCameraClick = {
+                    cameraLauncher.launch(null)
+                },
+                onGalleryClick = {
+                    galleryLauncher.launch("image/*")
+                },
+            )
         }
     }
     Spacer(modifier = Modifier.height(4.dp))
+}
+
+@Composable
+private fun InputStatusPill(
+    text: String,
+    isError: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(if (isError) ErrorSurface else AppGreenSoft.copy(alpha = 0.72f), RoundedCornerShape(999.dp))
+            .padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = if (isError) TablerXIcon else TablerPhotoIcon,
+            contentDescription = null,
+            tint = if (isError) ErrorText else AccentGreenDark,
+            modifier = Modifier.size(15.dp),
+        )
+        Text(
+            text = text,
+            color = if (isError) ErrorText else MutedText,
+            softWrap = true,
+            maxLines = 2,
+            overflow = TextOverflow.Visible,
+            style = MaterialTheme.typography.labelSmall,
+        )
+    }
+}
+
+@Composable
+private fun AttachmentActionMenu(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+    onCameraClick: () -> Unit,
+    onGalleryClick: () -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = fadeIn(animationSpec = tween(140)) + slideInVertically(initialOffsetY = { it / 2 }),
+        exit = fadeOut(animationSpec = tween(100)) + slideOutVertically(targetOffsetY = { it / 2 }),
+    ) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
+            shape = RoundedCornerShape(18.dp),
+            border = BorderStroke(1.dp, BorderGreen),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(min = 156.dp)
+                    .padding(vertical = 8.dp),
+            ) {
+                AttachmentActionRow(
+                    icon = TablerCameraIcon,
+                    text = "拍照",
+                    onClick = onCameraClick,
+                )
+                AttachmentActionRow(
+                    icon = TablerPhotoIcon,
+                    text = "从相册选择",
+                    onClick = onGalleryClick,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentActionRow(
+    icon: ImageVector,
+    text: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = AccentGreenDark,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = text,
+            color = Ink,
+            fontWeight = FontWeight.Medium,
+            style = MaterialTheme.typography.bodyMedium,
+        )
+    }
+}
+
+@Composable
+private fun AssistantInputChip() {
+    Row(
+        modifier = Modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(AppGreenSoft.copy(alpha = 0.86f))
+            .padding(start = 6.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        GuideAssistantImage(
+            modifier = Modifier.size(22.dp),
+            cornerRadius = 8.dp,
+        )
+        Icon(
+            imageVector = TablerChevronDownIcon,
+            contentDescription = "导购助手菜单",
+            tint = AccentGreenDark,
+            modifier = Modifier.size(15.dp),
+        )
+    }
+}
+
+@Composable
+private fun ModelModeChip() {
+    Row(
+        modifier = Modifier
+            .height(34.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = "RAG",
+            color = MutedText,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Icon(
+            imageVector = TablerChevronDownIcon,
+            contentDescription = "检索模式",
+            tint = MutedText,
+            modifier = Modifier.size(16.dp),
+        )
+    }
+}
+
+@Composable
+private fun RecordingInputRow(
+    waveformLevels: List<Float>,
+    elapsedSeconds: Int,
+    onStop: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(68.dp)
+            .padding(start = 8.dp, end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        InputToolbarButton(
+            imageVector = TablerPlusIcon,
+            contentDescription = "录音中暂不可添加图片",
+            enabled = false,
+            onClick = {},
+        )
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            VoiceDottedRail(modifier = Modifier.weight(1f))
+            VoiceWaveform(
+                levels = waveformLevels,
+                color = MutedText,
+                modifier = Modifier.width(82.dp),
+            )
+            Text(
+                text = formatVoiceDuration(elapsedSeconds),
+                color = MutedText,
+                style = MaterialTheme.typography.titleMedium,
+            )
+        }
+        InputToolbarButton(
+            imageVector = TablerStopIcon,
+            contentDescription = "停止录音并转写",
+            containerColor = SurfaceWhite,
+            contentColor = MutedText,
+            onClick = onStop,
+        )
+        SendRoundButton(
+            isLoading = false,
+            enabled = true,
+            onClick = onStop,
+        )
+    }
+}
+
+@Composable
+private fun VoiceDottedRail(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.height(24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
+        repeat(18) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(1.dp)
+                    .background(BorderGreen.copy(alpha = 0.72f), RoundedCornerShape(999.dp)),
+            )
+        }
+    }
+}
+
+@Composable
+private fun InputToolbarButton(
+    imageVector: ImageVector,
+    contentDescription: String,
+    enabled: Boolean = true,
+    selected: Boolean = false,
+    containerColor: Color = if (selected) AppGreenSoft else Color.Transparent,
+    contentColor: Color = MutedText,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (enabled) containerColor else Color.Transparent)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = contentDescription,
+            tint = if (enabled) contentColor else MutedText.copy(alpha = 0.28f),
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+@Composable
+private fun SendRoundButton(
+    isLoading: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val canClick = enabled && !isLoading
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (canClick) MutedText else BorderGreen.copy(alpha = 0.65f))
+            .clickable(enabled = canClick, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = SurfaceWhite,
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = TablerArrowUpIcon,
+                contentDescription = "发送",
+                tint = if (canClick) SurfaceWhite else MutedText.copy(alpha = 0.64f),
+                modifier = Modifier.size(24.dp),
+            )
+        }
+    }
+}
+
+private fun formatVoiceDuration(seconds: Int): String {
+    val safeSeconds = seconds.coerceAtLeast(0)
+    return "${safeSeconds / 60}:${(safeSeconds % 60).toString().padStart(2, '0')}"
 }
 
 private class VoiceRecordingSession(

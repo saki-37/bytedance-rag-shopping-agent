@@ -42,22 +42,41 @@ class TtsSpeaker(
         val request = synchronized(lock) {
             pendingRequest.also { pendingRequest = null }
         }
-        request?.let { speak(it.messageId, it.text) }
+        request?.let {
+            speak(
+                messageId = it.messageId,
+                rawText = it.text,
+                verboseMode = it.verboseMode,
+                speechRate = it.speechRate,
+            )
+        }
     }
 
-    fun speak(messageId: String, rawText: String) {
-        val readableText = rawText.toTtsReadableText()
+    fun speak(
+        messageId: String,
+        rawText: String,
+        verboseMode: Boolean,
+        speechRate: Float,
+    ) {
+        val readableText = rawText.toTtsReadableText(verboseMode)
         if (readableText.isBlank()) return
         if (!initialized) {
             synchronized(lock) {
-                pendingRequest = TtsSpeakRequest(messageId = messageId, text = rawText)
+                pendingRequest = TtsSpeakRequest(
+                    messageId = messageId,
+                    text = rawText,
+                    verboseMode = verboseMode,
+                    speechRate = speechRate,
+                )
             }
             return
         }
 
-        val chunks = readableText.toTtsChunks()
+        val normalizedRate = normalizeSpeechRate(speechRate)
+        val chunks = readableText.toTtsChunks(normalizedRate)
         if (chunks.isEmpty()) return
 
+        tts.setSpeechRate(normalizedRate)
         stop()
         val requestId = UUID.randomUUID().toString()
         val utteranceIds = chunks.mapIndexed { index, _ -> "$requestId:$messageId:$index" }
@@ -150,7 +169,19 @@ class TtsSpeaker(
     private data class TtsSpeakRequest(
         val messageId: String,
         val text: String,
+        val verboseMode: Boolean,
+        val speechRate: Float,
     )
+}
+
+private fun String.toTtsReadableText(verboseMode: Boolean): String {
+    val base = toTtsReadableText()
+    if (base.isBlank()) return base
+    return if (verboseMode) {
+        "以下是一条助手回复：$base"
+    } else {
+        base
+    }
 }
 
 private fun String.toTtsReadableText(): String {
@@ -159,22 +190,26 @@ private fun String.toTtsReadableText(): String {
         .lines()
         .filterNot { line -> line.trim().matches(Regex("""^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$""")) }
         .joinToString("。") { line -> line.trim().trim('|').replace("|", "，") }
-        .replace(Regex("""`([^`]*)`"""), "$1")
-        .replace(Regex("""(\*\*|__)(.*?)(\*\*|__)"""), "$2")
-        .replace(Regex("""^\s*#{1,6}\s*""", RegexOption.MULTILINE), "")
-        .replace(Regex("""^\s*[-*•]\s+""", RegexOption.MULTILINE), "")
-        .replace(Regex("""^\s*\d+[.)、]\s+""", RegexOption.MULTILINE), "")
-        .replace(Regex("""\s*[\(（]\s*(?:p|s)_[A-Za-z0-9_]+\s*[\)）]"""), "")
-        .replace(Regex("""\s+(?:p|s)_[A-Za-z0-9_]+"""), "")
-        .replace(Regex("""[>#*_~]+"""), "")
-        .replace(Regex("""\s+"""), " ")
-        .replace(Regex("""。{2,}"""), "。")
+        .replace(Regex("`([^`]*)`"), "$1")
+        .replace(Regex("(\\*\\*|__)(.*?)(\\*\\*|__)"), "$2")
+        .replace(Regex("^\\s*#{1,6}\\s*", RegexOption.MULTILINE), "")
+        .replace(Regex("^\\s*[-*•]\\s+", RegexOption.MULTILINE), "")
+        .replace(Regex("^\\s*\\d+[.)、]\\s+", RegexOption.MULTILINE), "")
+        .replace(Regex("\\s*[\\(（]\\s*(?:p|s)_[A-Za-z0-9_]+\\s*[\\)）]"), "")
+        .replace(Regex("\\s+(?:p|s)_[A-Za-z0-9_]+"), "")
+        .replace(Regex("[>#*_~]+"), "")
+        .replace(Regex("\\s+"), " ")
+        .replace(Regex("。{2,}"), "。")
         .trim(' ', '。', '，')
 }
 
-private fun String.toTtsChunks(): List<String> {
-    val maxLength = (TextToSpeech.getMaxSpeechInputLength() - 200).coerceAtLeast(500)
-    val sentences = split(Regex("""(?<=[。！？!?；;])\s*"""))
+private fun String.toTtsChunks(speechRate: Float): List<String> {
+    val maxLength = when {
+        speechRate >= 1.4f -> (TextToSpeech.getMaxSpeechInputLength() - 260).coerceAtLeast(500)
+        speechRate <= 0.8f -> (TextToSpeech.getMaxSpeechInputLength() - 120).coerceAtLeast(500)
+        else -> (TextToSpeech.getMaxSpeechInputLength() - 200).coerceAtLeast(500)
+    }
+    val sentences = split(Regex("(?<=[。！？!?；;])\\s*"))
         .map { it.trim() }
         .filter { it.isNotBlank() }
     if (sentences.isEmpty()) return emptyList()
@@ -197,4 +232,14 @@ private fun String.toTtsChunks(): List<String> {
         chunks += current.toString().trim()
     }
     return chunks
+}
+
+private fun normalizeSpeechRate(rate: Float): Float {
+    return when {
+        rate <= 0.74f -> 0.75f
+        rate <= 0.88f -> 0.75f
+        rate <= 1.12f -> 1.0f
+        rate <= 1.38f -> 1.25f
+        else -> 1.5f
+    }
 }
