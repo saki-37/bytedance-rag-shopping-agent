@@ -32,10 +32,28 @@ data class ProductVariantCard(
     val reason: String,
 )
 
+data class ChatImage(
+    val localUri: String? = null,
+    val previewUrl: String? = null,
+    val imageId: String? = null,
+    val mimeType: String? = null,
+    val source: ImageSource = ImageSource.Unknown,
+    val summary: String? = null,
+    val queryText: String? = null,
+    val imagePlanJson: String? = null,
+)
+
+enum class ImageSource(val apiValue: String) {
+    Camera("camera"),
+    Gallery("gallery"),
+    Unknown("unknown"),
+}
+
 data class ChatMessage(
     val role: Role,
     val content: String,
     val products: List<ProductCard> = emptyList(),
+    val images: List<ChatImage> = emptyList(),
     val isEphemeral: Boolean = false,
     val isQuickReply: Boolean = false,
     val feedback: FeedbackType? = null,
