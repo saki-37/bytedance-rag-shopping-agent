@@ -118,9 +118,9 @@ demo/             本地录屏素材，忽略不提交
 | --- | --- | --- |
 | `message` | string | 本轮用户文本；图片-only 时允许为空 |
 | `images` | array | 可选图片引用，来自 `/api/multimodal/images` |
-| `user_id` | string | 本地用户 ID，用于 local memory |
+| `user_id` | string | 本地演示身份 ID（App 顶部可切换，默认 `local-demo-user`），用于 local memory 隔离；Demo 级，非服务端鉴权 |
 | `recipient_id` | string | 当前购买对象，如自己、家人、同事 |
-| `conversation_id` | string | 本地会话 ID |
+| `conversation_id` | string | 本地会话 ID；Android 每个会话独立生成，新建/切换会话后变化 |
 | `history` | array | 最近对话；assistant 消息可带 `product_ids` 用于指代解析 |
 
 SSE 事件：
@@ -187,6 +187,12 @@ TTS 不走后端接口，由 Android 系统 TextToSpeech 播报助手回复。�
 - `PUT /api/user-memory/{user_id}/selected-recipient`
 
 这些接口用于维护“给谁买”的轻量上下文，如肤质、尺码、避开项、收货备注等。提交主讲建议把它作为个性化补充，不作为核心亮点。
+
+### 5.6 演示身份与本地多会话（已实现，Demo 级）
+
+- Android 顶部提供“演示身份”入口：本地 user_id 切换（默认 `local-demo-user`，持久保存在 SharedPreferences），切换后重新加载该身份的常用对象并自动开新会话。无密码、无 JWT、无服务端鉴权，文案明确标注“本地演示身份”。
+- Android 左上角提供侧边栏入口：点击后从左侧滑出会话抽屉浮层（不改变主界面布局），可新建/切换本地会话；每个会话有独立 `conversation_id`（`android-<时间戳>-<序号>`）和消息历史，切换时互不串扰；会话标题取首条用户提问并带时间标记。会话列表为内存态，重启 App 不保留。
+- feedback 与 ASR 请求复用当前会话的 `conversation_id`，便于 trace 对齐。
 
 ## 6. RAG 链路设计
 
@@ -386,10 +392,11 @@ claim-level audit 截图占位：
 当前明确不做或不主讲：
 
 1. 真实交易链路：购物车、下单、支付、库存、实时优惠。
-2. 完整图搜图：当前图片是 text-first 线索，不是图像向量检索。
-3. 全品类同等深度：美妆是深度主线，服饰是第二品类样例，其余品类 thin support。
-4. 完整自动化 claim-level judge 平台：当前是高风险样例和报告脚本。
-5. 重型 GraphRAG/Neo4j：当前是轻量 graph-aware relation score。
+2. 真实账号体系：当前“演示身份”是本地 user_id 切换，无密码与服务端鉴权；本地会话列表是内存态，重启不保留。
+3. 完整图搜图：当前图片是 text-first 线索，不是图像向量检索。
+4. 全品类同等深度：美妆是深度主线，服饰是第二品类样例，其余品类 thin support。
+5. 完整自动化 claim-level judge 平台：当前是高风险样例和报告脚本。
+6. 重型 GraphRAG/Neo4j：当前是轻量 graph-aware relation score。
 
 未来可以增强：
 

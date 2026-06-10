@@ -19,6 +19,7 @@
 - 多模态图片输入第一版：Android 支持相机/相册图片上传，后端把图片理解为 `image_plan` / `query_text` 后接入现有 RAG；当前是 text-first 图片理解，不是图像向量搜同款。
 - 语音输入与 TTS 第一版：Android 录音上传 `/api/asr/transcribe`，后端代理本地 ASR sidecar；助手回答可用 Android 系统 TTS 播报。最终视频是否主展示取决于设备和 sidecar 稳定性。
 - 常用购买对象 / recipient context：Android 可选择和管理购买对象，后端把对象约束合入检索请求，作为个性化补充能力。
+- 演示身份与本地多会话：App 顶部可切换 Demo 级本地身份（user_id，默认 `local-demo-user`，持久保存在本机），常用对象与记忆偏好按 user_id 隔离；支持新建/切换本地会话，每个会话有独立 `conversation_id` 和消息历史（内存态，重启不保留）。不是真实账号或登录体系。
 - 商品卡片展示图片、品牌、商品名、价格、标签、推荐理由；点击卡片打开详情弹窗。
 - Golden queries、conversation cases、真实 API 三轮回归和 Android 模拟器复验证据已整理在文档中。
 
@@ -275,6 +276,7 @@ python3 scripts/scan_secrets.py --all
 - Graph-aware relation score 已有第一版：运行时派生 category、sub_category、budget、facet、preference 关系，并以小权重参与 rerank。
 - 图片输入、ASR 语音输入和 TTS 播报已接入第一版，可作为提交加分项；它们需要最终实机/provider/sidecar 验证后再决定是否放入主视频。
 - 当前不做购物车、真实下单、支付、库存和实时优惠；图片输入不等于图像向量搜同款。
+- “演示身份”是本地 user_id 切换（无密码、无服务端鉴权），会话列表是本机内存态；两者都是演示辅助能力，不是生产级用户体系。
 - Evidence-aware fallback 已有第一版：兜底回答会引用商品资料、官方 FAQ、用户评价和“资料未说明/不能保证”边界。
 - 轻量用户反馈闭环已有 Android 可见第一版：回答下方可点 `有用` / `不准确`，反馈 JSONL 写入 `data/tmp/feedback/`，该目录被 `.gitignore` 忽略。
 - 更细的 claim-level groundedness 已有第一版人工标注样例和报告脚本；完整自动化 judge 平台仍是下一阶段增强项。

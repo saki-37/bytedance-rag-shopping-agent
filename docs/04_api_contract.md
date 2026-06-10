@@ -56,7 +56,9 @@ SSE 流式聊天接口。
 
 `history[].product_ids` 为可选字段。Android 会把上一轮 assistant 商品卡片的 `product_id` 带回后端，用于解析“第一款”“它”“这款”等商品指代；旧请求不传该字段时按空数组处理。
 
-`user_id` 可选。若未传，后端回退到 `conversation_id / local-demo-user`。当 `MEMORY_PROVIDER` 非 `disabled` 时，`user_id` 参与跨会话记忆 profile 加载与应用。
+`user_id` 可选。若未传，后端回退到 `conversation_id / local-demo-user`。当 `MEMORY_PROVIDER` 非 `disabled` 时，`user_id` 参与跨会话记忆 profile 加载与应用。Android 端会传入“演示身份”对应的本地 user_id（默认 `local-demo-user`，可在 App 内切换）；这是 Demo 级本地身份，不是服务端鉴权。
+
+`conversation_id` 可选。Android 端每个本地会话生成独立的 conversation_id（形如 `android-<时间戳>-<序号>`），新建/切换会话后该值随之变化；feedback 与 ASR 请求复用当前会话的 conversation_id。
 
 `recipient_id` 可选。Android 会把当前购买对象带给后端；后端从本地 memory profile 中取出该对象的肤质、尺码、预算、避开项等约束，并合并进本轮检索请求。提交主线建议把它作为个性化补充能力，不作为核心亮点。
 

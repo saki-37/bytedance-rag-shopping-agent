@@ -54,6 +54,7 @@
 | 图片输入怎么接 | `server/app/asr_routes.py`、`server/app/models.py`、`ShoppingAgentClient.uploadImage` | Android 上传图片，后端生成 `image_plan` / `query_text`，再把图片线索拼入现有 RAG |
 | 语音和 TTS 怎么接 | `server/app/asr_routes.py`、`TtsSpeaker.kt`、`TtsSettings.kt` | ASR 由后端代理本地 sidecar；TTS 使用 Android 系统 TextToSpeech |
 | 购买对象上下文怎么接 | `server/app/user_memory.py`、`ChatViewModel.kt` | Android 选择 recipient，后端把该对象的约束合入本轮检索 |
+| 演示身份/多会话怎么做 | `DemoIdentity.kt`、`ChatViewModel.kt` | 本地 user_id 切换（SharedPreferences 持久化）+ 内存态多会话，每会话独立 `conversation_id`；是 Demo 级本地身份，不是账号系统 |
 
 ## Demo 讲解顺序
 
@@ -70,7 +71,7 @@
 
 当前版本不主打：
 
-1. 购物车、下单、支付、库存、实时优惠等真实电商交易链路。
+1. 购物车、下单、支付、库存、实时优惠等真实电商交易链路；也不做真实账号/登录体系（“演示身份”是本地 user_id 切换，会话列表是内存态）。
 2. Google Lens 式图搜图或图像向量搜同款；当前图片是 text-first `image_plan`，再接文本 RAG。
 3. 全品类完整深度标注；当前美妆是深度主线，服饰是第二品类样例，其余是 thin support。
 4. 完整 GraphRAG / Neo4j。
