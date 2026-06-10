@@ -819,8 +819,9 @@ class ShoppingAgentClient(
         val rawMessage = exception?.localizedMessage ?: "Network request failed"
         return (
             "连接后端失败：请确认 FastAPI 正在 8000 端口运行。"
-                + "模拟器可先执行 adb reverse tcp:8000 tcp:8000；"
-                + "若不使用 adb reverse，请确认 10.0.2.2:8000 可访问。"
+                + "真机局域网调试请确认手机与电脑同一 Wi-Fi，且 local.properties 的 backend.lan.url 是电脑当前 IP；"
+                + "USB/模拟器可执行 adb reverse tcp:8000 tcp:8000。"
+                + "已尝试地址：${baseUrls.joinToString("、")}。"
                 + "原始错误：$rawMessage"
             )
     }

@@ -93,7 +93,7 @@ adb reverse tcp:8000 tcp:8000
 - Debug App 优先访问 `http://127.0.0.1:8000`。
 - 模拟器或 USB 真机建议执行 `adb reverse tcp:8000 tcp:8000`。
 - 如果不设置 reverse，模拟器可能回退到 `http://10.0.2.2:8000`。
-- 真机不使用 USB reverse 时，需要把后端部署到手机可访问的局域网或公网地址，并按项目配置重新构建。
+- 真机不插 USB 时，可走同一 Wi-Fi 局域网：在仓库根目录 `local.properties` 加 `backend.lan.url=http://<电脑局域网IP>:8000` 后重新构建；App 会优先连该地址，失败再回退。要求后端以 `--host 0.0.0.0` 启动、手机与电脑同网、macOS 防火墙放行。
 
 ### 2.3 最短 Demo 操作
 

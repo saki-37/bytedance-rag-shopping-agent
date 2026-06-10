@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// 从 local.properties（不进 Git）读取真机调试用的后端局域网地址。
+// 用法：在仓库根目录 local.properties 加一行：
+//   backend.lan.url=http://10.7.192.180:8000
+// 改 IP 只需改这一行并重新构建；不配置则保持 adb reverse / 模拟器默认行为。
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+val backendLanUrl: String = localProperties.getProperty("backend.lan.url", "").trim()
 
 android {
     namespace = "com.saki.bytedance.ragshopping"
@@ -14,10 +28,12 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "BACKEND_LAN_URL", "\"$backendLanUrl\"")
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
