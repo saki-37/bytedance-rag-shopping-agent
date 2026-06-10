@@ -324,13 +324,16 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 git status --short --branch
 python3 scripts/scan_secrets.py --all
 git diff --check
-git ls-files | rg '\\.(mp4|mov|env)$'
+git ls-files | rg '\\.(mp4|mov|env|pdf|zip)$'
 ```
 
 人工确认：
 
 - `.env` 没有进入 Git。
-- 文档和录屏没有真实 Key。
+- 文档和录屏没有真实 Key。注意两类隐蔽泄露（曾真实发生）：
+  飞书导出 Markdown 会把 Key 中的连字符转义成 `\-` 绕过普通文本搜索；
+  课题原始 PDF 内嵌共用 APIKey 且文本流被压缩，无法被文本扫描发现。
+  `scan_secrets.py` 已针对这两类加规则：转义 Key 模式 + 禁止跟踪二进制文档。
 - `data/tmp/`、`data/indexes/`、`demo/*.mp4`、`demo/*.mov` 没有进入 Git。
 - 飞书设计文档和说明文档链接权限为评委可访问。
 - 演示视频链接可播放，且没有展示 Key、代理账号、私人图片或本地隐私路径。

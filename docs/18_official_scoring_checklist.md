@@ -1,6 +1,6 @@
 # 官方采分点逐项对照表
 
-更新：2026-06-09
+更新：2026-06-10
 
 来源：`docs/01_topic_brief.md` 中根据官方课题说明整理出的“课题真实要求、评分权重、基础/进阶/高级场景”。本页不按我们自己的 V0/V1/V2/V3 展开，只按官方采分口径看当前完成度。
 
@@ -143,6 +143,8 @@
 | 错误处理 | ◯ | Mock fallback、guardrail fallback、无结果追问 | 可补后端断开/真实 API 失败的演示说明 |
 | 依赖说明 | ✅ | `docs/20_reproducibility_and_dependencies.md` 已集中列出 Python、Android、Gradle、Chroma、模型配置和复现检查 | 最终提交前确认版本表仍与代码一致 |
 | README | ✅ | 根目录 README | 最终提交前再收口 |
+| 核心逻辑注释 | ✅ | RAG 检索流水线、Prompt 构造、Planner、guardrail、多轮状态、用户记忆和 SSE 入口均有中文模块说明 + 关键函数注释（retrieval/llm/planner/guardrails/conversation_state/user_memory/main） | 无 |
+| 密钥与敏感材料防护 | ✅ | `.env` 全程 gitignore；`scan_secrets.py` 覆盖转义 Key（飞书导出 `\-` 形式）与被跟踪二进制文档；课题原始 PDF（内嵌共用 Key）已移出 Git 并修订提交 | force-push 后在 GitHub 网页端复核历史无 Key |
 | 技术文档 | ✅ | architecture/evaluation/security/RAG strategy/schema docs | 文档较多，需给评委推荐阅读顺序 |
 
 ### 效果与可靠性 20%
@@ -151,9 +153,9 @@
 | --- | --- | --- | --- |
 | 检索准确 | ✅ | golden 8、subcategory 6、apparel 5、all-category smoke 7、comparison 3、groundedness retrieval-only 11 全部 PASS | 最终提交前再按复现检查表跑一轮 |
 | 少幻觉 | ◯ | guardrail + failure case + evidence-aware fallback + groundedness full mock / retrieval-only 11/11；真实 API golden stream 三轮稳定；高风险真实 API 代表 case 已通过 AI semantic review | 生成层完整 claim-level judge 尚未实现；当前重点是把已有证据讲清楚 |
-| 多轮可用 | ◯ | conversation 6 条 PASS；failure regression 9/9 PASS，覆盖 Android 实测撞到的序号指代、品牌/商品类型 follow-up、类目切换、预算收窄和早八提神问题 | 可继续把新的 Android 失败样例沉淀进回归网 |
+| 多轮可用 | ◯ | conversation 6 条 PASS；failure regression 9/9 PASS，覆盖 Android 实测撞到的序号指代、品牌/商品类型 follow-up、类目切换、预算收窄和早八提神问题；Android 端已支持本地多会话隔离（每会话独立 conversation_id 和 history，演示时可避免历史污染） | 可继续把新的 Android 失败样例沉淀进回归网 |
 | 复杂约束可用 | ◯ | 预算、排除项、子类、信息不足、对比均有第一版 | 约束过紧无结果和过敏风险需要陷阱 case |
-| UI 无明显 Bug | ◯ | loading 收尾、自动滚动、卡片详情已修 | 最终录屏前需要人工复验 |
+| UI 无明显 Bug | ◯ | loading 收尾、自动滚动、卡片详情已修；附件菜单顶起输入框已改为浮层修复；会话抽屉/演示身份入口已联调 | 最终录屏前需要人工复验 |
 
 ### 加分项深度 20%
 
@@ -184,7 +186,7 @@
 | 反选 / 排除约束 | ◯ | 不要酒精/刺激已有解析和多轮继承 | 陷阱 case 需要补强 |
 | 购物车与下单 | ⏸ | 未做 | 暂不建议做 |
 | 拍照找货 | △ | 图片上传 + image_plan + 文本 RAG 已接入 | 当前不是图搜图；需最终实机/provider 验证 |
-| 端侧体验优化 | △ | 流式、自动滚动、快捷问题、卡片/详情、ASR/TTS 和低视力可访问性设置已有 | 没专门做性能指标 |
+| 端侧体验优化 | △ | 流式、自动滚动、快捷问题、卡片/详情、ASR/TTS、低视力可访问性设置、左侧会话抽屉、演示身份切换和附件浮层菜单已有 | 没专门做性能指标 |
 
 ## 待办池：Groundedness / 反编造 Benchmark
 

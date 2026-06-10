@@ -27,6 +27,12 @@ class Rule:
 
 RULES = [
     Rule("Ark API key", re.compile(r"ark-[A-Za-z0-9_-]{20,}")),
+    # 飞书/Markdown 导出会把连字符转义成 "\-"，导致明文 Key 绕过上面的规则
+    #（曾真实发生：课题说明文档里的 ark\-xxxx\-... 未被扫出）。
+    Rule(
+        "Ark/OpenAI API key (escaped dashes)",
+        re.compile(r"(?:ark|sk)(?:\\-[A-Za-z0-9_]{2,}){3,}"),
+    ),
     Rule("OpenAI-style API key", re.compile(r"sk-[A-Za-z0-9_-]{20,}")),
     Rule("AWS access key", re.compile(r"AKIA[0-9A-Z]{16}")),
     Rule(
@@ -129,6 +135,27 @@ def is_safe_reference(match_text: str) -> bool:
     return any(reference in match_text for reference in SAFE_REFERENCES)
 
 
+# 这些二进制文档无法做文本扫描，但可能内嵌密钥（曾真实发生：课题 PDF 内嵌
+# 共用 APIKey 被提交）。一旦被 Git 跟踪就直接报错，要求人工确认或移出 Git。
+RISKY_TRACKED_BINARY_SUFFIXES = {".pdf", ".doc", ".docx", ".ppt", ".pptx", ".zip"}
+
+
+def tracked_paths() -> set[str]:
+    output = run_git(["ls-files", "-z", "--cached"])
+    return {item.decode("utf-8") for item in output.split(b"\0") if item}
+
+
+def risky_tracked_binaries() -> list[str]:
+    findings: list[str] = []
+    for path in sorted(tracked_paths()):
+        if Path(path).suffix.lower() in RISKY_TRACKED_BINARY_SUFFIXES:
+            findings.append(
+                f"{path}: Tracked binary document: cannot be text-scanned and may embed "
+                "secrets; keep it out of Git (gitignore) or manually verify and allowlist."
+            )
+    return findings
+
+
 def scan(paths: list[str], *, staged: bool) -> list[str]:
     findings: list[str] = []
     for path in paths:
@@ -136,6 +163,7 @@ def scan(paths: list[str], *, staged: bool) -> list[str]:
         if should_skip(path, content):
             continue
         findings.extend(scan_content(path, content or b""))
+    findings.extend(risky_tracked_binaries())
     return findings
 
 

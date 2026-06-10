@@ -1,3 +1,13 @@
+"""生成后 guardrail：对模型回答做确定性校验与兜底（反幻觉最后一道防线）。
+
+防线顺序（见 llm.py 调用侧）：
+1. Prompt 约束：回答只能基于商品卡片与证据文本（第一道，软约束）。
+2. guard_answer：逐条规则校验——商业红线词（库存/优惠/下单等）、
+   无证据价格、无证据"不含 X"断言、结果型绝对承诺（"绝不闷痘"）。
+3. 校验失败先尝试 LLM repair 改写；仍失败则 build_safe_answer 给出
+   evidence-bound 兜底——只引用 ProductCard 字段 + "资料未说明/不能保证"边界。
+"""
+
 import re
 from dataclasses import dataclass, field
 

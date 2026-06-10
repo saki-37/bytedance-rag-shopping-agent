@@ -1,3 +1,11 @@
+"""生成层：Prompt 构造 + LLM 调用 + guardrail 协同（evidence-bound 生成）。
+
+流程：组装 SYSTEM_PROMPT（证据约束、红线、SKU/排序规则）与检索 context ->
+完整收集模型回答（不直接透传）-> guard_answer 校验 -> 失败先 repair 改写，
+仍失败用 build_safe_answer 兜底 -> 最终文本再以 SSE 流式发给客户端。
+MOCK_LLM=true 或缺 Key 时走 _mock_answer，仅验证结构链路，不代表真实效果。
+"""
+
 import asyncio
 import logging
 from collections.abc import AsyncIterator

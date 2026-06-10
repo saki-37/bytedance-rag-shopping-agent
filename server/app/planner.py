@@ -1,3 +1,16 @@
+"""LLM Planner：把复杂请求规划成结构化检索计划（增强层，可随时降级）。
+
+定位与边界：
+- 规则层 conversation_state 永远先跑，产出确定性的 rule-only 检索消息；
+  Planner 只是"锦上添花"——超时、解析失败、校验不过都会回退规则结果，
+  保证主链路不依赖任何一次 LLM 调用成功。
+- Planner 输出 RetrievalPlan（pydantic 强校验）：turn_type、改写 query、
+  预算/类目/facet 补丁、对比计划（comparison_plan）和跨类目场景组合
+  （scene_bundle + search_slots，如"三亚度假从防晒到穿搭"）。
+- 校验失败的字段会被丢弃并记录 validation_errors；planner_trace 全程
+  记录 called/applied/fallback_reason/latency，写入 RetrievalTrace 可复验。
+"""
+
 import asyncio
 import json
 import logging
@@ -70,6 +83,8 @@ class PlannerSearchSlot(BaseModel):
 
 
 class RetrievalPlan(BaseModel):
+    """Planner 的全部输出契约：LLM 只能在这些受约束字段内表达计划，越界即丢弃。"""
+
     turn_type: Literal[
         "new_search",
         "refine_search",

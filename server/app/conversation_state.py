@@ -1,3 +1,19 @@
+"""多轮对话状态与约束继承（规则层，不依赖 LLM）。
+
+核心职责：把"帮我推荐跑鞋 -> 要轻量的 -> 预算 500 以内"这类多轮追问，
+合并成一条带完整约束的检索消息（retrieval message），供下游 RAG 使用。
+
+设计要点：
+1. 先判断本轮是不是追问（_is_follow_up）：自包含的新需求不继承历史，
+   避免上一轮的预算/类目污染新话题。
+2. 是追问时，把最近最多 4 轮用户消息逐条合并进 RuleConversationState，
+   预算取最新值、排除词累加、放宽语义（"贵一点也行"）会显式清除旧约束。
+3. "第一款 / 它 / 刚才那款"等商品指代通过 history 里 assistant 带回的
+   product_ids 解析成具体 product_id（_referenced_history_product_ids）。
+4. 全程产出 constraint_trace（本轮/继承/放宽/生效），写入 RetrievalTrace
+   供调试与答辩复验，证明约束确实被继承而不是模型猜的。
+"""
+
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -87,6 +103,8 @@ CONTINUATION_MARKERS = [
 
 @dataclass
 class RuleConversationState:
+    """跨轮累积的结构化约束。actions 记录每条约束的来源（history/current），用于 trace。"""
+
     category_candidates: list[str] = field(default_factory=list)
     referenced_product_ids: list[str] = field(default_factory=list)
     budget_max: float | None = None
@@ -107,6 +125,7 @@ class RetrievalMessageBuildResult:
 
 
 def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult:
+    """规则版多轮合并入口：自包含查询原样返回；追问则合并历史约束后重写检索消息。"""
     previous_user_messages = [
         item.content.strip()
         for item in request.history

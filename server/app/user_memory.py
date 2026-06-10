@@ -1,3 +1,16 @@
+"""用户记忆与购买对象上下文（本地 provider 薄层）。
+
+职责：
+- 按 user_id 维护 UserMemoryProfile（约束、长期偏好、常用购买对象 recipients、
+  短期兴趣快照），LocalMemoryProvider 落盘到 data/tmp/user_memory/<user_id>.json。
+- build_memory_augmented_request 把"硬约束"（过敏、avoid_terms、预算上限等）
+  合并进本轮检索请求——硬约束走结构化执行，不交给模型自由判断。
+- resolve_recipient_profile 解析当前"给谁买"，对象的肤质/尺码/避开项参与检索。
+- 全程产出 MemoryTrace（应用了哪些约束/偏好/短期信号），可在 trace 中复验。
+
+边界：这是演示级本地记忆，不是账号体系；user_id 来自客户端本地"演示身份"。
+"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta

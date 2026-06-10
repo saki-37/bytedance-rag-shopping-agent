@@ -1,3 +1,17 @@
+"""FastAPI 入口：SSE 聊天主链路 + 反馈 + 用户记忆/购买对象接口。
+
+POST /api/chat/stream 的事件顺序（推荐场景）：
+  status(retrieving) -> [quick_reply 临时气泡] -> products(商品卡片)
+  -> status(generating) -> token... -> done
+追问场景则跳过 products，直接流式输出澄清问题。
+
+首屏策略：检索/Planner 作为后台任务启动；超过
+FAST_QUICK_REPLY_DEADLINE_SECONDS 仍未完成时，先发一个模板 quick_reply
+"接住"用户（ephemeral，不进 history），主链路完成后再发正式内容——
+deadline 只影响临时气泡，从不截断 Planner、检索或生成。
+每次请求生成 trace_id，全量运行证据写入 runtime trace 供复验。
+"""
+
 import asyncio
 import json
 import logging

@@ -1,3 +1,23 @@
+"""商品 RAG 检索核心：约束优先的混合检索（不是纯向量搜索）。
+
+主入口 retrieve() 的流水线：
+1. parse_query_intent：规则解析预算、类目、肤质/功效/场景 facet、
+   否定排除词（"不要含酒精"）、商品指代和是否需要追问澄清。
+2. 记忆合并：_apply_memory_profile 把用户/购买对象的硬约束并入 intent。
+3. 硬过滤先于打分：预算上限、类目、品牌排除、排除词、必要功效/肤质
+   不满足即剔除——违反硬约束的商品不能因为语义相似而被召回。
+4. 多路召回打分：keyword 词命中 + facet 匹配 + Chroma 向量分
+   （metadata filter 收窄）+ 轻量 graph 关系分 + 用途优先级，加权求和。
+5. rerank 与选卡：_select_ranked_scored 控制多样性/对比顺序，
+   生成 ProductCard（卡片字段全部来自数据源，不经过模型）。
+6. RetrievalTrace 全程记录过滤原因、各通道命中、排序信号与来源证据，
+   供 /api/debug/retrieve、评测脚本和答辩复验。
+
+Chunking 口径：商品为最小检索单元（一商品一向量），向量文本由
+data_loader.product_search_text 拼接标题/类目/卖点/适用人群等字段；
+SKU/规格作为商品内 variants 展示，不单独成 chunk，避免召回碎片化。
+"""
+
 import contextlib
 import io
 import re
