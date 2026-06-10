@@ -3692,10 +3692,17 @@ private fun InputBar(
             if (statusText != null) {
                 LoadingStatusCard(statusText = statusText)
             }
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 单行可横向滑动的快捷提示词：避免换行占两排遮挡上方消息
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 DemoPrompts.forEach { (label, prompt) ->
                     Text(
                         text = label,
+                        maxLines = 1,
                         modifier = Modifier
                             .background(AppGreenSoft, RoundedCornerShape(999.dp))
                             .clickable(enabled = !isLoading) {

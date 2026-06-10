@@ -201,7 +201,10 @@ def memory_context_lines(
             lines.append(f"- 最近回避：{ '、'.join(items)}")
     if memory_profile.interaction_preferences.answer_length != "normal":
         lines.append(f"- 回答风格：{memory_profile.interaction_preferences.answer_length}")
-    if recipient.relationship:
+    # "self" 是默认对象，注入"当前对象关系：self"只会制造噪音：
+    # 用户嘴上说"给朋友买"时，这行字会诱导模型按"自己"口径回答（真实 case）。
+    # 只有显式选择了非本人对象（妈妈/朋友等）才值得告知生成层。
+    if recipient.relationship and recipient.relationship != "self":
         lines.append(f"- 当前对象关系：{recipient.relationship}")
     if recipient.body_profile.skin_type:
         lines.append(f"- 皮肤类型：{recipient.body_profile.skin_type}")

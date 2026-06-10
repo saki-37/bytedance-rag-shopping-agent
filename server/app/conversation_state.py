@@ -693,6 +693,13 @@ def _history_product_aliases(raw: dict) -> tuple[list[str], list[str]]:
     context_aliases = {_normalize_reference_text(sub_category)}
     sub_category_aliases = FACET_LEXICON.get("sub_category", {}).get(sub_category, [])
     context_aliases.update(_normalize_reference_text(alias) for alias in sub_category_aliases)
+    # 口语化类型词：用户常说"那条裤子/那双鞋/那个帽子"，而 sub_category 是
+    # "运动长裤/跑步鞋"等，子串匹配不到（真实 case：'之前的那条裤子'未解析到
+    # 已推荐的长裤，导致候选混入卫衣）。按类型补口语别名；多个候选同型时
+    # 仍受"恰好命中一个才生效"的保守规则保护。
+    for type_char, spoken_alias in (("裤", "裤子"), ("鞋", "鞋子"), ("帽", "帽子")):
+        if type_char in sub_category:
+            context_aliases.add(spoken_alias)
     if brand == "阿迪达斯":
         strong_aliases.add("adidas")
     if brand == "安热沙":

@@ -175,7 +175,19 @@ async def build_planned_retrieval_message(
         return _finish_planner_trace(rule_build, planner_trace, started)
 
     planner_trace["applied"] = True
-    merged_message = _append_planner_additions(rule_build.message, additions, request.message)
+    # product_followup 且 Planner 已锁定新子类时，丢弃规则层继承的旧子类，
+    # 避免"卫衣 + 运动长裤"两个子类同时生效，把上一话题的商品混进候选
+    #（真实 case：问"之前的那条裤子"，卡片混入了上一轮的李宁卫衣）。
+    drop_rule_sub_category = (
+        validated_plan.get("turn_type") == "product_followup"
+        and bool(validated_plan.get("facets_patch", {}).get("sub_category"))
+    )
+    merged_message = _append_planner_additions(
+        rule_build.message,
+        additions,
+        request.message,
+        drop_rule_sub_category=drop_rule_sub_category,
+    )
     return _finish_planner_trace(
         RetrievalMessageBuildResult(
             message=merged_message,
@@ -831,10 +843,21 @@ def _references_all_previous_products(message: str) -> bool:
     return any(term in normalized_message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])
 
 
-def _append_planner_additions(rule_message: str, additions: list[str], current_message: str) -> str:
+def _append_planner_additions(
+    rule_message: str,
+    additions: list[str],
+    current_message: str,
+    drop_rule_sub_category: bool = False,
+) -> str:
+    base_message = rule_message
+    if drop_rule_sub_category:
+        # 移除规则层的"- 子类：..."行；Planner additions 里会带上本轮的新子类
+        base_message = "\n".join(
+            line for line in rule_message.split("\n") if not line.startswith("- 子类：")
+        )
     return "\n".join(
         [
-            rule_message,
+            base_message,
             "LLM Planner补充：",
             *additions,
             "本轮原文：",

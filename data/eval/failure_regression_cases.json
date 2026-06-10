@@ -11,7 +11,11 @@
       {
         "role": "assistant",
         "content": "给你推荐3款符合需求的运动类非化妆品好物：1. 优衣库运动短裤。2. adidas运动长裤。3. 李宁卫衣。",
-        "product_ids": ["p_clothes_023", "p_clothes_004", "p_clothes_005"]
+        "product_ids": [
+          "p_clothes_023",
+          "p_clothes_004",
+          "p_clothes_005"
+        ]
       }
     ],
     "turns": [
@@ -19,30 +23,54 @@
         "user": "可以帮我比较一下1和2吗？",
         "expect": {
           "expected_comparison_mode": true,
-          "expected_referenced_product_ids": ["p_clothes_023", "p_clothes_004"],
-          "expected_product_ids_exact": ["p_clothes_023", "p_clothes_004"],
+          "expected_referenced_product_ids": [
+            "p_clothes_023",
+            "p_clothes_004"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_023",
+            "p_clothes_004"
+          ],
           "max_products": 2,
-          "forbidden_product_ids": ["p_clothes_005"]
+          "forbidden_product_ids": [
+            "p_clothes_005"
+          ]
         }
       },
       {
         "user": "可以帮我比较一下1 和 2吗？",
         "expect": {
           "expected_comparison_mode": true,
-          "expected_referenced_product_ids": ["p_clothes_023", "p_clothes_004"],
-          "expected_product_ids_exact": ["p_clothes_023", "p_clothes_004"],
+          "expected_referenced_product_ids": [
+            "p_clothes_023",
+            "p_clothes_004"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_023",
+            "p_clothes_004"
+          ],
           "max_products": 2,
-          "forbidden_product_ids": ["p_clothes_005"]
+          "forbidden_product_ids": [
+            "p_clothes_005"
+          ]
         }
       },
       {
         "user": "可以帮我比较一下一和二吗？",
         "expect": {
           "expected_comparison_mode": true,
-          "expected_referenced_product_ids": ["p_clothes_023", "p_clothes_004"],
-          "expected_product_ids_exact": ["p_clothes_023", "p_clothes_004"],
+          "expected_referenced_product_ids": [
+            "p_clothes_023",
+            "p_clothes_004"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_023",
+            "p_clothes_004"
+          ],
           "max_products": 2,
-          "forbidden_product_ids": ["p_clothes_005"]
+          "forbidden_product_ids": [
+            "p_clothes_005"
+          ]
         }
       }
     ]
@@ -55,7 +83,11 @@
       {
         "role": "assistant",
         "content": "给你推荐3款运动类非化妆品好物：1. 优衣库运动短裤。2. adidas Essentials 三条纹运动长裤。3. 李宁卫衣。",
-        "product_ids": ["p_clothes_023", "p_clothes_004", "p_clothes_005"]
+        "product_ids": [
+          "p_clothes_023",
+          "p_clothes_004",
+          "p_clothes_005"
+        ]
       },
       {
         "role": "user",
@@ -64,7 +96,10 @@
       {
         "role": "assistant",
         "content": "已对比优衣库运动短裤和 adidas Essentials 三条纹运动长裤。",
-        "product_ids": ["p_clothes_023", "p_clothes_004"]
+        "product_ids": [
+          "p_clothes_023",
+          "p_clothes_004"
+        ]
       }
     ],
     "turns": [
@@ -72,10 +107,17 @@
         "user": "好的，我觉得阿迪达斯的不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？",
         "expect": {
           "expected_comparison_mode": false,
-          "expected_referenced_product_ids": ["p_clothes_004"],
-          "expected_product_ids_exact": ["p_clothes_004"],
+          "expected_referenced_product_ids": [
+            "p_clothes_004"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_004"
+          ],
           "max_products": 1,
-          "forbidden_product_ids": ["p_clothes_022", "p_clothes_008"]
+          "forbidden_product_ids": [
+            "p_clothes_022",
+            "p_clothes_008"
+          ]
         }
       }
     ]
@@ -88,7 +130,11 @@
       {
         "role": "assistant",
         "content": "给你推荐3款运动类非化妆品好物：1. 优衣库运动短裤。2. adidas Essentials 三条纹运动长裤。3. 李宁卫衣。",
-        "product_ids": ["p_clothes_023", "p_clothes_004", "p_clothes_005"]
+        "product_ids": [
+          "p_clothes_023",
+          "p_clothes_004",
+          "p_clothes_005"
+        ]
       },
       {
         "role": "user",
@@ -97,7 +143,10 @@
       {
         "role": "assistant",
         "content": "已对比优衣库运动短裤和 adidas Essentials 三条纹运动长裤。",
-        "product_ids": ["p_clothes_023", "p_clothes_004"]
+        "product_ids": [
+          "p_clothes_023",
+          "p_clothes_004"
+        ]
       }
     ],
     "turns": [
@@ -105,8 +154,12 @@
         "user": "好的，我觉得长裤不错。然后我妈是168厘米，体重是130斤，穿多大的比较合适？",
         "expect": {
           "expected_comparison_mode": false,
-          "expected_referenced_product_ids": ["p_clothes_004"],
-          "expected_product_ids_exact": ["p_clothes_004"],
+          "expected_referenced_product_ids": [
+            "p_clothes_004"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_004"
+          ],
           "max_products": 1
         }
       }
@@ -120,7 +173,11 @@
       {
         "role": "assistant",
         "content": "给你推荐3款运动类非化妆品好物：1. 优衣库运动短裤。2. adidas Essentials 三条纹运动长裤。3. 李宁卫衣。",
-        "product_ids": ["p_clothes_023", "p_clothes_004", "p_clothes_005"]
+        "product_ids": [
+          "p_clothes_023",
+          "p_clothes_004",
+          "p_clothes_005"
+        ]
       },
       {
         "role": "user",
@@ -129,7 +186,10 @@
       {
         "role": "assistant",
         "content": "已对比优衣库运动短裤和 adidas Essentials 三条纹运动长裤。",
-        "product_ids": ["p_clothes_023", "p_clothes_004"]
+        "product_ids": [
+          "p_clothes_023",
+          "p_clothes_004"
+        ]
       },
       {
         "role": "user",
@@ -138,7 +198,9 @@
       {
         "role": "assistant",
         "content": "这款 adidas Essentials 三条纹运动长裤建议结合尺码表，优先看 L 码。",
-        "product_ids": ["p_clothes_004"]
+        "product_ids": [
+          "p_clothes_004"
+        ]
       }
     ],
     "turns": [
@@ -146,8 +208,12 @@
         "user": "那前面的短裤呢？我觉得也可以买一条，大概多少码合适？",
         "expect": {
           "expected_comparison_mode": false,
-          "expected_referenced_product_ids": ["p_clothes_023"],
-          "expected_product_ids_exact": ["p_clothes_023"],
+          "expected_referenced_product_ids": [
+            "p_clothes_023"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_023"
+          ],
           "max_products": 1
         }
       }
@@ -165,7 +231,11 @@
       {
         "role": "assistant",
         "content": "先给了几款美妆候选。",
-        "product_ids": ["p_beauty_018", "p_beauty_010", "p_beauty_014"]
+        "product_ids": [
+          "p_beauty_018",
+          "p_beauty_010",
+          "p_beauty_014"
+        ]
       },
       {
         "role": "user",
@@ -174,20 +244,36 @@
       {
         "role": "assistant",
         "content": "曾经错误地给了运动相关美妆候选。",
-        "product_ids": ["p_beauty_020", "p_beauty_010"]
+        "product_ids": [
+          "p_beauty_020",
+          "p_beauty_010"
+        ]
       }
     ],
     "turns": [
       {
         "user": "有没有什么运动类的非化妆品推荐？",
         "expect": {
-          "expected_category_candidates": ["apparel"],
-          "forbidden_category_candidates": ["beauty"],
-          "allowed_product_categories": ["服饰运动"],
-          "forbidden_product_categories": ["美妆护肤"],
+          "expected_category_candidates": [
+            "apparel"
+          ],
+          "forbidden_category_candidates": [
+            "beauty"
+          ],
+          "allowed_product_categories": [
+            "服饰运动"
+          ],
+          "forbidden_product_categories": [
+            "美妆护肤"
+          ],
           "min_products": 1,
-          "retrieval_message_contains": ["类目：服饰运动"],
-          "retrieval_message_not_contains": ["类目：美妆护肤", "肤质："]
+          "retrieval_message_contains": [
+            "类目：服饰运动"
+          ],
+          "retrieval_message_not_contains": [
+            "类目：美妆护肤",
+            "肤质："
+          ]
         }
       }
     ]
@@ -204,7 +290,11 @@
       {
         "role": "assistant",
         "content": "给你推荐了几款夏季防晒。",
-        "product_ids": ["p_beauty_010", "p_beauty_023", "p_beauty_006"]
+        "product_ids": [
+          "p_beauty_010",
+          "p_beauty_023",
+          "p_beauty_006"
+        ]
       },
       {
         "role": "user",
@@ -213,7 +303,11 @@
       {
         "role": "assistant",
         "content": "结合油皮和户外需求，仍优先看防晒候选。",
-        "product_ids": ["p_beauty_010", "p_beauty_023", "p_beauty_006"]
+        "product_ids": [
+          "p_beauty_010",
+          "p_beauty_023",
+          "p_beauty_006"
+        ]
       }
     ],
     "turns": [
@@ -224,13 +318,28 @@
           "max_products": 0,
           "expected_budget_max": 150,
           "expected_facets": {
-            "skin_type": ["油皮"],
-            "effect": ["防晒"],
-            "use_case": ["户外"]
+            "skin_type": [
+              "油皮"
+            ],
+            "effect": [
+              "防晒"
+            ],
+            "use_case": [
+              "户外"
+            ]
           },
-          "forbidden_product_ids": ["p_beauty_010", "p_beauty_023", "p_beauty_006"],
-          "clarification_contains": ["150元以内", "没有同时满足"],
-          "retrieval_message_contains": ["150元以内"]
+          "forbidden_product_ids": [
+            "p_beauty_010",
+            "p_beauty_023",
+            "p_beauty_006"
+          ],
+          "clarification_contains": [
+            "150元以内",
+            "没有同时满足"
+          ],
+          "retrieval_message_contains": [
+            "150元以内"
+          ]
         }
       }
     ]
@@ -247,7 +356,9 @@
       {
         "role": "assistant",
         "content": "已推荐 adidas Essentials 三条纹运动长裤。",
-        "product_ids": ["p_clothes_004"]
+        "product_ids": [
+          "p_clothes_004"
+        ]
       }
     ],
     "turns": [
@@ -255,8 +366,12 @@
         "user": "我妈168厘米130斤，穿多大的比较合适？",
         "expect": {
           "expected_comparison_mode": false,
-          "expected_referenced_product_ids": ["p_clothes_004"],
-          "expected_product_ids_exact": ["p_clothes_004"],
+          "expected_referenced_product_ids": [
+            "p_clothes_004"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_004"
+          ],
           "max_products": 1
         }
       }
@@ -271,12 +386,30 @@
         "user": "早八想提神，有啥推荐的吗？",
         "expect": {
           "expected_facets": {
-            "use_case": ["提神"],
-            "sub_category": ["咖啡", "茶饮", "功能饮料"]
+            "use_case": [
+              "提神"
+            ],
+            "sub_category": [
+              "咖啡",
+              "茶饮",
+              "功能饮料"
+            ]
           },
-          "expected_any_product_ids": ["p_food_001", "p_food_002", "p_food_022", "p_food_023"],
-          "allowed_product_sub_categories": ["咖啡", "茶饮", "功能饮料"],
-          "forbidden_product_sub_categories": ["方便食品", "坚果/零食"]
+          "expected_any_product_ids": [
+            "p_food_001",
+            "p_food_002",
+            "p_food_022",
+            "p_food_023"
+          ],
+          "allowed_product_sub_categories": [
+            "咖啡",
+            "茶饮",
+            "功能饮料"
+          ],
+          "forbidden_product_sub_categories": [
+            "方便食品",
+            "坚果/零食"
+          ]
         }
       }
     ]
@@ -289,9 +422,17 @@
       {
         "user": "早八想提神，想要便携咖啡，不要太甜",
         "expect": {
-          "expected_any_product_ids": ["p_food_001", "p_food_023"],
-          "allowed_product_sub_categories": ["咖啡"],
-          "forbidden_product_sub_categories": ["方便食品", "功能饮料"]
+          "expected_any_product_ids": [
+            "p_food_001",
+            "p_food_023"
+          ],
+          "allowed_product_sub_categories": [
+            "咖啡"
+          ],
+          "forbidden_product_sub_categories": [
+            "方便食品",
+            "功能饮料"
+          ]
         }
       }
     ]
@@ -308,7 +449,9 @@
       {
         "role": "assistant",
         "content": "已推荐巴黎欧莱雅防晒同系列规格。",
-        "product_ids": ["p_beauty_006"]
+        "product_ids": [
+          "p_beauty_006"
+        ]
       },
       {
         "role": "user",
@@ -317,27 +460,66 @@
       {
         "role": "assistant",
         "content": "已对比 AIRism 和 DRY-EX 两件T恤。",
-        "product_ids": ["p_clothes_001", "p_clothes_002"]
+        "product_ids": [
+          "p_clothes_001",
+          "p_clothes_002"
+        ]
       }
     ],
     "turns": [
       {
         "user": "早八想提神，想要便携咖啡，不要太甜",
         "expect": {
-          "expected_category_candidates": ["food"],
-          "forbidden_category_candidates": ["beauty", "apparel"],
+          "expected_category_candidates": [
+            "food"
+          ],
+          "forbidden_category_candidates": [
+            "beauty",
+            "apparel"
+          ],
           "expected_facets": {
-            "use_case": ["提神"],
-            "sub_category": ["咖啡"]
+            "use_case": [
+              "提神"
+            ],
+            "sub_category": [
+              "咖啡"
+            ]
           },
-          "allowed_product_categories": ["食品饮料"],
-          "allowed_product_sub_categories": ["咖啡"],
-          "forbidden_product_categories": ["美妆护肤", "服饰运动"],
-          "forbidden_product_sub_categories": ["防晒", "T恤"],
-          "expected_any_product_ids": ["p_food_001", "p_food_002", "p_food_023"],
-          "forbidden_product_ids": ["p_beauty_006", "p_clothes_001", "p_clothes_002"],
-          "retrieval_message_contains": ["早八想提神", "便携咖啡"],
-          "retrieval_message_not_contains": ["类目：美妆护肤", "类目：服饰运动", "肤质：油皮", "防晒", "T恤"]
+          "allowed_product_categories": [
+            "食品饮料"
+          ],
+          "allowed_product_sub_categories": [
+            "咖啡"
+          ],
+          "forbidden_product_categories": [
+            "美妆护肤",
+            "服饰运动"
+          ],
+          "forbidden_product_sub_categories": [
+            "防晒",
+            "T恤"
+          ],
+          "expected_any_product_ids": [
+            "p_food_001",
+            "p_food_002",
+            "p_food_023"
+          ],
+          "forbidden_product_ids": [
+            "p_beauty_006",
+            "p_clothes_001",
+            "p_clothes_002"
+          ],
+          "retrieval_message_contains": [
+            "早八想提神",
+            "便携咖啡"
+          ],
+          "retrieval_message_not_contains": [
+            "类目：美妆护肤",
+            "类目：服饰运动",
+            "肤质：油皮",
+            "防晒",
+            "T恤"
+          ]
         }
       }
     ]
@@ -354,7 +536,9 @@
       {
         "role": "assistant",
         "content": "已推荐巴黎欧莱雅防晒同系列规格。",
-        "product_ids": ["p_beauty_006"]
+        "product_ids": [
+          "p_beauty_006"
+        ]
       },
       {
         "role": "user",
@@ -363,7 +547,10 @@
       {
         "role": "assistant",
         "content": "已对比 AIRism 和 DRY-EX 两件T恤。",
-        "product_ids": ["p_clothes_001", "p_clothes_002"]
+        "product_ids": [
+          "p_clothes_001",
+          "p_clothes_002"
+        ]
       },
       {
         "role": "user",
@@ -372,7 +559,11 @@
       {
         "role": "assistant",
         "content": "已推荐几款便携咖啡。",
-        "product_ids": ["p_food_022", "p_food_002", "p_food_001"]
+        "product_ids": [
+          "p_food_022",
+          "p_food_002",
+          "p_food_001"
+        ]
       }
     ],
     "turns": [
@@ -381,11 +572,32 @@
         "expect": {
           "must_clarify": true,
           "max_products": 0,
-          "expected_category_candidates": ["beauty"],
-          "forbidden_product_ids": ["p_beauty_006", "p_clothes_001", "p_clothes_002", "p_food_022", "p_food_002", "p_food_001"],
-          "clarification_contains": ["肤质", "预算"],
-          "retrieval_message_contains": ["我想买护肤品"],
-          "retrieval_message_not_contains": ["规则合并后的检索状态", "200元以内", "防晒", "T恤", "咖啡", "早八"]
+          "expected_category_candidates": [
+            "beauty"
+          ],
+          "forbidden_product_ids": [
+            "p_beauty_006",
+            "p_clothes_001",
+            "p_clothes_002",
+            "p_food_022",
+            "p_food_002",
+            "p_food_001"
+          ],
+          "clarification_contains": [
+            "肤质",
+            "预算"
+          ],
+          "retrieval_message_contains": [
+            "我想买护肤品"
+          ],
+          "retrieval_message_not_contains": [
+            "规则合并后的检索状态",
+            "200元以内",
+            "防晒",
+            "T恤",
+            "咖啡",
+            "早八"
+          ]
         }
       }
     ]
@@ -409,17 +621,43 @@
         "expect": {
           "min_products": 3,
           "min_distinct_product_categories": 2,
-          "expected_category_candidates": ["beauty", "apparel"],
+          "expected_category_candidates": [
+            "beauty",
+            "apparel"
+          ],
           "expected_facets": {
-            "effect": ["防晒"],
-            "use_case": ["户外"],
-            "sub_category": ["防晒", "短袖T恤"]
+            "effect": [
+              "防晒"
+            ],
+            "use_case": [
+              "户外"
+            ],
+            "sub_category": [
+              "防晒",
+              "短袖T恤"
+            ]
           },
-          "allowed_product_categories": ["美妆护肤", "服饰运动"],
-          "expected_product_categories_present": ["美妆护肤", "服饰运动"],
-          "expected_product_sub_categories_present": ["防晒"],
-          "forbidden_product_categories": ["食品饮料", "数码电子"],
-          "retrieval_message_contains": ["三亚度假", "防晒", "穿搭", "推荐模式：场景组合"]
+          "allowed_product_categories": [
+            "美妆护肤",
+            "服饰运动"
+          ],
+          "expected_product_categories_present": [
+            "美妆护肤",
+            "服饰运动"
+          ],
+          "expected_product_sub_categories_present": [
+            "防晒"
+          ],
+          "forbidden_product_categories": [
+            "食品饮料",
+            "数码电子"
+          ],
+          "retrieval_message_contains": [
+            "三亚度假",
+            "防晒",
+            "穿搭",
+            "推荐模式：场景组合"
+          ]
         }
       }
     ]
@@ -444,17 +682,96 @@
         "expect": {
           "min_products": 3,
           "min_distinct_product_categories": 2,
-          "expected_category_candidates": ["beauty", "apparel"],
+          "expected_category_candidates": [
+            "beauty",
+            "apparel"
+          ],
           "expected_facets": {
-            "effect": ["防晒"],
-            "use_case": ["户外"],
-            "sub_category": ["防晒", "帽子"]
+            "effect": [
+              "防晒"
+            ],
+            "use_case": [
+              "户外"
+            ],
+            "sub_category": [
+              "防晒",
+              "帽子"
+            ]
           },
-          "allowed_product_categories": ["美妆护肤", "服饰运动"],
-          "expected_product_categories_present": ["美妆护肤", "服饰运动"],
-          "expected_product_sub_categories_present": ["防晒", "帽子"],
-          "forbidden_product_categories": ["食品饮料", "数码电子"],
-          "retrieval_message_contains": ["防晒霜", "帽子", "裤子", "推荐模式：场景组合"]
+          "allowed_product_categories": [
+            "美妆护肤",
+            "服饰运动"
+          ],
+          "expected_product_categories_present": [
+            "美妆护肤",
+            "服饰运动"
+          ],
+          "expected_product_sub_categories_present": [
+            "防晒",
+            "帽子"
+          ],
+          "forbidden_product_categories": [
+            "食品饮料",
+            "数码电子"
+          ],
+          "retrieval_message_contains": [
+            "防晒霜",
+            "帽子",
+            "裤子",
+            "推荐模式：场景组合"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-014",
+    "title": "口语指代“之前的那条裤子”必须解析回已推荐的长裤，候选不能混入卫衣或其他品牌长裤",
+    "source": "Android 真实 trace 2026-06-10 conv android-1781067576312-4：用户说“之前的那条裤子”，referenced_product_ids 为空，候选混入李宁卫衣（继承的子类=卫衣残留）和 Nike 长裤",
+    "history": [
+      {
+        "role": "user",
+        "content": "我想分别给我朋友买一套衣服，买个帽子，再买一件长袖，再买一条长裤，每个商品给我推荐一个"
+      },
+      {
+        "role": "assistant",
+        "content": "已返回商品卡片。",
+        "product_ids": [
+          "p_clothes_022",
+          "p_clothes_004",
+          "p_clothes_019"
+        ]
+      },
+      {
+        "role": "user",
+        "content": "有没有再便宜点的卫衣？比如 三百元以内的。"
+      },
+      {
+        "role": "assistant",
+        "content": "已返回商品卡片。",
+        "product_ids": [
+          "p_clothes_005",
+          "p_clothes_022"
+        ]
+      }
+    ],
+    "turns": [
+      {
+        "user": "OK，那之前的那条裤子可以给我推荐一个适合我朋友的大小吗？",
+        "expect": {
+          "min_products": 1,
+          "expected_referenced_product_ids": [
+            "p_clothes_004"
+          ],
+          "expected_any_product_ids": [
+            "p_clothes_004"
+          ],
+          "forbidden_product_ids": [
+            "p_clothes_005",
+            "p_clothes_022",
+            "p_clothes_006",
+            "p_clothes_019"
+          ]
         }
       }
     ]
