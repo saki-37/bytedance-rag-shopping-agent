@@ -18,7 +18,7 @@
 | 后端口径 | 启动前按 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md) 临时覆盖到 `LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.5`；启动后 `curl /health` 确认。 |
 | 回归抽样 | 至少跑过防晒推荐、安热沙/安耐晒 alias、多轮对比、图片输入、ASR、TTS 开关。 |
 | 真机连接 | USB 连接后重跑 `adb reverse tcp:8000 tcp:8000`；若用真机局域网地址，确认 `backend.lan.url` 是当前电脑 IP。 |
-| ASR sidecar | 如果展示语音输入，先启动 `/Users/jia/Documents/个人工具/audio-transcription-lab/asr_service.py --port 8765`，并用短音频确认 `/api/asr/transcribe` 可用。 |
+| ASR sidecar | 如果展示语音输入，先启动 `~/asr-lab（本地 ASR 工具目录，按自己环境替换）/asr_service.py --port 8765`，并用短音频确认 `/api/asr/transcribe` 可用。 |
 | TTS | 打开系统媒体音量，确认中文 TTS 可播报；录屏前试一次能否录到声音，录不到也要保留可见的“播放中/停止”状态。 |
 | 多模态图片 | 手机相册里提前放好安热沙/安耐晒防晒图片，优先用 `p_beauty_010` 对应商品图或已验证截图。 |
 | 隐私 | 设置、购买对象、终端画面不要露真实手机号、地址、API Key、代理配置和私人路径。 |

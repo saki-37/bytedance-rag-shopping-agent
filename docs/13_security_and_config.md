@@ -86,7 +86,7 @@ python3 scripts/scan_secrets.py --staged
 本地调用 Ark / Doubao API 时，如果需要走代理，优先只设置 HTTP/HTTPS 代理：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
   server/.venv/bin/python <script>
 ```
@@ -106,6 +106,6 @@ all_proxy=socks5://127.0.0.1:7897
 调试配置时只能打印布尔状态，不打印真实 Key：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python -c 'import sys; sys.path.insert(0,"server"); from app.config import get_settings; s=get_settings(); print({"mock_llm": s.mock_llm, "provider": s.active_llm_provider, "has_key": bool(s.llm_api_key), "has_model": bool(s.llm_model), "model": s.llm_model, "base_url": s.llm_base_url})'
 ```

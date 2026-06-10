@@ -34,7 +34,7 @@
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 ```
 
@@ -70,7 +70,7 @@ server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 ```
 
@@ -98,7 +98,7 @@ server/.venv/bin/python scripts/run_subcategory_queries.py --require-vector
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_subcategory_queries.py \
   --cases data/eval/apparel_queries.json \
   --require-vector \
@@ -130,7 +130,7 @@ server/.venv/bin/python scripts/run_subcategory_queries.py \
 前置命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python -B scripts/build_thin_enriched_catalog.py
 server/.venv/bin/python -B scripts/check_data.py
 server/.venv/bin/python -B scripts/build_index.py
@@ -147,7 +147,7 @@ server/.venv/bin/python -B scripts/build_index.py
 smoke 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 all_proxy=socks5://127.0.0.1:7897 \
   server/.venv/bin/python -B scripts/run_subcategory_queries.py \
   --cases data/eval/all_category_queries.json \
@@ -214,7 +214,7 @@ Trace 结论：
 复跑命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 
 server/.venv/bin/python -m py_compile \
   server/app/conversation_state.py \
@@ -261,7 +261,7 @@ git diff --check
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_conversation_cases.py --output /private/tmp/bytedance-rag-conversation.jsonl
 ```
 
@@ -279,7 +279,7 @@ server/.venv/bin/python scripts/run_conversation_cases.py --output /private/tmp/
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/check_generation_guardrails.py
 ```
 
@@ -298,7 +298,7 @@ server/.venv/bin/python scripts/check_generation_guardrails.py
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
   server/.venv/bin/python <one-off-real-api-check>
 ```
@@ -322,7 +322,7 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
   server/.venv/bin/python scripts/probe_chat.py \
   --turn 我是油皮，想要200元以内通勤防晒 \
@@ -393,7 +393,7 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_comparison_queries.py \
   --require-vector \
   --output /private/tmp/bytedance-rag-comparison.jsonl
@@ -492,7 +492,7 @@ server/.venv/bin/python scripts/run_comparison_queries.py \
 命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_golden_queries.py --check-stream --require-vector
 ```
 
@@ -611,7 +611,7 @@ CQ-06: 商品卡指代：第一款追问应聚焦上一轮商品
 复跑命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
   --mock-llm \
   --retrieval-only \
@@ -645,7 +645,7 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 复跑命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
   --mock-llm \
   --retrieval-only \
@@ -696,7 +696,7 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 复跑命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/check_generation_guardrails.py
 
 PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \
@@ -751,7 +751,7 @@ PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases
 复跑命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/check_feedback_loop.py
 ```
 
@@ -785,7 +785,7 @@ server/.venv/bin/python scripts/check_feedback_loop.py
 复跑命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 
 MOCK_LLM=false https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
   PYTHONDONTWRITEBYTECODE=1 server/.venv/bin/python scripts/run_groundedness_cases.py \

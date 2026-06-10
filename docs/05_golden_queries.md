@@ -24,14 +24,14 @@
 构建 Chroma 索引：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/build_index.py
 ```
 
 运行检索层 benchmark：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 ```
 
@@ -43,7 +43,7 @@ server/.venv/bin/python scripts/run_golden_queries.py --require-vector
 联调真实后端 SSE：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_golden_queries.py --mode http --check-stream --require-vector
 ```
 
@@ -52,7 +52,7 @@ server/.venv/bin/python scripts/run_golden_queries.py --mode http --check-stream
 运行生成层 guardrail 检查：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/check_generation_guardrails.py
 ```
 
@@ -80,7 +80,7 @@ data/eval/conversation_cases.json
 运行命令：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 server/.venv/bin/python scripts/run_conversation_cases.py
 ```
 
@@ -94,7 +94,7 @@ server/.venv/bin/python scripts/run_conversation_cases.py
 如果只想快速看某条 query 或某组多轮对话的真实回复，不想启动 Uvicorn 和 Android，可以直接跑：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
   server/.venv/bin/python scripts/probe_chat.py \
   --turn "不要酒精味太重或者刺激感强的产品"
@@ -103,7 +103,7 @@ https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
 多轮调试：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 https_proxy=http://127.0.0.1:7897 http_proxy=http://127.0.0.1:7897 \
   server/.venv/bin/python scripts/probe_chat.py \
   --turn "我是油皮，想要200元以内通勤防晒。敏感肌最近屏障不稳定，想找修护面霜。不要酒精味太重或者刺激感强的产品。我想买护肤品，你推荐什么？" \

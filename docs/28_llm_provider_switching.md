@@ -18,7 +18,7 @@
 仓库读取的是根目录 `.env`：
 
 ```text
-/Users/jia/Developer/bytedance-rag-shopping-agent/.env
+/path/to/bytedance-rag-shopping-agent/.env
 ```
 
 建议 `.env` 同时保留正式 provider 和演示 provider 的 key，但默认 provider 仍设为 `ark`：
@@ -46,7 +46,7 @@ APP_ENV=local
 本次录屏建议直接用命令行临时覆盖，不改长期 `.env`：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent/server
+cd /path/to/bytedance-rag-shopping-agent/server
 LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.5 \
   uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
@@ -77,7 +77,7 @@ LLM_PROVIDER=ark
 启动后端时临时切到 Yunwu 默认候选：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent/server
+cd /path/to/bytedance-rag-shopping-agent/server
 LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.4-mini \
   uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
@@ -85,7 +85,7 @@ LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.4-mini \
 只跑一次 probe：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.4-mini \
   server/.venv/bin/python scripts/probe_chat.py \
   --turn 我是油皮，想要200元以内通勤防晒
@@ -94,7 +94,7 @@ LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.4-mini \
 如果要验证本次录屏使用的 `gpt-5.5`：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.5 \
   server/.venv/bin/python scripts/probe_chat.py \
   --turn 我是油皮，想要200元以内通勤防晒
@@ -176,7 +176,7 @@ gpt-5.5（仅当本机实测更快且稳定）
 演示前建议用同一条 query 对候选模型做最小对比：
 
 ```bash
-cd /Users/jia/Developer/bytedance-rag-shopping-agent
+cd /path/to/bytedance-rag-shopping-agent
 
 LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.5 \
   server/.venv/bin/python scripts/probe_chat.py \

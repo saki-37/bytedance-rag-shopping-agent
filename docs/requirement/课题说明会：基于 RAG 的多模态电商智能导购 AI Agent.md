@@ -32,7 +32,7 @@
 
 - 深度连接\&\#34;浏览\&\#34;→\&\#34;决策\&\#34;→\&\#34;转化\&\#34;
 
-![Image](https://internal-api-drive-stream.larkoffice.com/space/api/box/stream/download/authcode/?code=NjVlODZhYjFmYzIwNTRlZjk4OThlNTg5ZmNkYTAzYTlfY2FhYTE0MjcwM2U1MDA5NWFkOTNiNzQzZGY4ZThjZTFfSUQ6NzY0MTgxMjU4MTU0OTAzNDQ2OF8xNzc5Nzg0NTg4OjE3Nzk4NzA5ODhfVjM)
+（原文此处为飞书内嵌图片，导出链接已失效，略）
 
 ## 1\.2 典型用户场景
 
@@ -51,7 +51,7 @@
 
 **设计建议**：基础场景为必须实现项；进阶场景体现多轮对话和检索能力；高级场景中的**反选/排除**、**购物车操作**和**多模态**为核心加分点，考察 Agent 对否定语义、结构化数据操作和复杂约束的理解。
 
-![Image](https://internal-api-drive-stream.larkoffice.com/space/api/box/stream/download/authcode/?code=M2FiNzRlMzVkYjUxNzdiOTVhY2UzMjljYWEwMTkwZThfYjViZmVhNmVkZjcxYjRmZWJlOWZhMzkyNzBmOGJkNTFfSUQ6NzY0MTU5MDQ5MDkxNTM0MzMxOF8xNzc5Nzg0NTg4OjE3Nzk4NzA5ODhfVjM)
+（原文此处为飞书内嵌图片，导出链接已失效，略）
 
 ---
 
@@ -113,7 +113,7 @@
 
 BaseAPI：https://ark\.cn\-beijing\.volces\.com/api/v3/
 
-Model：ep\-20260514111645\-lmgt2
+Model：YOUR\_MODEL\_ENDPOINT（课题共用 endpoint，已脱敏）
 
 APIKey：YOUR\_SHARED\_COURSE\_KEY（真实 Key 仅保存在本地 `.env`，不进 Git；原文此处为课题共用 Key，已脱敏）
 

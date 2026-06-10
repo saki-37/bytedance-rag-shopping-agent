@@ -11,7 +11,7 @@
 - Android 原生客户端：`client/android/`，Kotlin + Jetpack Compose + OkHttp。
 - FastAPI 后端：`server/app/`，已有 `/api/chat/stream`、`/api/debug/retrieve`、`/api/feedback`。
 - 后端现有 venv：`server/.venv`，Python `3.13.2`。
-- 已验证的本地 ASR 实验环境：`/Users/jia/Documents/个人工具/audio-transcription-lab/`，Python `3.11.4`，FunASR `1.3.9`，已预热 `iic/SenseVoiceSmall + fsmn-vad`。
+- 已验证的本地 ASR 实验环境：`~/asr-lab（本地 ASR 工具目录，按自己环境替换）/`，Python `3.11.4`，FunASR `1.3.9`，已预热 `iic/SenseVoiceSmall + fsmn-vad`。
 
 这次不要把它理解成“个人批量转写脚本”，而是把 ASR 变成后端能力：
 
@@ -109,7 +109,7 @@ RAG 后端的 `/api/asr/transcribe` 负责：
 建议在 `audio-transcription-lab` 里新增一个轻量服务，例如：
 
 ```text
-/Users/jia/Documents/个人工具/audio-transcription-lab/asr_service.py
+~/asr-lab（本地 ASR 工具目录，按自己环境替换）/asr_service.py
 ```
 
 职责：
@@ -125,7 +125,7 @@ RAG 后端的 `/api/asr/transcribe` 负责：
 可以复用已验证脚本：
 
 ```text
-/Users/jia/Documents/个人工具/audio-transcription-lab/scripts/transcribe.py
+~/asr-lab（本地 ASR 工具目录，按自己环境替换）/scripts/transcribe.py
 ```
 
 第一版不要做流式 ASR，先做文件级非流式：
@@ -275,7 +275,7 @@ Android：
 已新增 sidecar 服务：
 
 ```bash
-cd /Users/jia/Documents/个人工具/audio-transcription-lab
+cd ~/asr-lab（本地 ASR 工具目录，按自己环境替换）
 source .venv/bin/activate
 python asr_service.py --port 8765 --keep-uploads
 ```
@@ -309,12 +309,12 @@ POST /api/asr/transcribe
 
 ```bash
 # 1. ASR sidecar
-cd /Users/jia/Documents/个人工具/audio-transcription-lab
+cd ~/asr-lab（本地 ASR 工具目录，按自己环境替换）
 source .venv/bin/activate
 python asr_service.py --port 8765 --keep-uploads
 
 # 2. RAG FastAPI 后端
-cd /Users/jia/Developer/bytedance-rag-shopping-agent/server
+cd /path/to/bytedance-rag-shopping-agent/server
 source .venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
