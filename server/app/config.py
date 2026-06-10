@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     yunwu_model: str | None = None
 
     planner_timeout_seconds: float = 20.0
+    generation_timeout_seconds: float = 30.0
     fast_first_screen_enabled: bool = True
     fast_quick_reply_deadline_seconds: float = 0.8
     memory_provider: str = "local"

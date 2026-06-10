@@ -1,15 +1,15 @@
 # Demo 脚本
 
-日期：2026-05-28
+日期：2026-06-10
 
-用途：保留第一版 1 分钟闭环 Demo 的短脚本，并作为最终提交视频的入口页。5-10 分钟带讲解主版请看 `docs/submission_video_script.md`。
+用途：保留第一版 1 分钟闭环 Demo 的短脚本，并作为最终提交视频的入口页。10 分钟以内完整录制版与剪辑索引请看 `docs/submission_video_script.md`。
 
 答辩口头讲解可直接参考 `docs/22_defense_cheatsheet.md`。提交给评委的设计文档和体验说明分别见 `docs/submission_design_doc.md`、`docs/submission_user_guide.md`。
 
 ## 录屏前检查
 
 1. 后端运行在 `0.0.0.0:8000`，Android 模拟器通过 `adb reverse tcp:8000 tcp:8000` 后访问 `http://127.0.0.1:8000`。
-2. 本地 `.env` 已配置真实 API。正式复验保持 `LLM_PROVIDER=ark`、`ARK_API_KEY`、`ARK_MODEL`、`MOCK_LLM=false`；如果现场演示等待太长，可按 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md) 临时设 `LLM_PROVIDER=yunwu` 并覆盖 `YUNWU_MODEL`。
+2. 本地 `.env` 已配置真实 API。正式复验保持 `LLM_PROVIDER=ark`、`ARK_API_KEY`、`ARK_MODEL`、`MOCK_LLM=false`；如果录屏需要更快响应，可按 [LLM Provider 切换与演示模型候选](28_llm_provider_switching.md) 临时设 `LLM_PROVIDER=yunwu` 并覆盖 `YUNWU_MODEL=gpt-5.5`。
 3. 启动后用 `curl http://127.0.0.1:8000/health` 确认 `llm_provider` 和 `llm_model` 与本轮口径一致。
 4. 如果真实 API 需要代理，终端使用：
 
@@ -28,11 +28,12 @@ export all_proxy=socks5://127.0.0.1:7897
    - `蜜粉`
    - `唇釉`
    - `眉笔`
-	   - `卸妆`
+   - `卸妆`
 6. 如需展示图片/语音/TTS，提前验证：
-   - 图片上传后能得到 `image_plan`，并能继续发送聊天请求。
+   - 图片上传后能得到 `image_plan`，安热沙/安耐晒图片能归一到防晒检索线索，并能继续发送聊天请求。
    - ASR sidecar 已启动，`POST /api/asr/transcribe` 能返回文本。
-   - Android 系统 TTS 中文播报可用。
+   - Android 系统 TTS 中文播报可用，详细/不详细播报模式能切换。
+   - 底部购买对象 chip 能切换，左侧会话抽屉能新建对话。
 
 ## 1 分钟展示顺序
 
@@ -113,10 +114,26 @@ export all_proxy=socks5://127.0.0.1:7897
 
 > 对于资料没有明确支持的“不含/不会刺激”断言，后端不会让模型直接放大成确定承诺。
 
+## 10 分钟录制补充片段
+
+最终录制现在按 `docs/submission_video_script.md` 的 10 分钟以内版本执行。除上面的 1 分钟主线外，还需要额外录到这些可剪素材：
+
+| 片段 | 操作 | 讲解口径 |
+| --- | --- | --- |
+| 模型口径 | `curl /health` 展示 `mock_llm=false`、`llm_provider`、`llm_model` | 本次可用 `gpt-5.5` 提速录屏，正式 benchmark 仍按 Ark/Doubao 口径。 |
+| 多模态图片 | 上传安热沙/安耐晒防晒图片，发起找相似/更适合油皮通勤的请求 | 图片理解先抽取品牌、品类、包装文字，再复用 RAG；不是图搜图。 |
+| Amy 三件套 | 新建会话，按 `docs/submission_video_script.md` 的 "Amy 三件套固定台本" 连续录三轮 | 展示场景组合 search slots、多轮序号指代、对比卡片裁剪和上衣尺码 follow-up。 |
+| 购买对象 | 底部 chip 从 `自己` 切到 `妈妈` 或 `爸爸` | 这是本轮购物对象上下文，不是换助手人格。 |
+| 新建对话 | 左侧抽屉新建会话，输入信息不足 query | 新会话隔离历史；信息不足先追问。 |
+| 语音输入 | 只展示一次麦克风录音、转写、确认发送 | ASR 只把语音变成可编辑文本，用户确认后再进入 RAG。 |
+| 小助手播报 | 点击助手头像/播放按钮，展示播放中和停止 | TTS 是 Android 系统播报，可手动控制。 |
+| 详细播报 | 设置里切换详细/不详细播报，各播一小段 | 普通模式更短，详细模式面向视障用户提供更多上下文。 |
+| 无障碍设置 | 展示语音开关、状态提示、字号 | 语音可关闭，状态可见，大字号可读。 |
+
 ## 当前边界
 
 1. 当前 Demo 主线仍建议优先展示文字导购、流式返回、商品卡片、详情页和防幻觉边界。
-2. 图片输入、ASR 语音输入和 TTS 播报已接入第一版；只有在最终设备/provider/sidecar 复验稳定时才放入主视频现场展示。
+2. 图片输入、ASR 语音输入、TTS 播报、购买对象切换和无障碍设置已接入第一版；主视频可以展示，但要按真实稳定情况剪，失败素材不要硬放。
 3. 当前 enriched 数据以美妆深度主线为核心，并有服饰样例和全品类 thin support；不要承诺所有品类都达到美妆深度。
 4. 当前不展示购物车、真实下单、库存、实时优惠或支付。
 5. Guardrail 是规则版，不是完整 groundedness judge；提交时应讲“发现/拦截/修复/兜底”，不要讲“零幻觉”。

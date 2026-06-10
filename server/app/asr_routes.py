@@ -87,6 +87,7 @@ async def transcribe_audio(
             profile=profile,
             conversation_id=conversation_id,
             sidecar_trace_id=result.asr_trace_id,
+            text=result.text,
             text_char_count=len(result.text),
             error=result.error,
         )
@@ -102,6 +103,7 @@ async def transcribe_audio(
             profile=profile,
             conversation_id=conversation_id,
             sidecar_trace_id=None,
+            text="",
             text_char_count=0,
             error=str(exc),
         )
@@ -516,6 +518,7 @@ def _write_asr_trace(
     profile: str,
     conversation_id: str | None,
     sidecar_trace_id: str | None,
+    text: str,
     text_char_count: int,
     error: str | None,
 ) -> None:
@@ -531,6 +534,7 @@ def _write_asr_trace(
             "profile": profile,
             "conversation_id": conversation_id,
             "sidecar_trace_id": sidecar_trace_id,
+            "text": text,
             "text_char_count": text_char_count,
             "error": error,
             "latency_ms": int((time.perf_counter() - started_at) * 1000),

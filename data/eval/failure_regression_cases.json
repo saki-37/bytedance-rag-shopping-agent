@@ -280,8 +280,8 @@
   },
   {
     "id": "FR-006",
-    "title": "口语预算收窄：150 元以内无满足防晒时不能继续推荐 170/268/298",
-    "source": "Android 真实测试：夏季防晒多轮收窄预算仍返回超预算商品",
+    "title": "口语预算收窄：150 元以内只能返回预算内 SKU，不能继续推荐 170/268/298",
+    "source": "Android 真实测试：夏季防晒多轮收窄预算仍返回超预算商品；当前 raw 数据中安热沙 20ml 便携装为 118 元，可作为预算内候选",
     "history": [
       {
         "role": "user",
@@ -314,8 +314,10 @@
       {
         "user": "我的预算可能只有150",
         "expect": {
-          "must_clarify": true,
-          "max_products": 0,
+          "must_clarify": false,
+          "expected_product_ids_exact": [
+            "p_beauty_010"
+          ],
           "expected_budget_max": 150,
           "expected_facets": {
             "skin_type": [
@@ -329,13 +331,11 @@
             ]
           },
           "forbidden_product_ids": [
-            "p_beauty_010",
             "p_beauty_023",
             "p_beauty_006"
           ],
-          "clarification_contains": [
-            "150元以内",
-            "没有同时满足"
+          "allowed_product_sub_categories": [
+            "防晒"
           ],
           "retrieval_message_contains": [
             "150元以内"
@@ -771,6 +771,237 @@
             "p_clothes_022",
             "p_clothes_006",
             "p_clothes_019"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-015",
+    "title": "展示链路：三件套必须覆盖帽子/上衣/裤子，第二第三对比不能混入第一款，上衣尺码追问要找回上衣卡片",
+    "source": "Android 展示 trace 2026-06-10 conv android-1781072010658-2：三件套漏帽子；第二/第三对比混入第一款；上衣尺码追问只拿到裤子卡片",
+    "sequential": true,
+    "turns": [
+      {
+        "user": "我想给我的朋友 Amy 买一套生日礼物的衣服。她以户外运动为主，身高170，是女生。想给她搭配一套运动系三件套，来个帽子，然后来个上衣，再来个裤子，可以帮我各搭配一件吗？",
+        "planner_additions": [
+          "- 推荐模式：场景组合",
+          "- 类目：服饰运动",
+          "- 子类：帽子、速干T恤、短袖T恤、户外裤、运动长裤",
+          "- 场景：户外、运动",
+          "- 搜索槽：户外运动帽子 | 类目=服饰运动 | 子类=帽子 | 场景=户外,运动",
+          "- 搜索槽：户外运动上衣 | 类目=服饰运动 | 子类=速干T恤,短袖T恤 | 场景=户外,运动",
+          "- 搜索槽：户外运动裤子 | 类目=服饰运动 | 子类=户外裤,运动长裤 | 场景=户外,运动"
+        ],
+        "expect": {
+          "expected_product_ids_exact": [
+            "p_clothes_019",
+            "p_clothes_021",
+            "p_clothes_017"
+          ],
+          "expected_product_sub_categories_present": [
+            "帽子",
+            "速干T恤",
+            "户外裤"
+          ],
+          "retrieval_message_contains": [
+            "推荐模式：场景组合",
+            "搜索槽：户外运动帽子",
+            "搜索槽：户外运动上衣",
+            "搜索槽：户外运动裤子"
+          ]
+        }
+      },
+      {
+        "user": "嗯，第二款和第三款可以给我出一个比较吗？",
+        "expect": {
+          "expected_comparison_mode": true,
+          "expected_referenced_product_ids": [
+            "p_clothes_021",
+            "p_clothes_017"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_021",
+            "p_clothes_017"
+          ],
+          "forbidden_product_ids": [
+            "p_clothes_019",
+            "p_clothes_004"
+          ]
+        }
+      },
+      {
+        "user": "呃，上衣的话，你有什么推荐的尺码吗？如果是根据我朋友的这个身材的话。",
+        "expect": {
+          "expected_comparison_mode": false,
+          "expected_referenced_product_ids": [
+            "p_clothes_021"
+          ],
+          "expected_product_ids_exact": [
+            "p_clothes_021"
+          ],
+          "forbidden_product_ids": [
+            "p_clothes_017",
+            "p_clothes_019",
+            "p_clothes_004"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-016",
+    "title": "展示链路：防晒推荐补充油皮/户外条件后仍要保留三张可对比候选",
+    "source": "Android 展示 trace 2026-06-10：先问防晒可返回三张，补充油皮/户外后因为 skin_type 硬过滤只剩两张，200 元通勤防晒版本会进一步塌成一张",
+    "sequential": true,
+    "turns": [
+      {
+        "user": "夏天快到了，想看看防晒!",
+        "expect": {
+          "min_products": 3,
+          "expected_product_ids_exact": [
+            "p_beauty_010",
+            "p_beauty_023",
+            "p_beauty_006"
+          ],
+          "allowed_product_categories": [
+            "美妆护肤"
+          ],
+          "allowed_product_sub_categories": [
+            "防晒"
+          ]
+        }
+      },
+      {
+        "user": "我是油皮，主要是户外需求",
+        "expect": {
+          "min_products": 3,
+          "expected_category_candidates": [
+            "beauty"
+          ],
+          "expected_facets": {
+            "skin_type": [
+              "油皮"
+            ],
+            "effect": [
+              "防晒"
+            ],
+            "use_case": [
+              "户外"
+            ],
+            "sub_category": [
+              "防晒"
+            ]
+          },
+          "expected_product_ids_exact": [
+            "p_beauty_006",
+            "p_beauty_023",
+            "p_beauty_010"
+          ],
+          "allowed_product_categories": [
+            "美妆护肤"
+          ],
+          "allowed_product_sub_categories": [
+            "防晒"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-017",
+    "title": "展示链路：防晒同款后补充敏感肌和中文预算时，必须继承防晒上下文",
+    "source": "Android 展示 trace 2026-06-10 conv android-1781074905730-2：ASR 文本为“感谢我是敏感肌，然后预算大概在两百元。”，validator 丢掉防晒和预算后推荐成面霜/面膜",
+    "history": [
+      {
+        "role": "user",
+        "content": "我朋友给我推荐了，这个可以帮我找个同款吗？"
+      },
+      {
+        "role": "assistant",
+        "content": "已返回安热沙防晒同款。",
+        "product_ids": [
+          "p_beauty_010"
+        ]
+      }
+    ],
+    "turns": [
+      {
+        "user": "感谢我是敏感肌，然后预算大概在两百元。",
+        "expect": {
+          "must_clarify": false,
+          "min_products": 1,
+          "expected_budget_max": 200,
+          "expected_category_candidates": [
+            "beauty"
+          ],
+          "expected_facets": {
+            "skin_type": [
+              "敏感肌"
+            ],
+            "effect": [
+              "防晒"
+            ],
+            "sub_category": [
+              "防晒"
+            ]
+          },
+          "allowed_product_categories": [
+            "美妆护肤"
+          ],
+          "allowed_product_sub_categories": [
+            "防晒"
+          ],
+          "forbidden_product_ids": [
+            "p_beauty_012",
+            "p_beauty_007",
+            "p_beauty_022"
+          ],
+          "retrieval_message_contains": [
+            "敏感肌",
+            "200元以内",
+            "子类：防晒"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "FR-018",
+    "title": "展示链路：比较一下这三款不能把“一下”的一误解析成第一款",
+    "source": "Android 展示 trace 2026-06-10 conv android-1781076251875-1：用户说“详细的对比一下这三款”，规则层把“一下”误解析为第一款，导致安热沙被 product_id 硬过滤",
+    "history": [
+      {
+        "role": "user",
+        "content": "我是油皮，想要200元以内通勤防晒"
+      },
+      {
+        "role": "assistant",
+        "content": "已返回巴黎欧莱雅两个规格和安热沙20ml便携装。",
+        "product_ids": [
+          "p_beauty_006",
+          "p_beauty_010"
+        ]
+      }
+    ],
+    "turns": [
+      {
+        "user": "可以给我详细的对比一下这三款吗？",
+        "expect": {
+          "expected_comparison_mode": true,
+          "expected_referenced_product_ids": [
+            "p_beauty_006",
+            "p_beauty_010"
+          ],
+          "expected_product_ids_exact": [
+            "p_beauty_006",
+            "p_beauty_010"
+          ],
+          "forbidden_product_ids": [
+            "p_beauty_023"
+          ],
+          "retrieval_message_contains": [
+            "指代商品ID：p_beauty_006、p_beauty_010"
           ]
         }
       }

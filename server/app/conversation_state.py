@@ -21,13 +21,10 @@ from pathlib import Path
 
 from app.models import ChatRequest, QueryIntent
 from app.data_loader import load_raw_products
-from app.retrieval import FACET_LEXICON, category_exclusions, parse_query_intent
+from app.retrieval import CATEGORY_TO_RAW, FACET_LEXICON, RAW_TO_CATEGORY, category_exclusions, parse_query_intent
 
 
-CATEGORY_LABELS = {
-    "beauty": "美妆护肤",
-    "apparel": "服饰运动",
-}
+CATEGORY_LABELS = CATEGORY_TO_RAW
 
 FACET_LABELS = {
     "skin_type": "肤质",
@@ -135,6 +132,21 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
     current_intent = parse_query_intent(current_message)
     referenced_product_ids = _referenced_history_product_ids(current_message, request.history)
     if not previous_user_messages:
+        if referenced_product_ids:
+            state = RuleConversationState()
+            _merge_message(state, current_message, source="current")
+            _apply_referenced_products(state, referenced_product_ids, source="current")
+            return RetrievalMessageBuildResult(
+                message=_format_merged_message(state=state, current_message=current_message),
+                applied=True,
+                trace={
+                    "applied": True,
+                    "reason": "assistant_card_reference_only",
+                    "source_user_turns": 1,
+                    "state": _state_trace(state),
+                    "constraint_trace": _constraint_trace_from_state(state),
+                },
+            )
         return RetrievalMessageBuildResult(
             message=current_message,
             applied=False,
@@ -161,8 +173,9 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
         _merge_message(state, message, source="history")
     _merge_message(state, current_message, source="current")
     if referenced_product_ids:
-        state.referenced_product_ids = referenced_product_ids
-        state.actions.append(f"current:reference_products={','.join(referenced_product_ids)}")
+        _apply_referenced_products(state, referenced_product_ids, source="current")
+    else:
+        _inherit_active_product_context(state, request.history)
 
     merged_message = _format_merged_message(
         state=state,
@@ -401,6 +414,92 @@ def _format_merged_message(
             current_message,
         ]
     )
+
+
+def _apply_referenced_products(state: RuleConversationState, product_ids: list[str], source: str) -> None:
+    state.referenced_product_ids = product_ids
+    state.actions.append(f"{source}:reference_products={','.join(product_ids)}")
+    _apply_product_context(state, product_ids, source=source, replace_existing=True)
+
+
+def _inherit_active_product_context(state: RuleConversationState, history: list) -> None:
+    if state.facets.get("sub_category"):
+        return
+    product_ids = _latest_history_product_ids(history)
+    if not product_ids:
+        return
+    context = _product_context_for_product_ids(product_ids)
+    if not _is_coherent_product_context(product_ids, context):
+        return
+    _apply_product_context(state, product_ids, source="history", replace_existing=False)
+
+
+def _apply_product_context(
+    state: RuleConversationState,
+    product_ids: list[str],
+    *,
+    source: str,
+    replace_existing: bool,
+) -> None:
+    context = _product_context_for_product_ids(product_ids)
+    categories = context["categories"]
+    sub_categories = context["sub_categories"]
+    effects = context["effects"]
+
+    if categories:
+        before = list(state.category_candidates)
+        if replace_existing and not state.category_candidates:
+            state.category_candidates = list(categories)
+        elif not state.category_candidates:
+            _append_unique(state.category_candidates, categories)
+        else:
+            _append_unique(state.category_candidates, [
+                category for category in categories if category in state.category_candidates
+            ])
+        if state.category_candidates != before:
+            state.actions.append(f"{source}:merge_category={','.join(state.category_candidates)}")
+
+    if sub_categories and (replace_existing or not state.facets.get("sub_category")):
+        state.facets["sub_category"] = list(sub_categories)
+        state.actions.append(f"{source}:merge_sub_category={','.join(sub_categories)}")
+    if effects and not state.facets.get("effect"):
+        state.facets["effect"] = list(effects)
+        state.actions.append(f"{source}:merge_effect={','.join(effects)}")
+
+
+def _product_context_for_product_ids(product_ids: list[str]) -> dict[str, list[str]]:
+    products = _raw_products_by_id()
+    categories: list[str] = []
+    sub_categories: list[str] = []
+    for product_id in product_ids:
+        raw = products.get(product_id)
+        if not raw:
+            continue
+        raw_category = str(raw.get("category", "")).strip()
+        category = RAW_TO_CATEGORY.get(raw_category)
+        if category and category not in categories:
+            categories.append(category)
+        sub_category = str(raw.get("sub_category", "")).strip()
+        if sub_category and sub_category not in sub_categories:
+            sub_categories.append(sub_category)
+    effects = [
+        sub_category
+        for sub_category in sub_categories
+        if sub_category in FACET_LEXICON.get("effect", {})
+    ]
+    return {
+        "categories": categories,
+        "sub_categories": sub_categories,
+        "effects": effects,
+    }
+
+
+def _is_coherent_product_context(product_ids: list[str], context: dict[str, list[str]]) -> bool:
+    if len(product_ids) == 1:
+        return True
+    categories = context.get("categories", [])
+    sub_categories = context.get("sub_categories", [])
+    return len(categories) == 1 and len(sub_categories) == 1
 
 
 def _state_trace(state: RuleConversationState) -> dict:
@@ -700,6 +799,8 @@ def _history_product_aliases(raw: dict) -> tuple[list[str], list[str]]:
     for type_char, spoken_alias in (("裤", "裤子"), ("鞋", "鞋子"), ("帽", "帽子")):
         if type_char in sub_category:
             context_aliases.add(spoken_alias)
+    if any(marker in sub_category for marker in ["T恤", "卫衣"]) or "上衣" in title:
+        context_aliases.update({"上衣", "衣服"})
     if brand == "阿迪达斯":
         strong_aliases.add("adidas")
     if brand == "安热沙":
@@ -754,14 +855,16 @@ def _recent_history_product_ids(history: list, max_assistant_turns: int = 6) -> 
 def _referenced_product_index(message: str) -> int | None:
     normalized = message.strip()
     explicit_patterns = [
-        (r"(第一|第1(?:个|款|件)?|1(?:号|个|款|件))", 0),
-        (r"(第二|第2(?:个|款|件)?|2(?:号|个|款|件))", 1),
-        (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
+        (r"(第一|第1(?:个|款|件)?|1号)", 0),
+        (r"(第二|第2(?:个|款|件)?|2号)", 1),
+        (r"(第三|第3(?:个|款|件)?|3号)", 2),
     ]
     for pattern, index in explicit_patterns:
         if re.search(pattern, normalized):
             return index
-    if any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
+    if any(term in normalized for term in ["它", "这款", "那款", "刚才那个", "刚才那款", "上一款", "上一个"]):
+        return 0
+    if _has_product_deictic_reference(normalized):
         return 0
     return None
 
@@ -769,25 +872,38 @@ def _referenced_product_index(message: str) -> int | None:
 def _referenced_product_indexes(message: str) -> list[int]:
     normalized = message.strip()
     markers = [
-        (r"(第一|第1(?:个|款|件)?|1(?:号|个|款|件))", 0),
-        (r"(第二|第2(?:个|款|件)?|2(?:号|个|款|件))", 1),
-        (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
+        (r"(第一|第1(?:个|款|件)?|1号)", 0),
+        (r"(第二|第2(?:个|款|件)?|2号)", 1),
+        (r"(第三|第3(?:个|款|件)?|3号)", 2),
     ]
     indexes = [index for pattern, index in markers if re.search(pattern, normalized)]
     if _has_numbered_comparison_context(normalized):
-        bare_markers = [
-            (r"(?<!\d)[1一](?!\d)", 0),
-            (r"(?<!\d)[2二](?!\d)", 1),
-            (r"(?<!\d)[3三](?!\d)", 2),
-        ]
-        indexes.extend(index for pattern, index in bare_markers if re.search(pattern, normalized))
-    if indexes and any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
+        indexes.extend(_numbered_pair_or_list_indexes(normalized))
+    if indexes and any(term in normalized for term in ["它", "这款", "那款", "刚才那个", "刚才那款", "上一款", "上一个"]):
         indexes.insert(0, 0)
     return list(dict.fromkeys(indexes))
 
 
 def _has_numbered_comparison_context(message: str) -> bool:
     return any(term in message for term in ["比较", "对比", "1和", "1 和", "一和", "一 和", "和2", "和 2", "和二", "和 二"])
+
+
+def _numbered_pair_or_list_indexes(message: str) -> list[int]:
+    token_to_index = {"1": 0, "一": 0, "2": 1, "二": 1, "3": 2, "三": 2}
+    token = r"(?<!第)(?<!\d)[123一二三](?![\d个款件号套双])"
+    separator = r"\s*(?:和|跟|与|及|、|,|，)\s*"
+    indexes: list[int] = []
+    for match in re.finditer(rf"{token}(?:{separator}{token})+", message):
+        for raw_token in re.findall(r"[123一二三]", match.group(0)):
+            indexes.append(token_to_index[raw_token])
+    return list(dict.fromkeys(indexes))
+
+
+def _has_product_deictic_reference(message: str) -> bool:
+    return bool(
+        re.search(r"(这个|那个|这一个|那一个).{0,4}(商品|产品|卡片|款|牌子|品牌)", message)
+        or re.search(r"(商品|产品|卡片|款|牌子|品牌).{0,4}(这个|那个|这一个|那一个)", message)
+    )
 
 
 def _references_first_two_products(message: str) -> bool:
@@ -798,4 +914,16 @@ def _references_all_previous_products(message: str) -> bool:
     normalized_message = re.sub(r"比较(合适|适合|舒服|稳妥|好|划算|便宜|贵|大|小)", "", message)
     if not any(term in normalized_message for term in ["对比", "比较", "怎么选", "哪个更", "哪款更", "区别"]):
         return False
-    return any(term in normalized_message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])
+    return any(term in normalized_message for term in [
+        "这几个",
+        "这些",
+        "它们",
+        "刚才这些",
+        "刚才几个",
+        "这三款",
+        "这3款",
+        "三款",
+        "3款",
+        "全部",
+        "都",
+    ])

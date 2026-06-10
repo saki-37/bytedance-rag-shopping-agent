@@ -785,12 +785,12 @@ def _comparison_indexes(message: str) -> list[int]:
     indexes = [index for pattern, index in markers if re.search(pattern, message)]
     if _has_numbered_comparison_context(message):
         bare_markers = [
-            (r"(?<!\d)[1一](?!\d)", 0),
-            (r"(?<!\d)[2二](?!\d)", 1),
-            (r"(?<!\d)[3三](?!\d)", 2),
+            (r"(?<!\d)1(?![\d个款件号套双])|(?<!第)一(?![个款件号套双])", 0),
+            (r"(?<!\d)2(?![\d个款件号套双])|(?<!第)二(?![个款件号套双])", 1),
+            (r"(?<!\d)3(?![\d个款件号套双])|(?<!第)三(?![个款件号套双])", 2),
         ]
         indexes.extend(index for pattern, index in bare_markers if re.search(pattern, message))
-    if indexes and any(term in message for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
+    if indexes and any(term in message for term in ["它", "这款", "那款", "刚才那个", "刚才那款", "上一款", "上一个"]):
         indexes.insert(0, 0)
     return list(dict.fromkeys(indexes))
 
@@ -845,4 +845,6 @@ def _references_all_previous_products(message: str) -> bool:
 
 def _ordered_cards(cards: list[ProductCard], target_product_ids: list[str]) -> list[ProductCard]:
     order = {product_id: index for index, product_id in enumerate(target_product_ids)}
-    return sorted(cards, key=lambda card: order.get(card.product_id, len(order)))
+    ordered = sorted(cards, key=lambda card: order.get(card.product_id, len(order)))
+    targeted = [card for card in ordered if card.product_id in order]
+    return targeted or ordered

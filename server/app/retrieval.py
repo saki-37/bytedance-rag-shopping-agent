@@ -55,6 +55,15 @@ class RetrievalResult:
     clarification_question: str | None = None
 
 
+@dataclass(frozen=True)
+class SearchSlot:
+    label: str
+    category: str | None = None
+    sub_categories: tuple[str, ...] = ()
+    effects: tuple[str, ...] = ()
+    use_cases: tuple[str, ...] = ()
+
+
 FACET_LEXICON: dict[str, dict[str, list[str]]] = {
     "skin_type": {
         "油皮": ["油皮", "大油皮", "混油", "混油皮", "出油"],
@@ -377,23 +386,127 @@ def parse_query_intent(query: str) -> QueryIntent:
 
 
 def _hard_budget(query: str) -> float | None:
+    amount = r"(\d+(?:\.\d+)?|[零〇一二两三四五六七八九十百千万点半]+)"
     patterns = [
-        r"(\d+(?:\.\d+)?)\s*元?\s*(?:以[内下]|以内|以下|之内|内)",
-        r"(?:预算|价格|价位).{0,8}(?:放宽到|放宽至|放到|放至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
-        r"(?:预算|价格|价位)\s*(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
-        r"(?:预算|价格|价位).{0,8}(?:可能只有|只有|只剩|大概|大约|最多|上限|控制在)\s*(\d+(?:\.\d+)?)\s*元?",
-        r"(?:放宽到|放宽至|放到|放至|调高到|调高至|提高到|提高至)\s*(\d+(?:\.\d+)?)\s*元?",
-        r"(?:预算|价格|价位)\s*(?:在|不超过|别超过|低于|小于|不高于|<=)?\s*(\d+(?:\.\d+)?)",
-        r"(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*(\d+(?:\.\d+)?)\s*元?",
-        r"(?:不超过|别超过|低于|小于|不高于|<=)\s*(\d+(?:\.\d+)?)\s*元?",
+        rf"{amount}\s*(?:元|块)?\s*(?:以[内下]|以内|以下|之内|内)",
+        rf"(?:预算|价格|价位).{{0,8}}(?:放宽到|放宽至|放到|放至|调高到|调高至|提高到|提高至)\s*{amount}\s*(?:元|块)?",
+        rf"(?:预算|价格|价位)\s*(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*{amount}\s*(?:元|块)?",
+        rf"(?:预算|价格|价位).{{0,8}}(?:可能只有|只有|只剩|大概|大约|最多|上限|控制在)\s*(?:在)?\s*{amount}\s*(?:元|块)?",
+        rf"(?:放宽到|放宽至|放到|放至|调高到|调高至|提高到|提高至)\s*{amount}\s*(?:元|块)?",
+        rf"(?:预算|价格|价位)\s*(?:大概在|大约在|大概|大约|在|不超过|别超过|低于|小于|不高于|<=)?\s*{amount}\s*(?:元|块)?",
+        rf"(?:降到|降至|降低到|压到|压低到|控制在|调到|改成|设成|缩到)\s*{amount}\s*(?:元|块)?",
+        rf"(?:不超过|别超过|低于|小于|不高于|<=)\s*{amount}\s*(?:元|块)?",
     ]
     matches: list[tuple[int, float]] = []
     for pattern in patterns:
         for match in re.finditer(pattern, query):
-            matches.append((match.start(), float(match.group(1))))
+            amount_value = _parse_budget_amount(match.group(1))
+            if amount_value is not None:
+                matches.append((match.start(), amount_value))
     if not matches:
         return None
     return max(matches, key=lambda item: item[0])[1]
+
+
+def _parse_budget_amount(raw_value: str) -> float | None:
+    normalized = raw_value.strip()
+    if not normalized:
+        return None
+    try:
+        return float(normalized)
+    except ValueError:
+        return _chinese_number_to_float(normalized)
+
+
+def _chinese_number_to_float(raw_value: str) -> float | None:
+    text = raw_value.strip().replace("两", "二").replace("〇", "零")
+    if not text:
+        return None
+    if text == "半":
+        return 0.5
+
+    if "点" in text:
+        integer_part, decimal_part = text.split("点", 1)
+        integer = _chinese_integer_to_int(integer_part) if integer_part else 0
+        if integer is None:
+            return None
+        digits = []
+        digit_values = _chinese_digit_values()
+        for char in decimal_part:
+            if char == "半":
+                digits.append("5")
+            elif char in digit_values:
+                digits.append(str(digit_values[char]))
+            else:
+                return None
+        return float(f"{integer}.{''.join(digits)}") if digits else float(integer)
+
+    integer = _chinese_integer_to_int(text)
+    return float(integer) if integer is not None else None
+
+
+def _chinese_integer_to_int(text: str) -> int | None:
+    if not text:
+        return 0
+    if "万" in text:
+        high, low = text.split("万", 1)
+        high_value = _chinese_integer_to_int(high)
+        low_value = _chinese_integer_to_int(low)
+        if high_value is None or low_value is None:
+            return None
+        return high_value * 10000 + low_value
+
+    digit_values = _chinese_digit_values()
+    unit_values = {"十": 10, "百": 100, "千": 1000}
+    total = 0
+    number = 0
+    last_unit = 1
+    zero_after_unit = False
+    seen = False
+    for char in text:
+        if char in digit_values:
+            seen = True
+            digit = digit_values[char]
+            if digit == 0:
+                zero_after_unit = True
+                number = 0
+            else:
+                number = digit
+            continue
+        if char not in unit_values:
+            return None
+        seen = True
+        unit = unit_values[char]
+        if number == 0:
+            number = 1
+        total += number * unit
+        number = 0
+        last_unit = unit
+        zero_after_unit = False
+
+    if not seen:
+        return None
+    if number:
+        if total and last_unit >= 100 and number < 10 and not zero_after_unit:
+            total += number * (last_unit // 10)
+        else:
+            total += number
+    return total
+
+
+def _chinese_digit_values() -> dict[str, int]:
+    return {
+        "零": 0,
+        "一": 1,
+        "二": 2,
+        "三": 3,
+        "四": 4,
+        "五": 5,
+        "六": 6,
+        "七": 7,
+        "八": 8,
+        "九": 9,
+    }
 
 
 def _extract_referenced_product_ids(query: str) -> list[str]:
@@ -469,6 +582,7 @@ def _extract_soft_preferences(query: str) -> list[str]:
 
 def _is_comparison_query(query: str) -> bool:
     query = re.sub(r"比较(合适|适合|舒服|稳妥|好|划算|便宜|贵|大|小)", "", query)
+    query = re.sub(r"比较(喜欢|偏|常|经常|多|少|高|低|轻|重|宽松|修身)", "", query)
     return any(term in query for term in COMPARISON_TERMS)
 
 
@@ -624,6 +738,7 @@ def retrieve(
     final_hits: list[RetrievalHit] = []
     hard_filtered_out: list[FilteredProduct] = []
     scored: list[tuple[float, dict, list[str]]] = []
+    skin_type_backfill_scored: list[tuple[float, dict, list[str]]] = []
 
     # 这里刻意先排除、再打分：违反硬约束的商品不能因为向量命中而返回。
     for item in products:
@@ -667,15 +782,22 @@ def retrieve(
                 FilteredProduct(product_id=raw["product_id"], reason=f"missing required effect: {missing_effect}")
             )
             continue
+        skin_type_near_miss: str | None = None
         missing_skin_type = _missing_required_skin_type(intent, item)
         if not is_referenced_product and missing_skin_type is not None:
-            hard_filtered_out.append(
-                FilteredProduct(product_id=raw["product_id"], reason=f"missing required skin_type: {missing_skin_type}")
-            )
-            continue
+            if _can_backfill_skin_type_near_miss(intent, query):
+                skin_type_near_miss = missing_skin_type
+            else:
+                hard_filtered_out.append(
+                    FilteredProduct(product_id=raw["product_id"], reason=f"missing required skin_type: {missing_skin_type}")
+                )
+                continue
         text = product_search_text(item).lower()
         score = 0.0
         reasons: list[str] = []
+        if skin_type_near_miss is not None:
+            score -= 2.0
+            reasons.append(f"skin_type_near_miss:{skin_type_near_miss}")
         if is_referenced_product:
             score += 20.0
             reasons.append("referenced_product")
@@ -710,8 +832,15 @@ def retrieve(
             score += 1.0
             reasons.append("budget_match")
         if score > 0:
-            scored.append((score, item, reasons))
+            entry = (score, item, reasons)
+            if skin_type_near_miss is not None:
+                skin_type_backfill_scored.append(entry)
+            else:
+                scored.append(entry)
 
+    if not scored and skin_type_backfill_scored:
+        scored = skin_type_backfill_scored
+        skin_type_backfill_scored = []
     if not scored:
         # 如果没有正向匹配信号，保留通过硬过滤的商品，
         # 让下游 fallback 仍然能基于证据回答，而不是编造。
@@ -748,7 +877,13 @@ def retrieve(
         )
 
     scored.sort(key=lambda pair: (pair[0], -_min_purchase_price(pair[1]["raw"])), reverse=True)
+    skin_type_backfill_scored.sort(key=lambda pair: (pair[0], -_min_purchase_price(pair[1]["raw"])), reverse=True)
     selected_scored = _select_ranked_scored(scored, limit=limit, intent=intent, query=query)
+    selected_scored = _fill_underfilled_with_backfill(
+        selected_scored,
+        skin_type_backfill_scored,
+        limit=limit,
+    )
     selected_scored = _order_referenced_scored(selected_scored, intent)
     selected = [item for _, item, _ in selected_scored]
     final_hits = [
@@ -1209,6 +1344,21 @@ def _missing_required_skin_type(intent: QueryIntent, item: dict) -> str | None:
     return ",".join(required_skin_types)
 
 
+def _can_backfill_skin_type_near_miss(intent: QueryIntent, query: str) -> bool:
+    required_skin_types = set(intent.facets.get("skin_type", []))
+    if not required_skin_types:
+        return False
+    if "敏感肌" in required_skin_types:
+        return False
+    if intent.comparison_mode or intent.referenced_product_ids:
+        return False
+    if not any(skin_type in {"油皮", "混油皮", "干皮"} for skin_type in required_skin_types):
+        return False
+    if _is_scene_bundle_query(query):
+        return False
+    return True
+
+
 def _has_positive_skin_type_evidence(skin_type: str, item: dict) -> bool:
     aliases = _skin_type_aliases(skin_type)
     structured_text = _positive_structured_text(item)
@@ -1447,7 +1597,12 @@ def _select_ranked_scored(
     query: str,
 ) -> list[tuple[float, dict, list[str]]]:
     if _is_scene_bundle_query(query) and not intent.referenced_product_ids:
-        selected = _select_scene_bundle_scored(scored, limit=limit, intent=intent)
+        selected = _select_scene_bundle_scored(
+            scored,
+            limit=limit,
+            intent=intent,
+            slots=_planned_search_slots(query),
+        )
         if selected:
             return selected
 
@@ -1488,15 +1643,45 @@ def _select_ranked_scored(
     return selected[:limit]
 
 
+def _fill_underfilled_with_backfill(
+    selected: list[tuple[float, dict, list[str]]],
+    backfill: list[tuple[float, dict, list[str]]],
+    *,
+    limit: int,
+) -> list[tuple[float, dict, list[str]]]:
+    if len(selected) >= limit or not backfill:
+        return selected[:limit]
+    filled = list(selected)
+    selected_ids = {str(entry[1]["raw"].get("product_id")) for entry in filled}
+    for entry in backfill:
+        product_id = str(entry[1]["raw"].get("product_id"))
+        if product_id in selected_ids:
+            continue
+        filled.append(entry)
+        selected_ids.add(product_id)
+        if len(filled) >= limit:
+            break
+    return filled[:limit]
+
+
 def _select_scene_bundle_scored(
     scored: list[tuple[float, dict, list[str]]],
     *,
     limit: int,
     intent: QueryIntent,
+    slots: list[SearchSlot] | None = None,
 ) -> list[tuple[float, dict, list[str]]]:
     selected: list[tuple[float, dict, list[str]]] = []
     selected_ids: set[str] = set()
     selected_sub_categories: set[str] = set()
+
+    for slot in slots or []:
+        match = _first_slot_match(scored, selected_ids, slot)
+        if match is None:
+            continue
+        _append_selected_scored(match, selected, selected_ids, selected_sub_categories)
+        if len(selected) >= limit:
+            return selected[:limit]
 
     for category in intent.category_candidates:
         match = _first_unselected(
@@ -1527,6 +1712,89 @@ def _select_scene_bundle_scored(
         if len(selected) >= limit:
             break
     return selected[:limit]
+
+
+def _planned_search_slots(query: str) -> list[SearchSlot]:
+    slots: list[SearchSlot] = []
+    for match in re.finditer(r"(?m)^-\s*搜索槽：([^\n]+)$", query):
+        raw_parts = [part.strip() for part in match.group(1).split("|")]
+        if not raw_parts:
+            continue
+        label = raw_parts[0]
+        category: str | None = None
+        sub_categories: list[str] = []
+        effects: list[str] = []
+        use_cases: list[str] = []
+        for part in raw_parts[1:]:
+            if "=" not in part:
+                continue
+            key, raw_value = [item.strip() for item in part.split("=", 1)]
+            values = [value.strip() for value in re.split(r"[、,，]+", raw_value) if value.strip()]
+            if key == "类目":
+                category = _slot_category(values)
+            elif key == "子类":
+                sub_categories.extend(value for value in values if value in FACET_LEXICON["sub_category"])
+            elif key == "功效":
+                effects.extend(value for value in values if value in FACET_LEXICON["effect"])
+            elif key == "场景":
+                use_cases.extend(value for value in values if value in FACET_LEXICON["use_case"])
+        if category or sub_categories or effects or use_cases:
+            slots.append(
+                SearchSlot(
+                    label=label,
+                    category=category,
+                    sub_categories=tuple(dict.fromkeys(sub_categories)),
+                    effects=tuple(dict.fromkeys(effects)),
+                    use_cases=tuple(dict.fromkeys(use_cases)),
+                )
+            )
+    return slots[:6]
+
+
+def _slot_category(values: list[str]) -> str | None:
+    for value in values:
+        if value in CATEGORY_TO_RAW:
+            return value
+        if value in RAW_TO_CATEGORY:
+            return RAW_TO_CATEGORY[value]
+    return None
+
+
+def _first_slot_match(
+    scored: list[tuple[float, dict, list[str]]],
+    selected_ids: set[str],
+    slot: SearchSlot,
+) -> tuple[float, dict, list[str]] | None:
+    for sub_category in slot.sub_categories:
+        match = _first_unselected(
+            scored,
+            selected_ids,
+            lambda entry, expected=sub_category: _matches_slot(entry[1], slot, required_sub_category=expected),
+        )
+        if match is not None:
+            return match
+    return _first_unselected(
+        scored,
+        selected_ids,
+        lambda entry: _matches_slot(entry[1], slot),
+    )
+
+
+def _matches_slot(item: dict, slot: SearchSlot, required_sub_category: str | None = None) -> bool:
+    raw = item["raw"]
+    if slot.category and _canonical_category(item) != slot.category:
+        return False
+    raw_sub_category = str(raw.get("sub_category", ""))
+    if required_sub_category is not None:
+        return raw_sub_category == required_sub_category
+    if slot.sub_categories and raw_sub_category not in slot.sub_categories:
+        return False
+    text = product_search_text(item).lower()
+    if slot.effects and not any(effect.lower() in text for effect in slot.effects):
+        return False
+    if slot.use_cases and not any(use_case.lower() in text for use_case in slot.use_cases):
+        return False
+    return True
 
 
 def _first_unselected(

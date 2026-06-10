@@ -1,6 +1,6 @@
 # LLM Provider 切换与演示模型候选
 
-日期：2026-06-08
+日期：2026-06-10
 
 用途：说明当前项目如何在正式评测的 Ark / Doubao provider 和演示用 Yunwu provider 之间切换，以及如何选择和验证演示模型。正式 benchmark 仍以 Ark / Doubao 为准；Yunwu 只作为现场演示或录屏时降低等待时间的备用 provider。
 
@@ -9,7 +9,7 @@
 推荐把 `.env` 当作长期默认配置，把命令行环境变量当作单次临时覆盖：
 
 - `.env` 长期保持 `LLM_PROVIDER=ark`，用于正式测试和回归。
-- 演示时用命令行前缀临时覆盖 `LLM_PROVIDER=yunwu` 和 `YUNWU_MODEL=...`。
+- 演示时用命令行前缀临时覆盖 `LLM_PROVIDER=yunwu` 和 `YUNWU_MODEL=...`；本次录屏如果实测 `gpt-5.5` 更快且稳定，就临时用 `gpt-5.5`。
 - 每次改 provider 或模型后，都要重启 Uvicorn；后端启动时读取配置。
 - `GET /health` 会返回当前 `llm_provider` 和 `llm_model`，用于确认本轮实际生效的模型。
 
@@ -43,6 +43,14 @@ APP_ENV=local
 
 `.env` 里的 `YUNWU_MODEL` 只是默认备用值。临时演示时可以在命令行覆盖它，不需要反复编辑 `.env`。
 
+本次录屏建议直接用命令行临时覆盖，不改长期 `.env`：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent/server
+LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.5 \
+  uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
 ## 两种切换方式
 
 ### 方式一：改 `.env`
@@ -66,7 +74,7 @@ LLM_PROVIDER=ark
 
 适合演示、录屏或模型 A/B smoke test。命令行环境变量会覆盖 `.env` 中同名字段。
 
-启动后端时临时切到 Yunwu：
+启动后端时临时切到 Yunwu 默认候选：
 
 ```bash
 cd /Users/jia/Developer/bytedance-rag-shopping-agent/server
@@ -83,6 +91,15 @@ LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.4-mini \
   --turn 我是油皮，想要200元以内通勤防晒
 ```
 
+如果要验证本次录屏使用的 `gpt-5.5`：
+
+```bash
+cd /Users/jia/Developer/bytedance-rag-shopping-agent
+LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.5 \
+  server/.venv/bin/python scripts/probe_chat.py \
+  --turn 我是油皮，想要200元以内通勤防晒
+```
+
 ## 生效检查
 
 后端启动后检查：
@@ -91,7 +108,7 @@ LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.4-mini \
 curl http://127.0.0.1:8000/health
 ```
 
-期望看到类似：
+如果本次录屏切到 `gpt-5.5`，期望看到类似：
 
 ```json
 {
@@ -99,7 +116,7 @@ curl http://127.0.0.1:8000/health
   "catalog_size": 100,
   "mock_llm": false,
   "llm_provider": "yunwu",
-  "llm_model": "gpt-5.4-mini"
+  "llm_model": "gpt-5.5"
 }
 ```
 
@@ -111,7 +128,8 @@ curl http://127.0.0.1:8000/health
 
 | 角色 | 模型 ID | 推荐用途 | 注意事项 |
 | --- | --- | --- | --- |
-| 第一候选 | `gpt-5.4-mini` | 演示默认候选；比 `gpt-4o-mini` 更新，也应该比大模型更轻 | 需要先跑 probe，确认流式和 Planner JSON 稳定 |
+| 本次录屏实测候选 | `gpt-5.5` | 如果本机实测更快，可作为录屏临时模型，尤其适合图片/语音/复杂讲解段减少等待 | 必须先跑 probe，确认流式、Planner JSON、guardrail 表达都稳定 |
+| 轻量候选 | `gpt-5.4-mini` | 演示默认备用；比 `gpt-4o-mini` 更新，也应该比大模型更轻 | 需要先跑 probe，确认流式和 Planner JSON 稳定 |
 | 速度候选 | `gemini-3.5-flash` | 现场速度优先；适合减少等待 | 需要确认中文导购口吻和 guardrail 命中情况 |
 | 质量候选 | `claude-sonnet-4-6` | 回答质量和指令遵循优先 | 可能比 mini / flash 慢；不建议作为唯一现场备选 |
 | 保底候选 | `gpt-4o-mini` | 兼容性保守；ActiView 里已有类似 OpenAI-compatible 使用经验 | 能力不一定最新，但最稳妥 |
@@ -120,7 +138,7 @@ curl http://127.0.0.1:8000/health
 
 | 系列 | 可试模型 | 用途 |
 | --- | --- | --- |
-| OpenAI 强模型 | `gpt-5.5`, `gpt-5.5-pro` | 只适合质量对比，不适合现场低延迟演示默认 |
+| OpenAI 强模型 | `gpt-5.5-pro` | 质量对比；不建议作为唯一现场备选 |
 | Gemini 强模型 | `gemini-3.1-pro-preview`, `gemini-3-pro-preview`, `gemini-2.5-pro` | 质量或复杂推理对比 |
 | Claude 强模型 | `claude-opus-4-8`, `claude-opus-4-7` | 高质量对比；不建议演示默认 |
 | Yunwu 上的 Doubao | `doubao-seed-2-0-mini-260428`, `doubao-seed-2-0-lite-260428`, `doubao-seed-2-0-pro-260215` | 如果想备用 provider 仍尽量贴近豆包生态 |
@@ -144,20 +162,25 @@ curl http://127.0.0.1:8000/health
 因此推荐顺序是：
 
 ```text
-gpt-5.4-mini
+gpt-5.5（仅当本机实测更快且稳定）
+-> gpt-5.4-mini
 -> gemini-3.5-flash
 -> claude-sonnet-4-6
 -> gpt-4o-mini
 ```
 
-如果 `gpt-5.4-mini` probe 稳定，它可以作为演示默认；如果它慢或格式不稳，切 `gemini-3.5-flash`；如果要展示回答质量，试 `claude-sonnet-4-6`；如果现场出现兼容问题，退回 `gpt-4o-mini`。
+如果 `gpt-5.5` 在本机实测确实更快且格式稳定，本次录屏先用它；如果它慢或 Planner JSON 不稳，切回 `gpt-5.4-mini`；如果 mini 仍慢，切 `gemini-3.5-flash`；如果要展示回答质量，试 `claude-sonnet-4-6`；如果现场出现兼容问题，退回 `gpt-4o-mini`。
 
-## 三模型 smoke test
+## 四模型 smoke test
 
-演示前建议用同一条 query 对三个候选做最小对比：
+演示前建议用同一条 query 对候选模型做最小对比：
 
 ```bash
 cd /Users/jia/Developer/bytedance-rag-shopping-agent
+
+LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.5 \
+  server/.venv/bin/python scripts/probe_chat.py \
+  --turn 我是油皮，想要200元以内通勤防晒
 
 LLM_PROVIDER=yunwu YUNWU_MODEL=gpt-5.4-mini \
   server/.venv/bin/python scripts/probe_chat.py \

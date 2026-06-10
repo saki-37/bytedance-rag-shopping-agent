@@ -66,11 +66,11 @@
 12. 答辩口袋稿已收口项目介绍、架构链路、可靠性证据、关键代码入口和当前边界。
 13. 2026-06-07 主线收口完成：多轮比较意图污染、肤质正向证据过滤、跑步鞋/徒步鞋用途排序、SKU 回答匹配点和 groundedness mock 边界已修；conversation 7/7、comparison 3/3、groundedness mock 11/11、Android Kotlin 编译和反馈闭环均通过。
 14. Claim-level judge 样例已落地：5 个高风险人工标注样例、8 条 claim，可渲染 Markdown/JSONL 报告，用于展示“逐条事实主张如何回到数据源”。
-15. LLM provider 切换文档已补齐：正式评测默认 Ark / Doubao，演示可临时用命令行覆盖到 Yunwu，并记录 `gpt-5.4-mini`、`gemini-3.5-flash`、`claude-sonnet-4-6` 和 `gpt-4o-mini` 候选。
+15. LLM provider 切换文档已补齐：正式评测默认 Ark / Doubao，演示可临时用命令行覆盖到 Yunwu；本次录屏可实测使用 `gpt-5.5`，并保留 `gpt-5.4-mini`、`gemini-3.5-flash`、`claude-sonnet-4-6` 和 `gpt-4o-mini` 作为备选。
 16. 场景化组合推荐 Planner 第一版已落地：Planner 输出 `scene_bundle + search_slots`，retrieval 按结构化计划跨类目选品；三亚度假 case 已有真实 API Planner probe 和 `FR-012` 回归。
 17. 首屏极速响应 UX 已落地：`quick_reply` SSE 事件、Android 临时气泡、ephemeral history 过滤、本地打字机动画和 `stage_timings_ms` trace 均已接入。
 18. 快速响应边界已收口：`FAST_QUICK_REPLY_DEADLINE_SECONDS` 只影响临时气泡，不截断 Planner 或向量检索；复杂跨类目 case 已验证 Planner 完整 applied。
 19. 用户记忆与本地偏好层方案已补齐：建议先做本仓库 local provider 薄层，硬约束结构化执行，Mem0 仅作为后续软记忆可选增强。
 20. 多模态图片输入 MVP 已接入：Android 相机/相册上传，后端 `/api/multimodal/images` 生成 `image_plan` / `query_text`，再复用现有 RAG；当前不是图搜图。
 21. ASR 语音输入和 TTS 播报已接入第一版：Android 录音上传 `/api/asr/transcribe`，后端代理本地 sidecar；TTS 使用 Android 系统 TextToSpeech。
-22. 提交版设计文档、体验说明和 5-10 分钟视频脚本已补齐 Markdown 中间稿，后续需要复制到飞书并检查权限。
+22. 提交版设计文档、体验说明和 10 分钟以内录制脚本已补齐 Markdown 中间稿；视频脚本包含多模态、语音输入、TTS/无障碍、购买对象切换、新建对话和剪辑索引，后续需要复制到飞书并检查权限。

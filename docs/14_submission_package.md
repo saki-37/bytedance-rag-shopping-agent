@@ -13,7 +13,7 @@
 3. 设计文档飞书正文中间稿：`docs/submission_design_doc.md`
 4. 部署与体验说明飞书正文中间稿：`docs/submission_user_guide.md`
 5. 演示视频脚本：`docs/submission_video_script.md`
-6. Demo 录屏：现有短素材 `demo/录屏v1_submission_phone_60s.mp4`；最终仍需 5-10 分钟带讲解主版
+6. Demo 录屏：现有短素材 `demo/录屏v1_submission_phone_60s.mp4`；最终仍需 10 分钟以内带讲解主版
 7. 架构说明：`docs/10_architecture.md`
 8. 评测记录：`docs/11_evaluation_report.md`
 9. 依赖版本与复现说明：`docs/20_reproducibility_and_dependencies.md`
@@ -60,21 +60,22 @@
 
 ## Demo 讲解顺序
 
-短版详见 `docs/12_demo_script.md`，最终提交建议按 `docs/submission_video_script.md` 录制 5-10 分钟带讲解主版。现有 60 秒手机屏版本可作为短素材：
+短版详见 `docs/12_demo_script.md`，最终提交建议按 `docs/submission_video_script.md` 录制 10 分钟以内带讲解主版，并按功能索引剪出短版。现有 60 秒手机屏版本可作为短素材：
 
 ```text
 demo/录屏v1_submission_phone_60s.mp4
 ```
 
-5-10 分钟主版建议展示：
+10 分钟以内主版建议展示：
 
-1. 打开 Android App，并展示后端 `/health`。
-2. 点击或输入 `油皮通勤防晒`，展示真实流式回复和商品卡片。
-3. 点击商品卡片，展示详情弹窗。
-4. 点击或展示 `信息不足追问`，证明系统不会在信息不足时强行推荐。
+1. 打开 Android App，并展示后端 `/health`，确认本次录屏非 mock。
+2. 用语音或文字输入 `油皮通勤防晒`，展示真实流式回复、商品卡片和详情弹窗。
+3. 上传安热沙/安耐晒防晒图片，展示 text-first 图片理解复用 RAG。
+4. 切换购买对象，并新建对话展示信息不足追问和会话隔离。
 5. 展示多轮对比或场景化组合推荐。
-6. 稳定时展示图片输入、ASR 或 TTS 中的一项。
-7. 可选点击回答下方 `有用` / `不准确`，展示反馈闭环已接入真实 App。
+6. 点击小助手播报，展示详细/不详细模式和无障碍设置。
+7. 展示优惠/库存/下单 guardrail、trace 或 claim audit。
+8. 可选点击回答下方 `有用` / `不准确`，展示反馈闭环已接入真实 App。
 
 讲解重点：
 

@@ -29,6 +29,7 @@ def main() -> None:
     check_planner_category_patch()
     check_planner_scene_bundle_plan()
     check_planner_validator()
+    check_sensitive_sunscreen_context_validator()
     asyncio.run(check_planner_fallback())
     print("Planner contract checks passed")
 
@@ -40,6 +41,8 @@ def check_budget_parser() -> None:
         "我的预算可能只有150元": 150.0,
         "大概150以内": 150.0,
         "预算150": 150.0,
+        "预算大概在两百元": 200.0,
+        "我的预算可能只有一百五": 150.0,
     }
     for query, expected in cases.items():
         actual = parse_query_intent(query).universal_constraints.budget_max
@@ -49,6 +52,7 @@ def check_budget_parser() -> None:
 def check_comparison_phrase_parser() -> None:
     assert not parse_query_intent("穿多大的比较合适？").comparison_mode
     assert not parse_query_intent("这个尺码会不会比较大？").comparison_mode
+    assert not parse_query_intent("她比较喜欢运动，想搭配三件套").comparison_mode
     assert parse_query_intent("可以帮我比较一下1和2吗？").comparison_mode
     assert parse_query_intent("这两款有什么区别？").comparison_mode
 
@@ -107,6 +111,38 @@ def check_numeric_comparison_pair_parser() -> None:
             message,
             [card.product_id for card in result.cards],
         )
+
+    request = ChatRequest(message="第二款和第三款可以给我出一个比较吗？", history=history)
+    rule_build = build_retrieval_message(request)
+    intent = parse_query_intent(rule_build.message)
+    assert intent.referenced_product_ids == ["p_clothes_004", "p_clothes_005"], rule_build.message
+    result = retrieve(rule_build.message, products)
+    assert [card.product_id for card in result.cards] == ["p_clothes_004", "p_clothes_005"], (
+        [card.product_id for card in result.cards],
+        rule_build.message,
+    )
+
+    for message in ["可以帮我详细对比一下这三款吗？", "可以帮我详细对比一下这3款吗？"]:
+        request = ChatRequest(message=message, history=history)
+        rule_build = build_retrieval_message(request)
+        intent = parse_query_intent(rule_build.message)
+        assert intent.referenced_product_ids == ["p_clothes_023", "p_clothes_004", "p_clothes_005"], (
+            message,
+            rule_build.message,
+        )
+
+    two_product_history = [
+        ChatMessage(role="user", content="我是油皮，想要200元以内通勤防晒"),
+        ChatMessage(
+            role="assistant",
+            content="1. 巴黎欧莱雅同系列两种规格。2. 安热沙20ml便携装。",
+            product_ids=["p_beauty_006", "p_beauty_010"],
+        ),
+    ]
+    request = ChatRequest(message="可以给我详细的对比一下这三款吗？", history=two_product_history)
+    rule_build = build_retrieval_message(request)
+    intent = parse_query_intent(rule_build.message)
+    assert intent.referenced_product_ids == ["p_beauty_006", "p_beauty_010"], rule_build.message
 
 
 def check_history_brand_followup_parser() -> None:
@@ -197,6 +233,23 @@ def check_recent_product_type_followup_parser() -> None:
     shorts_intent = parse_query_intent(shorts_build.message)
     assert shorts_intent.referenced_product_ids == ["p_clothes_023"], shorts_build.message
     assert not shorts_intent.comparison_mode
+
+    top_request = ChatRequest(
+        message="上衣的话，根据这个身材有什么推荐尺码吗？",
+        history=[
+            ChatMessage(
+                role="assistant",
+                content=(
+                    "1. Nike Dri-FIT 男子训练短袖T恤。\n"
+                    "2. adidas Essentials 三条纹男子针织运动长裤。"
+                ),
+                product_ids=["p_clothes_003", "p_clothes_004"],
+            )
+        ],
+    )
+    top_build = build_retrieval_message(top_request)
+    top_intent = parse_query_intent(top_build.message)
+    assert top_intent.referenced_product_ids == ["p_clothes_003"], top_build.message
 
 
 def check_planner_category_patch() -> None:
@@ -325,6 +378,44 @@ def check_planner_validator() -> None:
     merged = _append_planner_additions(rule_build.message, additions, request.message)
     assert "LLM Planner补充" in merged
     assert parse_query_intent(merged).universal_constraints.budget_max == 150.0
+
+
+def check_sensitive_sunscreen_context_validator() -> None:
+    request = ChatRequest(
+        message="感谢我是敏感肌，然后预算大概在两百元。",
+        history=[
+            ChatMessage(role="user", content="我朋友给我推荐了，这个可以帮我找个同款吗？"),
+            ChatMessage(role="assistant", content="已返回安热沙防晒同款。", product_ids=["p_beauty_010"]),
+        ],
+    )
+    rule_build = build_retrieval_message(request)
+    assert "- 子类：防晒" in rule_build.message, rule_build.message
+    assert "- 预算：200元以内" in rule_build.message, rule_build.message
+
+    plan = RetrievalPlan.model_validate(
+        {
+            "turn_type": "refine_search",
+            "recommendation_mode": "single_category",
+            "rewrite_query": "敏感肌 200元 防晒",
+            "budget_update": {"type": "set", "value": 200},
+            "category_patch": {"mode": "keep", "include": [], "exclude": [], "reason_type": "none"},
+            "facets_patch": {
+                "skin_type": ["敏感肌"],
+                "effect": ["防晒"],
+                "sub_category": ["防晒"],
+            },
+            "exclude_terms_patch": [],
+            "referenced_product_policy": "none",
+            "needs_clarification": False,
+            "clarification_question": None,
+            "confidence": 0.9,
+        }
+    )
+    validated, additions, errors = _validate_plan(plan, request, rule_build)
+    assert not errors, errors
+    assert validated["budget_update"] == {"type": "set", "value": 200.0}
+    assert validated["facets_patch"]["sub_category"] == ["防晒"]
+    assert "- 预算：200元以内" in additions
 
 
 async def check_planner_fallback() -> None:

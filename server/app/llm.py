@@ -68,15 +68,24 @@ async def stream_answer(
         settings.llm_model,
     )
     try:
-        raw_answer = await _collect_llm_answer(
-            settings=settings,
-            user_message=user_message,
-            history=history,
-            context=context,
-            cards=cards,
-            answer_directive=answer_directive,
-            interaction_preferences=interaction_preferences,
+        raw_answer = await asyncio.wait_for(
+            _collect_llm_answer(
+                settings=settings,
+                user_message=user_message,
+                history=history,
+                context=context,
+                cards=cards,
+                answer_directive=answer_directive,
+                interaction_preferences=interaction_preferences,
+            ),
+            timeout=settings.generation_timeout_seconds,
         )
+    except TimeoutError:
+        logger.warning(
+            "LLM response timed out after %.1fs; falling back to grounded local answer",
+            settings.generation_timeout_seconds,
+        )
+        raw_answer = ""
     except Exception as exc:
         logger.warning("LLM response failed; falling back to grounded local answer: %s", exc)
         raw_answer = ""
@@ -159,16 +168,22 @@ async def _try_repair_answer(
     if not raw_answer.strip() or not cards:
         return guardrail
     try:
-        repaired_answer = await _collect_llm_repair(
-            settings=settings,
-            user_message=user_message,
-            context=context,
-            cards=cards,
-            raw_answer=raw_answer,
-            issues=guardrail.issues,
-            answer_directive=answer_directive,
-            interaction_preferences=interaction_preferences,
+        repaired_answer = await asyncio.wait_for(
+            _collect_llm_repair(
+                settings=settings,
+                user_message=user_message,
+                context=context,
+                cards=cards,
+                raw_answer=raw_answer,
+                issues=guardrail.issues,
+                answer_directive=answer_directive,
+                interaction_preferences=interaction_preferences,
+            ),
+            timeout=min(settings.generation_timeout_seconds, 20.0),
         )
+    except TimeoutError:
+        logger.warning("LLM repair timed out; using safe fallback")
+        return guardrail
     except Exception as exc:
         logger.warning("LLM repair failed; using safe fallback: %s", exc)
         return guardrail

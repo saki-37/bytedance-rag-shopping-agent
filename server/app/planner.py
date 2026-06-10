@@ -182,11 +182,18 @@ async def build_planned_retrieval_message(
         validated_plan.get("turn_type") == "product_followup"
         and bool(validated_plan.get("facets_patch", {}).get("sub_category"))
     )
+    drop_rule_referenced_products = (
+        validated_plan.get("turn_type") == "compare"
+        and bool(
+            (validated_plan.get("comparison_plan") or {}).get("target_product_ids")
+        )
+    )
     merged_message = _append_planner_additions(
         rule_build.message,
         additions,
         request.message,
         drop_rule_sub_category=drop_rule_sub_category,
+        drop_rule_referenced_products=drop_rule_referenced_products,
     )
     return _finish_planner_trace(
         RetrievalMessageBuildResult(
@@ -367,7 +374,7 @@ def _validate_plan(
     additions.extend(category_lines)
     validated["category_patch"] = category_patch
 
-    facet_lines, facets = _validate_facets(plan, request, validation_errors)
+    facet_lines, facets = _validate_facets(plan, request, rule_build, validation_errors)
     additions.extend(facet_lines)
     validated["facets_patch"] = facets
 
@@ -641,6 +648,7 @@ def _category_exclusion_signaled(category: str, current_text: str) -> bool:
 def _validate_facets(
     plan: RetrievalPlan,
     request: ChatRequest,
+    rule_build: RetrievalMessageBuildResult,
     validation_errors: list[str],
 ) -> tuple[list[str], dict[str, list[str]]]:
     combined_user_text = _combined_user_text(request)
@@ -665,7 +673,11 @@ def _validate_facets(
                 validation_errors.append(f"unknown_facet_value:{facet_name}={value}")
                 continue
             aliases = allowed[value]
-            if value not in slot_values.get(facet_name, []) and not any(alias.lower() in combined_user_text.lower() for alias in aliases):
+            if (
+                value not in slot_values.get(facet_name, [])
+                and not any(alias.lower() in combined_user_text.lower() for alias in aliases)
+                and not _facet_value_in_rule_context(facet_name, value, rule_build)
+            ):
                 validation_errors.append(f"facet_without_user_signal:{facet_name}={value}")
                 continue
             accepted.append(value)
@@ -683,6 +695,22 @@ def _search_slot_values_by_facet(slots: list[PlannerSearchSlot]) -> dict[str, li
         values["effect"].extend(_accepted_slot_facet_values("effect", slot.effects, []))
         values["use_case"].extend(_accepted_slot_facet_values("use_case", slot.use_cases, []))
     return {key: list(dict.fromkeys(items)) for key, items in values.items()}
+
+
+def _facet_value_in_rule_context(
+    facet_name: str,
+    value: str,
+    rule_build: RetrievalMessageBuildResult,
+) -> bool:
+    trace = rule_build.trace.get("constraint_trace", {})
+    for bucket_name in ["current_turn", "inherited", "effective"]:
+        bucket = trace.get(bucket_name, {})
+        if not isinstance(bucket, dict):
+            continue
+        facets = bucket.get("facets", {})
+        if isinstance(facets, dict) and value in facets.get(facet_name, []):
+            return True
+    return False
 
 
 def _validate_excludes(
@@ -724,7 +752,9 @@ def _validate_product_reference(
             return [product_ids[index]]
         validation_errors.append(f"referenced_product_index_out_of_range:{index + 1}")
         return []
-    if any(term in request.message for term in ["它", "这个", "这款", "刚才", "上一款"]):
+    if any(term in request.message for term in ["它", "这款", "那款", "刚才", "上一款"]):
+        return [product_ids[0]]
+    if _has_product_deictic_reference(request.message):
         return [product_ids[0]]
     return []
 
@@ -795,20 +825,26 @@ def _comparison_indexes(message: str) -> list[int]:
     if _references_first_two_products(normalized):
         return [0, 1]
     markers = [
-        (r"(第一|第1(?:个|款|件)?|1(?:号|个|款|件))", 0),
-        (r"(第二|第2(?:个|款|件)?|2(?:号|个|款|件))", 1),
-        (r"(第三|第3(?:个|款|件)?|3(?:号|个|款|件))", 2),
+        (r"(第一|第1(?:个|款|件)?|1号)", 0),
+        (r"(第二|第2(?:个|款|件)?|2号)", 1),
+        (r"(第三|第3(?:个|款|件)?|3号)", 2),
     ]
     indexes = [index for pattern, index in markers if re.search(pattern, normalized)]
     if _has_numbered_comparison_context(normalized):
-        bare_markers = [
-            (r"(?<!\d)[1一](?!\d)", 0),
-            (r"(?<!\d)[2二](?!\d)", 1),
-            (r"(?<!\d)[3三](?!\d)", 2),
-        ]
-        indexes.extend(index for pattern, index in bare_markers if re.search(pattern, normalized))
-    if indexes and any(term in normalized for term in ["它", "这个", "这款", "刚才那个", "刚才那款", "上一款", "上一个"]):
+        indexes.extend(_numbered_pair_or_list_indexes(normalized))
+    if indexes and any(term in normalized for term in ["它", "这款", "那款", "刚才那个", "刚才那款", "上一款", "上一个"]):
         indexes.insert(0, 0)
+    return list(dict.fromkeys(indexes))
+
+
+def _numbered_pair_or_list_indexes(message: str) -> list[int]:
+    token_to_index = {"1": 0, "一": 0, "2": 1, "二": 1, "3": 2, "三": 2}
+    token = r"(?<!第)(?<!\d)[123一二三](?![\d个款件号套双])"
+    separator = r"\s*(?:和|跟|与|及|、|,|，)\s*"
+    indexes: list[int] = []
+    for match in re.finditer(rf"{token}(?:{separator}{token})+", message):
+        for raw_token in re.findall(r"[123一二三]", match.group(0)):
+            indexes.append(token_to_index[raw_token])
     return list(dict.fromkeys(indexes))
 
 
@@ -840,7 +876,26 @@ def _references_all_previous_products(message: str) -> bool:
     normalized_message = re.sub(r"比较(合适|适合|舒服|稳妥|好|划算|便宜|贵|大|小)", "", message)
     if not any(term in normalized_message for term in ["对比", "比较", "怎么选", "哪个更", "哪款更", "区别"]):
         return False
-    return any(term in normalized_message for term in ["这几个", "这些", "它们", "刚才这些", "刚才几个", "全部", "都"])
+    return any(term in normalized_message for term in [
+        "这几个",
+        "这些",
+        "它们",
+        "刚才这些",
+        "刚才几个",
+        "这三款",
+        "这3款",
+        "三款",
+        "3款",
+        "全部",
+        "都",
+    ])
+
+
+def _has_product_deictic_reference(message: str) -> bool:
+    return bool(
+        re.search(r"(这个|那个|这一个|那一个).{0,4}(商品|产品|卡片|款|牌子|品牌)", message)
+        or re.search(r"(商品|产品|卡片|款|牌子|品牌).{0,4}(这个|那个|这一个|那一个)", message)
+    )
 
 
 def _append_planner_additions(
@@ -848,12 +903,19 @@ def _append_planner_additions(
     additions: list[str],
     current_message: str,
     drop_rule_sub_category: bool = False,
+    drop_rule_referenced_products: bool = False,
 ) -> str:
     base_message = rule_message
-    if drop_rule_sub_category:
-        # 移除规则层的"- 子类：..."行；Planner additions 里会带上本轮的新子类
+    if drop_rule_sub_category or drop_rule_referenced_products:
+        # 移除会被 Planner 当前轮计划覆盖的规则层行；Planner additions 会带上新值。
+        removed_prefixes: list[str] = []
+        if drop_rule_sub_category:
+            removed_prefixes.append("- 子类：")
+        if drop_rule_referenced_products:
+            removed_prefixes.append("- 指代商品ID：")
         base_message = "\n".join(
-            line for line in rule_message.split("\n") if not line.startswith("- 子类：")
+            line for line in rule_message.split("\n")
+            if not any(line.startswith(prefix) for prefix in removed_prefixes)
         )
     return "\n".join(
         [
@@ -906,19 +968,13 @@ def _latest_history_product_ids(history: list[ChatMessage]) -> list[str]:
 
 
 def _referenced_product_index(message: str) -> int | None:
-    markers = [
-        ("第一", 0),
-        ("第1", 0),
-        ("1款", 0),
-        ("第二", 1),
-        ("第2", 1),
-        ("2款", 1),
-        ("第三", 2),
-        ("第3", 2),
-        ("3款", 2),
+    explicit_patterns = [
+        (r"(第一|第1(?:个|款|件)?|1号)", 0),
+        (r"(第二|第2(?:个|款|件)?|2号)", 1),
+        (r"(第三|第3(?:个|款|件)?|3号)", 2),
     ]
-    for marker, index in markers:
-        if marker in message:
+    for pattern, index in explicit_patterns:
+        if re.search(pattern, message):
             return index
     return None
 
@@ -932,6 +988,9 @@ def _budget_value_mentioned(value: float, message: str) -> bool:
     if normalized_value in message:
         return True
     if float(value).is_integer() and str(int(value)) in message:
+        return True
+    parsed_budget = parse_query_intent(message).universal_constraints.budget_max
+    if parsed_budget is not None and abs(float(parsed_budget) - float(value)) < 0.01:
         return True
     return False
 
