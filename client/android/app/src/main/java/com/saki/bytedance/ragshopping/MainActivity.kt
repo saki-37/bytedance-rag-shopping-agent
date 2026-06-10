@@ -16,7 +16,9 @@ import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.MutableTransitionState
@@ -107,6 +109,9 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import kotlinx.coroutines.delay
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.sqrt
 
 private val AppGreen = Color(0xFFB7D65A)
@@ -178,6 +183,72 @@ private val TablerXIcon: ImageVector = ImageVector.Builder(
         lineTo(6f, 18f)
         moveTo(6f, 6f)
         lineTo(18f, 18f)
+    }
+}.build()
+// Tabler layout-sidebar：左侧会话抽屉入口图标
+private val TablerSidebarIcon: ImageVector = ImageVector.Builder(
+    name = "TablerLayoutSidebar",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(4f, 6f)
+        arcToRelative(2f, 2f, 0f, false, true, 2f, -2f)
+        horizontalLineToRelative(12f)
+        arcToRelative(2f, 2f, 0f, false, true, 2f, 2f)
+        verticalLineToRelative(12f)
+        arcToRelative(2f, 2f, 0f, false, true, -2f, 2f)
+        horizontalLineToRelative(-12f)
+        arcToRelative(2f, 2f, 0f, false, true, -2f, -2f)
+        close()
+        moveTo(9f, 4f)
+        verticalLineToRelative(16f)
+    }
+}.build()
+// Tabler settings：设置齿轮图标
+private val TablerSettingsIcon: ImageVector = ImageVector.Builder(
+    name = "TablerSettings",
+    defaultWidth = 24.dp,
+    defaultHeight = 24.dp,
+    viewportWidth = 24f,
+    viewportHeight = 24f,
+).apply {
+    path(
+        fill = null,
+        stroke = SolidColor(Color.Black),
+        strokeLineWidth = 2f,
+        strokeLineCap = StrokeCap.Round,
+        strokeLineJoin = StrokeJoin.Round,
+    ) {
+        moveTo(10.325f, 4.317f)
+        curveToRelative(0.426f, -1.756f, 2.924f, -1.756f, 3.35f, 0f)
+        arcToRelative(1.724f, 1.724f, 0f, false, false, 2.573f, 1.066f)
+        curveToRelative(1.543f, -0.94f, 3.31f, 0.826f, 2.37f, 2.37f)
+        arcToRelative(1.724f, 1.724f, 0f, false, false, 1.065f, 2.572f)
+        curveToRelative(1.756f, 0.426f, 1.756f, 2.924f, 0f, 3.35f)
+        arcToRelative(1.724f, 1.724f, 0f, false, false, -1.066f, 2.573f)
+        curveToRelative(0.94f, 1.543f, -0.826f, 3.31f, -2.37f, 2.37f)
+        arcToRelative(1.724f, 1.724f, 0f, false, false, -2.572f, 1.065f)
+        curveToRelative(-0.426f, 1.756f, -2.924f, 1.756f, -3.35f, 0f)
+        arcToRelative(1.724f, 1.724f, 0f, false, false, -2.573f, -1.066f)
+        curveToRelative(-1.543f, 0.94f, -3.31f, -0.826f, -2.37f, -2.37f)
+        arcToRelative(1.724f, 1.724f, 0f, false, false, -1.065f, -2.572f)
+        curveToRelative(-1.756f, -0.426f, -1.756f, -2.924f, 0f, -3.35f)
+        arcToRelative(1.724f, 1.724f, 0f, false, false, 1.066f, -2.573f)
+        curveToRelative(-0.94f, -1.543f, 0.826f, -3.31f, 2.37f, -2.37f)
+        curveToRelative(1f, 0.608f, 2.296f, 0.07f, 2.572f, -1.065f)
+        close()
+        moveTo(9f, 12f)
+        arcToRelative(3f, 3f, 0f, true, false, 6f, 0f)
+        arcToRelative(3f, 3f, 0f, true, false, -6f, 0f)
     }
 }.build()
 private val TablerPlusIcon: ImageVector = ImageVector.Builder(
@@ -471,6 +542,8 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
     var selectedProduct by remember { mutableStateOf<ProductCard?>(null) }
     var showTtsSettings by remember { mutableStateOf(false) }
     var showRecipientManager by remember { mutableStateOf(false) }
+    var showSessionSheet by remember { mutableStateOf(false) }
+    var showIdentitySheet by remember { mutableStateOf(false) }
     var ttsSettings by remember(context) { mutableStateOf(TtsSettingsStore.load(context)) }
     var autoSpokenMessageIds by remember { mutableStateOf(emptySet<String>()) }
     var stoppedSpeechMessageIds by remember { mutableStateOf(emptySet<String>()) }
@@ -654,6 +727,9 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
             ) {
                 Header(
                     ttsSettings = ttsSettings,
+                    userDisplayName = state.userDisplayName,
+                    onSessionsClick = { showSessionSheet = true },
+                    onIdentityClick = { showIdentitySheet = true },
                     onTtsSettingsClick = { showTtsSettings = true },
                 )
                 Box(
@@ -779,6 +855,38 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                     },
                 )
             }
+
+            if (showSessionSheet) {
+                SessionDrawerOverlay(
+                    sessions = state.sessions,
+                    isBusy = state.isLoading || state.isTranscribing,
+                    onNewSession = {
+                        stopAnySpeech()
+                        viewModel.newSession()
+                        showSessionSheet = false
+                    },
+                    onSelectSession = { sessionId ->
+                        stopAnySpeech()
+                        viewModel.switchSession(sessionId)
+                        showSessionSheet = false
+                    },
+                    onDismiss = { showSessionSheet = false },
+                )
+            }
+
+            if (showIdentitySheet) {
+                DemoIdentitySheet(
+                    currentUserId = state.userId,
+                    currentDisplayName = state.userDisplayName,
+                    isBusy = state.isLoading || state.isTranscribing,
+                    onSwitchUser = { input ->
+                        stopAnySpeech()
+                        viewModel.switchUser(input)
+                        showIdentitySheet = false
+                    },
+                    onDismiss = { showIdentitySheet = false },
+                )
+            }
         }
     }
 }
@@ -786,6 +894,9 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
 @Composable
 private fun Header(
     ttsSettings: TtsSettings,
+    userDisplayName: String,
+    onSessionsClick: () -> Unit,
+    onIdentityClick: () -> Unit,
     onTtsSettingsClick: () -> Unit,
 ) {
     Column(
@@ -798,29 +909,368 @@ private fun Header(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // 左上角 Sidebar 图标：打开左侧会话抽屉浮层
+            HeaderIconButton(
+                imageVector = TablerSidebarIcon,
+                contentDescription = "会话列表",
+                onClick = onSessionsClick,
+            )
             Text(
                 text = "RAG智能导购",
                 color = Ink,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.headlineSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onTtsSettingsClick) {
-                Text(
-                    text = "设置",
-                    color = Ink,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-            }
+            HeaderIconButton(
+                imageVector = TablerSettingsIcon,
+                contentDescription = "设置",
+                onClick = onTtsSettingsClick,
+            )
         }
         Text(
             text = "美妆、服饰、数码和食品生活都能问，预算、场景和避雷点可以直接说",
             color = AccentGreenDark,
             style = MaterialTheme.typography.bodyMedium,
         )
+        // 演示身份入口：本地 user_id，不是真实登录
+        Text(
+            text = "演示身份：$userDisplayName（本地，点此切换）",
+            color = AccentGreenDark,
+            fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.clickable(onClick = onIdentityClick),
+        )
+    }
+}
+
+@Composable
+private fun HeaderIconButton(
+    imageVector: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = contentDescription,
+            tint = Ink,
+            modifier = Modifier.size(22.dp),
+        )
+    }
+}
+
+/**
+ * 左侧会话抽屉浮层：从左滑出，覆盖在主界面之上（不改变主布局）。
+ * 支持新建 / 切换本地会话（仅内存态，重启后不保留历史会话）。
+ */
+@Composable
+private fun SessionDrawerOverlay(
+    sessions: List<ChatSessionSummary>,
+    isBusy: Boolean,
+    onNewSession: () -> Unit,
+    onSelectSession: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val visibilityState = remember {
+        MutableTransitionState(false).apply { targetState = true }
+    }
+
+    fun requestDismiss() {
+        visibilityState.targetState = false
+    }
+
+    LaunchedEffect(visibilityState.isIdle, visibilityState.currentState, visibilityState.targetState) {
+        if (visibilityState.isIdle && !visibilityState.currentState && !visibilityState.targetState) {
+            onDismiss()
+        }
+    }
+
+    BackHandler(enabled = visibilityState.currentState || visibilityState.targetState) {
+        requestDismiss()
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 半透明遮罩：点击关闭抽屉
+        AnimatedVisibility(
+            visibleState = visibilityState,
+            enter = fadeIn(animationSpec = tween(DetailSheetAnimationMillis)),
+            exit = fadeOut(animationSpec = tween(DetailSheetAnimationMillis)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x99000000))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = { requestDismiss() },
+                    ),
+            )
+        }
+        // 抽屉本体：从左侧滑入
+        AnimatedVisibility(
+            visibleState = visibilityState,
+            modifier = Modifier.align(Alignment.CenterStart),
+            enter = slideInHorizontally(
+                initialOffsetX = { fullWidth -> -fullWidth },
+                animationSpec = tween(DetailSheetAnimationMillis),
+            ) + fadeIn(animationSpec = tween(DetailSheetAnimationMillis)),
+            exit = slideOutHorizontally(
+                targetOffsetX = { fullWidth -> -fullWidth },
+                animationSpec = tween(DetailSheetAnimationMillis),
+            ) + fadeOut(animationSpec = tween(DetailSheetAnimationMillis)),
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(300.dp)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = {},
+                    ),
+                colors = CardDefaults.cardColors(containerColor = SurfaceCream),
+                shape = RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+            ) {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, top = 18.dp, end = 12.dp, bottom = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "会话",
+                            color = Ink,
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .background(AppGreenSoft, RoundedCornerShape(999.dp))
+                                .clickable(onClick = ::requestDismiss),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = TablerXIcon,
+                                contentDescription = "关闭",
+                                tint = Ink,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
+                    Text(
+                        text = "本地会话仅保存在本机内存，重启应用后不保留",
+                        color = MutedText,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    )
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (isBusy) {
+                            Text(
+                                text = "回复生成中，结束后才能新建或切换会话",
+                                color = MutedText,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !isBusy, onClick = onNewSession),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isBusy) AppGreenSoft.copy(alpha = 0.5f) else AppGreenSoft,
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                        ) {
+                            Text(
+                                text = "＋ 新建会话",
+                                color = AccentGreenDark,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            )
+                        }
+                        sessions.forEach { session ->
+                            SessionListRow(
+                                session = session,
+                                enabled = !isBusy && !session.isCurrent,
+                                onClick = { onSelectSession(session.id) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionListRow(
+    session: ChatSessionSummary,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = if (session.isCurrent) SurfaceWhite else SurfaceCream,
+        ),
+        border = if (session.isCurrent) BorderStroke(1.dp, AccentGreen) else BorderStroke(1.dp, BorderGreen),
+        shape = RoundedCornerShape(14.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = session.title,
+                    color = Ink,
+                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (session.isCurrent) {
+                    Text(
+                        text = "当前",
+                        color = AccentGreenDark,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
+            Text(
+                text = "${formatSessionTime(session.createdAtMillis)} · ${session.messageCount} 轮提问",
+                color = MutedText,
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
+}
+
+private fun formatSessionTime(createdAtMillis: Long): String {
+    return SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(createdAtMillis))
+}
+
+/** 演示身份底部弹层：本地 user_id 切换，不是真实账号/登录。 */
+@Composable
+private fun DemoIdentitySheet(
+    currentUserId: String,
+    currentDisplayName: String,
+    isBusy: Boolean,
+    onSwitchUser: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var input by remember { mutableStateOf("") }
+    val quickIdentities = listOf(DemoIdentityStore.DefaultUserId, "demo-user-b")
+
+    ReusableBottomSheetOverlay(
+        sheetKey = "demo-identity",
+        maxHeightFraction = 0.62f,
+        onDismiss = onDismiss,
+    ) { requestDismiss ->
+        ReusableBottomSheetCard(
+            maxHeightFraction = 0.62f,
+            onDismiss = requestDismiss,
+        ) {
+            BottomSheetHeader(
+                title = "演示身份",
+                subtitle = "本地演示用，仅保存在本机，不是真实账号或登录",
+                onDismiss = requestDismiss,
+            )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Text(
+                    text = "当前身份：$currentDisplayName（user_id：$currentUserId）",
+                    color = Ink,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    text = "切换后会重新加载该身份的常用对象，并开启一个新会话。常用对象、记忆偏好按 user_id 在后端隔离。",
+                    color = MutedText,
+                    style = MaterialTheme.typography.labelMedium,
+                )
+                RecipientField(
+                    label = "昵称或 user_id",
+                    value = input,
+                    enabled = !isBusy,
+                    onValueChange = { input = it },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    quickIdentities.forEach { candidate ->
+                        Card(
+                            modifier = Modifier.clickable(enabled = !isBusy) { input = candidate },
+                            colors = CardDefaults.cardColors(containerColor = AppGreenSoft),
+                            shape = RoundedCornerShape(999.dp),
+                        ) {
+                            Text(
+                                text = candidate,
+                                color = AccentGreenDark,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+                if (isBusy) {
+                    Text(
+                        text = "回复生成中，结束后才能切换身份",
+                        color = MutedText,
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(onClick = requestDismiss) {
+                        Text(text = "取消", color = MutedText)
+                    }
+                    TextButton(
+                        enabled = !isBusy && input.isNotBlank(),
+                        onClick = { onSwitchUser(input) },
+                    ) {
+                        Text(
+                            text = "切换身份",
+                            color = if (!isBusy && input.isNotBlank()) AccentGreenDark else MutedText,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -3351,13 +3801,29 @@ private fun InputBar(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
-                                InputToolbarButton(
-                                    imageVector = TablerPlusIcon,
-                                    contentDescription = "添加图片",
-                                    enabled = canUseInputTools,
-                                    selected = showAttachmentMenu,
-                                    onClick = { showAttachmentMenu = !showAttachmentMenu },
-                                )
+                                Box {
+                                    InputToolbarButton(
+                                        imageVector = TablerPlusIcon,
+                                        contentDescription = "添加图片",
+                                        enabled = canUseInputTools,
+                                        selected = showAttachmentMenu,
+                                        onClick = { showAttachmentMenu = !showAttachmentMenu },
+                                    )
+                                    // 用 DropdownMenu 浮层弹出，不占输入区布局空间，
+                                    // 避免菜单展开时把整个输入框向上顶
+                                    AttachmentActionMenu(
+                                        visible = showAttachmentMenu,
+                                        onDismiss = { showAttachmentMenu = false },
+                                        onCameraClick = {
+                                            showAttachmentMenu = false
+                                            cameraLauncher.launch(null)
+                                        },
+                                        onGalleryClick = {
+                                            showAttachmentMenu = false
+                                            galleryLauncher.launch("image/*")
+                                        },
+                                    )
+                                }
                                 Box {
                                     AssistantInputChip(
                                         label = currentRecipientName,
@@ -3415,17 +3881,6 @@ private fun InputBar(
                     }
                 }
             }
-            AttachmentActionMenu(
-                visible = showAttachmentMenu,
-                modifier = Modifier
-                    .padding(start = 8.dp, bottom = 56.dp),
-                onCameraClick = {
-                    cameraLauncher.launch(null)
-                },
-                onGalleryClick = {
-                    galleryLauncher.launch("image/*")
-                },
-            )
         }
     }
 }
@@ -3681,40 +4136,42 @@ private fun InputStatusPill(
     }
 }
 
+/**
+ * 附件菜单：以 Popup（DropdownMenu）形式锚定在加号按钮上方弹出。
+ * 浮层不参与输入区布局测量，因此展开/收起不会让输入框上下移动。
+ */
 @Composable
 private fun AttachmentActionMenu(
     visible: Boolean,
-    modifier: Modifier = Modifier,
+    onDismiss: () -> Unit,
     onCameraClick: () -> Unit,
     onGalleryClick: () -> Unit,
 ) {
-    AnimatedVisibility(
-        visible = visible,
-        modifier = modifier,
-        enter = fadeIn(animationSpec = tween(140)) + slideInVertically(initialOffsetY = { it / 2 }),
-        exit = fadeOut(animationSpec = tween(100)) + slideOutVertically(targetOffsetY = { it / 2 }),
+    DropdownMenu(
+        expanded = visible,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.width(188.dp),
+        offset = DpOffset(0.dp, (-8).dp),
+        properties = PopupProperties(focusable = false),
+        shape = RoundedCornerShape(18.dp),
+        containerColor = SurfaceWhite,
+        shadowElevation = 6.dp,
+        tonalElevation = 0.dp,
+        border = BorderStroke(1.dp, BorderGreen),
     ) {
-        Card(
-            modifier = Modifier.width(188.dp),
-            colors = CardDefaults.cardColors(containerColor = SurfaceWhite),
-            shape = RoundedCornerShape(18.dp),
-            border = BorderStroke(1.dp, BorderGreen),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+        Column(
+            modifier = Modifier.padding(vertical = 2.dp),
         ) {
-            Column(
-                modifier = Modifier.padding(vertical = 8.dp),
-            ) {
-                AttachmentActionRow(
-                    icon = TablerCameraIcon,
-                    text = "拍照",
-                    onClick = onCameraClick,
-                )
-                AttachmentActionRow(
-                    icon = TablerPhotoIcon,
-                    text = "从相册选择",
-                    onClick = onGalleryClick,
-                )
-            }
+            AttachmentActionRow(
+                icon = TablerCameraIcon,
+                text = "拍照",
+                onClick = onCameraClick,
+            )
+            AttachmentActionRow(
+                icon = TablerPhotoIcon,
+                text = "从相册选择",
+                onClick = onGalleryClick,
+            )
         }
     }
 }

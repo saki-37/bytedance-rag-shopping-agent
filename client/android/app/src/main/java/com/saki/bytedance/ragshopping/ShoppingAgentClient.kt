@@ -57,13 +57,15 @@ class ShoppingAgentClient(
         history: List<ChatMessage> = emptyList(),
         recipientId: String? = null,
         images: List<ChatImage> = emptyList(),
+        userId: String = DEFAULT_USER_ID,
+        conversationId: String = DEFAULT_CONVERSATION_ID,
         onEvent: suspend (StreamEvent) -> Unit,
     ) {
         withContext(Dispatchers.IO) {
             val payload = JSONObject()
                 .put("message", message)
-                .put("user_id", DEFAULT_USER_ID)
-                .put("conversation_id", DEFAULT_CONVERSATION_ID)
+                .put("user_id", userId.ifBlank { DEFAULT_USER_ID })
+                .put("conversation_id", conversationId.ifBlank { DEFAULT_CONVERSATION_ID })
                 .put("history", history.toPayloadHistory())
                 .put("images", images.toPayloadImages())
                 .apply {
@@ -102,6 +104,8 @@ class ShoppingAgentClient(
     suspend fun uploadImage(
         imageFile: File,
         mimeType: String = "image/jpeg",
+        userId: String = DEFAULT_USER_ID,
+        conversationId: String = DEFAULT_CONVERSATION_ID,
     ): UploadedChatImage {
         return withContext(Dispatchers.IO) {
             val mediaType = mimeType.toMediaType()
@@ -110,8 +114,8 @@ class ShoppingAgentClient(
             for (baseUrl in orderedBaseUrls()) {
                 val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
-                    .addFormDataPart("user_id", DEFAULT_USER_ID)
-                    .addFormDataPart("conversation_id", DEFAULT_CONVERSATION_ID)
+                    .addFormDataPart("user_id", userId.ifBlank { DEFAULT_USER_ID })
+                    .addFormDataPart("conversation_id", conversationId.ifBlank { DEFAULT_CONVERSATION_ID })
                     .addFormDataPart("file", imageFile.name, imageFile.asRequestBody(mediaType))
                     .build()
 
@@ -265,10 +269,11 @@ class ShoppingAgentClient(
         products: List<ProductCard>,
         history: List<ChatMessage>,
         turnId: String,
+        conversationId: String = DEFAULT_CONVERSATION_ID,
     ): String {
         return withContext(Dispatchers.IO) {
             val payload = JSONObject()
-                .put("conversation_id", "android-demo")
+                .put("conversation_id", conversationId.ifBlank { DEFAULT_CONVERSATION_ID })
                 .put("turn_id", turnId)
                 .put("feedback", feedback.apiValue)
                 .put("message", userMessage)
@@ -310,6 +315,7 @@ class ShoppingAgentClient(
     suspend fun transcribeAudio(
         audioFile: File,
         profile: String = "bilingual",
+        conversationId: String = DEFAULT_CONVERSATION_ID,
     ): AsrTranscriptionResult {
         return withContext(Dispatchers.IO) {
             var lastError: IOException? = null
@@ -317,7 +323,7 @@ class ShoppingAgentClient(
                 val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("profile", profile)
-                    .addFormDataPart("conversation_id", "android-demo")
+                    .addFormDataPart("conversation_id", conversationId.ifBlank { DEFAULT_CONVERSATION_ID })
                     .addFormDataPart("file", audioFile.name, audioFile.asRequestBody(m4aMediaType))
                     .build()
                 val request = Request.Builder()
@@ -799,7 +805,8 @@ class ShoppingAgentClient(
     }
 
     companion object {
-        const val DEFAULT_USER_ID = "android-demo"
+        // 与后端 user_memory.DEFAULT_MEMORY_USER_ID 对齐的演示默认身份。
+        const val DEFAULT_USER_ID = DemoIdentityStore.DefaultUserId
         const val DEFAULT_CONVERSATION_ID = "android-demo"
         const val TAG = "ShoppingAgentClient"
     }

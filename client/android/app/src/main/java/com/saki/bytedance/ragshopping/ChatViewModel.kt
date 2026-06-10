@@ -1,6 +1,7 @@
 package com.saki.bytedance.ragshopping
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -10,37 +11,194 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
+/** 会话摘要：用于会话列表 UI（标题 + 时间 + 当前标记）。 */
+data class ChatSessionSummary(
+    val id: String,
+    val title: String,
+    val createdAtMillis: Long,
+    val messageCount: Int,
+    val isCurrent: Boolean,
+)
+
 data class ChatUiState(
     val input: String = "",
     val backendBaseUrl: String = BackendConfig.DefaultBaseUrl,
+    // 演示级本地身份：仅存在 SharedPreferences，透传给后端做记忆隔离
+    val userId: String = DemoIdentityStore.DefaultUserId,
+    val userDisplayName: String = DemoIdentityStore.DefaultDisplayName,
+    // 当前会话 id，同时作为后端 conversation_id
+    val conversationId: String = "",
+    val sessions: List<ChatSessionSummary> = emptyList(),
     val pendingProducts: List<ProductCard> = emptyList(),
     val recipients: List<RecipientProfile> = listOf(defaultRecipientProfile()),
     val selectedRecipientId: String = "self",
     val recipientsLoading: Boolean = false,
     val recipientsSaving: Boolean = false,
     val recipientError: String? = null,
-    val messages: List<ChatMessage> = listOf(
-        ChatMessage(
-            role = Role.Assistant,
-            content = "你好，我是你的导购小助手。你可以告诉我想买什么、预算、使用场景和不想踩的雷；我会先查商品资料，再帮你筛选、对比和解释推荐依据。",
-        )
-    ),
+    val messages: List<ChatMessage> = initialSessionMessages(),
     val isLoading: Boolean = false,
     val statusText: String? = null,
     val isTranscribing: Boolean = false,
     val asrStatusText: String? = null,
 )
 
-class ChatViewModel(
+class ChatViewModel @JvmOverloads constructor(
+    application: Application,
     private val client: ShoppingAgentClient = ShoppingAgentClient(),
-) : ViewModel() {
+) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(ChatUiState())
     val state: StateFlow<ChatUiState> = _state
     private var quickReplyTypingJob: Job? = null
-    private val defaultUserId = ShoppingAgentClient.DEFAULT_USER_ID
+
+    /**
+     * 本地多会话（仅内存态，App 重启后只保留当前会话的初始状态）。
+     * key = 会话 id（同时作为后端 conversation_id）。
+     */
+    private class SessionRecord(
+        val id: String,
+        val createdAtMillis: Long,
+        var messages: List<ChatMessage>,
+    )
+
+    private val sessionRecords = linkedMapOf<String, SessionRecord>()
+    private var sessionCounter = 0
 
     init {
+        val identity = DemoIdentityStore.load(application)
+        val firstSession = createSessionRecord()
+        _state.update {
+            it.copy(
+                userId = identity.userId,
+                userDisplayName = identity.displayName,
+                conversationId = firstSession.id,
+                sessions = buildSessionSummaries(firstSession.id),
+            )
+        }
         loadRecipients()
+    }
+
+    // ---------- 会话切换（本地内存态） ----------
+
+    /** 新建会话；当前会话还没有用户消息时直接复用，避免堆积空会话。 */
+    fun newSession() {
+        val snapshot = state.value
+        if (snapshot.isLoading || snapshot.isTranscribing) return
+        val hasUserMessage = snapshot.messages.any { it.role == Role.User && it.content.isNotBlank() }
+        if (!hasUserMessage) return
+
+        archiveCurrentSession()
+        val record = createSessionRecord()
+        _state.update {
+            it.copy(
+                input = "",
+                conversationId = record.id,
+                messages = record.messages,
+                pendingProducts = emptyList(),
+                statusText = null,
+                asrStatusText = null,
+                sessions = buildSessionSummaries(record.id),
+            )
+        }
+    }
+
+    /** 切换到已有会话。流式回复进行中禁止切换，避免把 token 写进错误会话。 */
+    fun switchSession(sessionId: String) {
+        val snapshot = state.value
+        if (snapshot.isLoading || snapshot.isTranscribing) return
+        if (sessionId == snapshot.conversationId) return
+        val target = sessionRecords[sessionId] ?: return
+
+        archiveCurrentSession()
+        _state.update {
+            it.copy(
+                input = "",
+                conversationId = target.id,
+                messages = target.messages,
+                pendingProducts = emptyList(),
+                statusText = null,
+                asrStatusText = null,
+                sessions = buildSessionSummaries(target.id),
+            )
+        }
+    }
+
+    /**
+     * 切换演示身份（本地 user_id，不是真实登录）。
+     * 切换后：持久化身份、清空本地会话、重新拉取该用户的常用对象。
+     */
+    fun switchUser(rawInput: String) {
+        val snapshot = state.value
+        if (snapshot.isLoading || snapshot.isTranscribing) return
+        val identity = if (rawInput.isBlank()) DemoIdentity() else DemoIdentityStore.deriveIdentity(rawInput)
+        DemoIdentityStore.save(getApplication<Application>(), identity)
+        if (identity.userId == snapshot.userId) {
+            _state.update { it.copy(userDisplayName = identity.displayName) }
+            return
+        }
+
+        sessionRecords.clear()
+        val record = createSessionRecord()
+        _state.update {
+            it.copy(
+                input = "",
+                userId = identity.userId,
+                userDisplayName = identity.displayName,
+                conversationId = record.id,
+                messages = record.messages,
+                pendingProducts = emptyList(),
+                statusText = null,
+                asrStatusText = null,
+                sessions = buildSessionSummaries(record.id),
+                recipients = listOf(defaultRecipientProfile()),
+                selectedRecipientId = "self",
+            )
+        }
+        loadRecipients()
+    }
+
+    private fun createSessionRecord(): SessionRecord {
+        sessionCounter += 1
+        val record = SessionRecord(
+            id = "android-${System.currentTimeMillis()}-$sessionCounter",
+            createdAtMillis = System.currentTimeMillis(),
+            messages = initialSessionMessages(),
+        )
+        sessionRecords[record.id] = record
+        return record
+    }
+
+    /** 把当前 UI 消息列表写回对应会话记录，防止切换时丢消息。 */
+    private fun archiveCurrentSession() {
+        val snapshot = state.value
+        sessionRecords[snapshot.conversationId]?.messages = snapshot.messages
+    }
+
+    /** 只读取会话记录生成摘要；调用前需先 archiveCurrentSession() 保证记录是最新的。 */
+    private fun buildSessionSummaries(currentSessionId: String): List<ChatSessionSummary> {
+        return sessionRecords.values
+            .map { record ->
+                ChatSessionSummary(
+                    id = record.id,
+                    title = sessionTitle(record.messages),
+                    createdAtMillis = record.createdAtMillis,
+                    messageCount = record.messages.count { it.role == Role.User && it.content.isNotBlank() },
+                    isCurrent = record.id == currentSessionId,
+                )
+            }
+            .sortedByDescending { it.createdAtMillis }
+    }
+
+    private fun sessionTitle(messages: List<ChatMessage>): String {
+        val firstUserMessage = messages.firstOrNull { it.role == Role.User && it.content.isNotBlank() }
+            ?: return "新会话"
+        val text = firstUserMessage.content.trim().replace("\n", " ")
+        return if (text.length <= 14) text else text.take(14) + "…"
+    }
+
+    /** 先把当前消息写回记录，再刷新会话摘要（标题随首条用户消息变化）。 */
+    private fun refreshSessionSummaries() {
+        archiveCurrentSession()
+        _state.update { it.copy(sessions = buildSessionSummaries(it.conversationId)) }
     }
 
     fun updateInput(value: String) {
@@ -93,9 +251,15 @@ class ChatViewModel(
             )
         }
 
+        refreshSessionSummaries()
+
         viewModelScope.launch {
             try {
-                val uploaded = client.uploadImage(localImageFile)
+                val uploaded = client.uploadImage(
+                    imageFile = localImageFile,
+                    userId = state.value.userId,
+                    conversationId = state.value.conversationId,
+                )
                 val uploadedImage = ChatImage(
                     localUri = localPreviewUri,
                     previewUrl = uploaded.previewUrl,
@@ -112,6 +276,8 @@ class ChatViewModel(
                     history = history,
                     recipientId = state.value.selectedRecipientId,
                     images = listOf(uploadedImage),
+                    userId = state.value.userId,
+                    conversationId = state.value.conversationId,
                     onEvent = { event ->
                         when (event) {
                             is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
@@ -177,6 +343,7 @@ class ChatViewModel(
                     products = assistantMessage.products,
                     history = history,
                     turnId = messageId,
+                    conversationId = snapshot.conversationId,
                 )
             }.onSuccess {
                 _state.update { current ->
@@ -216,7 +383,10 @@ class ChatViewModel(
 
         viewModelScope.launch {
             try {
-                val result = client.transcribeAudio(audioFile)
+                val result = client.transcribeAudio(
+                    audioFile = audioFile,
+                    conversationId = state.value.conversationId,
+                )
                 _state.update { current ->
                     if (result.ok && result.text.isNotBlank()) {
                         current.copy(
@@ -266,11 +436,15 @@ class ChatViewModel(
             )
         }
 
+        refreshSessionSummaries()
+
         viewModelScope.launch {
             client.streamChat(
                 message = message,
                 history = history,
                 recipientId = state.value.selectedRecipientId,
+                userId = state.value.userId,
+                conversationId = state.value.conversationId,
                 onEvent = { event ->
                     when (event) {
                         is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
@@ -287,11 +461,14 @@ class ChatViewModel(
     }
 
     fun loadRecipients() {
+        // 记录发起请求时的 user_id；若返回前身份已切换，丢弃旧响应防止串数据
+        val requestUserId = state.value.userId
         _state.update { it.copy(recipientsLoading = true, recipientError = null) }
         viewModelScope.launch {
             runCatching {
-                client.getRecipients(defaultUserId)
+                client.getRecipients(requestUserId)
             }.onSuccess { response ->
+                if (state.value.userId != requestUserId) return@launch
                 val normalizedRecipients = normalizeRecipientProfiles(response.recipients)
                 _state.update { current ->
                     current.copy(
@@ -302,6 +479,7 @@ class ChatViewModel(
                     )
                 }
             }.onFailure { error ->
+                if (state.value.userId != requestUserId) return@launch
                 val fallback = normalizeRecipientProfiles(_state.value.recipients)
                 _state.update { current ->
                     current.copy(
@@ -330,7 +508,7 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             runCatching {
-                client.putSelectedRecipient(userId = defaultUserId, selectedRecipientId = nextRecipientId)
+                client.putSelectedRecipient(userId = state.value.userId, selectedRecipientId = nextRecipientId)
             }.onSuccess { response ->
                 val normalized = normalizeRecipientProfiles(response.recipients)
                 _state.update { current ->
@@ -365,7 +543,7 @@ class ChatViewModel(
         viewModelScope.launch {
             runCatching {
                 client.putRecipients(
-                    userId = defaultUserId,
+                    userId = state.value.userId,
                     recipients = normalizedRecipients,
                     selectedRecipientId = normalizedSelection,
                 )
@@ -461,6 +639,8 @@ class ChatViewModel(
                 messages = messages,
             )
         }
+        // 一轮结束后回写会话记录并刷新会话列表摘要
+        refreshSessionSummaries()
     }
 
     private fun appendToken(token: String) {
@@ -562,4 +742,12 @@ private fun defaultRecipientProfile() = RecipientProfile(
     recipientId = "self",
     displayName = "自己",
     relationship = "self",
+)
+
+/** 每个新会话的开场白（不计入发给后端的 history，发送时会 drop(1)）。 */
+internal fun initialSessionMessages(): List<ChatMessage> = listOf(
+    ChatMessage(
+        role = Role.Assistant,
+        content = "你好，我是你的导购小助手。你可以告诉我想买什么、预算、使用场景和不想踩的雷；我会先查商品资料，再帮你筛选、对比和解释推荐依据。",
+    )
 )
