@@ -1,8 +1,33 @@
 # ByteDance RAG Shopping Agent
 
-字节跳动 AI 全栈挑战赛项目：基于 RAG 的多模态电商智能导购 AI Agent。
+Evidence-bound Android RAG shopping agent with structured product cards, constraint-aware retrieval, and grounded generation guardrails.
 
-当前版本聚焦 **原生移动端 RAG 导购闭环 + 证据约束生成**：Android Kotlin 原生 App 支持文字、图片和语音需求输入，FastAPI 后端解析意图并检索商品，Doubao / Ark 生成 evidence-bound 导购回复，Android 端展示临时响应气泡、流式回答、商品卡片、图片、详情弹窗、反馈和 TTS 播报。
+这是一个从字节跳动 AI 全栈挑战赛沉淀出来的移动端 RAG Agent 项目。项目重点不是让 LLM 自由编写商品事实，而是把用户需求解析成预算、类目、反选、多轮继承等结构化约束，从本地商品库检索候选商品，再让模型在证据范围内生成导购回复。
+
+## Open-source snapshot
+
+- **Mobile-first experience**：Android Kotlin + Jetpack Compose 原生 App，支持文字、图片和语音需求输入，展示临时响应气泡、流式回答、商品卡片、图片、详情弹窗、反馈和 TTS 播报。
+- **Constraint-aware RAG**：FastAPI 后端将 query 转成结构化检索计划，结合 hard filters、keyword/facet、Chroma vector retrieval、metadata filter、light graph signals 和 `RetrievalTrace` 做可解释召回与排序。
+- **Grounded generation**：商品卡片、价格、图片和详情来自本地商品数据；LLM 负责导购表达，生成后 guardrail 会拦截编造价格、库存、优惠、下单承诺和无证据的绝对断言。
+- **Evaluation-first workflow**：项目区分 `real API`、`mock`、`retrieval-only` 和 `safe fallback` 结果，避免把离线结构验证误写成真实模型生成质量。
+
+## 5-minute route
+
+1. Start the FastAPI backend and build the local Chroma product index.
+2. Run the Android app with `adb reverse tcp:8000 tcp:8000`.
+3. Try these three prompts:
+   - `我是油皮，想要200元以内通勤防晒`
+   - `敏感肌，最近屏障不稳定，想找修护面霜，不要酒精味太重或者刺激感强的产品`
+   - `我要去三亚度假，帮我搭一套防晒`
+4. Check the returned product cards, detail modal, stream events, and debug trace.
+5. Read [docs/11_evaluation_report.md](docs/11_evaluation_report.md) with the result labels in mind: `real API` proves live model behavior, `mock` and `retrieval-only` prove local structure and retrieval paths.
+
+## Current boundaries
+
+- Image input is text-first image understanding that feeds the existing RAG flow; it is not image-vector search or visual same-item retrieval yet.
+- Local identity, recipient context, and sessions are demo-level local state, not a production account system.
+- The project does not implement real payment, inventory, or order fulfillment.
+- Demo-quality generation claims should be backed by `MOCK_LLM=false` real API evidence; mock / retrieval-only results are labeled as auxiliary checks.
 
 ## 当前完成能力
 
