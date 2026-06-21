@@ -18,6 +18,13 @@ server/.venv/
 # 课题原始材料（PDF 内嵌共用 APIKey，禁止入 Git；脱敏后的 md 版本保留）
 docs/requirement/*.pdf
 
+# Local retrospective / career notes
+docs/40_rag_project_retrospective_working_notes.md
+docs/41_rag_defense_scripts_and_qa.md
+docs/42_rag_personal_growth_retrospective.md
+docs/43_ai_collaboration_project_guardrails.md
+docs/44_rag_career_exploration_retrospective.md
+
 # RAG local artifacts
 data/indexes/
 data/tmp/
