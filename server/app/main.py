@@ -28,11 +28,14 @@ from fastapi.staticfiles import StaticFiles
 
 from app.asr_routes import router as asr_router
 from app.config import get_settings
+from app.constraint_state import ConstraintOverrideStore, constraint_chips_from_trace
 from app.data_loader import load_enriched_products, load_raw_products
 from app.feedback import save_feedback
 from app.llm import stream_answer
 from app.models import (
     AnswerDirective,
+    ConstraintActionRequest,
+    ConstraintActionResponse,
     ChatRequest,
     ConstraintTrace,
     FeedbackRequest,
@@ -53,6 +56,7 @@ from app.models import (
 from app.planner import build_planned_retrieval_message
 from app.retrieval import retrieve
 from app.user_memory import (
+    DEFAULT_MEMORY_USER_ID,
     DisabledMemoryProvider,
     MEMORY_PROVIDER_DISABLED,
     build_memory_augmented_request,
@@ -69,6 +73,7 @@ settings = get_settings()
 raw_products = load_raw_products(settings.raw_data_dir)
 enriched_products = load_enriched_products(settings.enriched_data_dir, raw_products)
 memory_provider = get_memory_provider(settings)
+constraint_override_store = ConstraintOverrideStore()
 
 app = FastAPI(title="ByteDance RAG Shopping Agent")
 app.add_middleware(
@@ -110,6 +115,8 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
         interaction_prefs = None
         memory_profile = None
         resolved_user_id = resolve_user_id(request)
+        override_snapshot = constraint_override_store.snapshot(resolved_user_id, request.conversation_id)
+        request_with_overrides = request.model_copy(update={"constraint_overrides": override_snapshot})
 
         def mark_stage(name: str) -> None:
             stage_timings.setdefault(name, int((time.perf_counter() - started_at) * 1000))
@@ -117,9 +124,9 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
         async def build_retrieval_context() -> tuple[Any, str, Any, AnswerDirective | None]:
             nonlocal memory_profile, memory_trace, interaction_prefs
             memory_profile = memory_provider.get_profile(resolved_user_id)
-            selected_recipient = resolve_recipient_profile(memory_profile, request.recipient_id)
+            selected_recipient = resolve_recipient_profile(memory_profile, request_with_overrides.recipient_id)
             retrieval_request, _, applied_constraints, applied_short_term_signals = build_memory_augmented_request(
-                request,
+                request_with_overrides,
                 memory_profile,
                 recipient_profile=selected_recipient,
             )
@@ -145,9 +152,10 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                 index_dir=settings.index_dir,
                 memory_profile=memory_profile,
                 recipient_profile=selected_recipient,
+                constraint_overrides=override_snapshot,
             )
             _attach_conversation_trace(result_inner.trace, retrieval_build_inner.trace)
-            answer_directive_inner = _build_answer_directive(request, retrieval_build_inner.trace, result_inner.cards)
+            answer_directive_inner = _build_answer_directive(request_with_overrides, retrieval_build_inner.trace, result_inner.cards)
             if answer_directive_inner:
                 result_inner.cards = _ordered_cards(result_inner.cards, answer_directive_inner.target_product_ids)
             mark_stage("retrieval_complete_ms")
@@ -170,6 +178,15 @@ async def chat_stream(request: ChatRequest) -> StreamingResponse:
                     yield _event("quick_reply", quick_reply)
                     quick_reply_sent = True
             retrieval_build, retrieval_message, result, answer_directive = await retrieval_task
+            constraint_chips = constraint_chips_from_trace(result.trace.constraint_trace if result else ConstraintTrace())
+            mark_stage("constraints_sent_ms")
+            yield _event(
+                "constraints",
+                {
+                    "trace_id": trace_id,
+                    "constraints": [chip.model_dump(mode="json") for chip in constraint_chips],
+                },
+            )
             if result.clarification_question:
                 quick_reply = _quick_reply_payload(
                     trace_id=trace_id,
@@ -272,10 +289,12 @@ async def debug_retrieve(request: ChatRequest) -> dict:
     trace_id = new_trace_id()
     started_at = time.perf_counter()
     resolved_user_id = resolve_user_id(request)
+    override_snapshot = constraint_override_store.snapshot(resolved_user_id, request.conversation_id)
+    request_with_overrides = request.model_copy(update={"constraint_overrides": override_snapshot})
     memory_profile = memory_provider.get_profile(resolved_user_id)
-    resolved_recipient = resolve_recipient_profile(memory_profile, request.recipient_id)
+    resolved_recipient = resolve_recipient_profile(memory_profile, request_with_overrides.recipient_id)
     retrieval_request, _, applied_constraints, applied_short_term_signals = build_memory_augmented_request(
-        request,
+        request_with_overrides,
         memory_profile,
         recipient_profile=resolved_recipient,
     )
@@ -299,9 +318,10 @@ async def debug_retrieve(request: ChatRequest) -> dict:
         index_dir=settings.index_dir,
         memory_profile=memory_profile,
         recipient_profile=resolved_recipient,
+        constraint_overrides=override_snapshot,
     )
     _attach_conversation_trace(result.trace, retrieval_build.trace)
-    answer_directive = _build_answer_directive(request, retrieval_build.trace, result.cards)
+    answer_directive = _build_answer_directive(request_with_overrides, retrieval_build.trace, result.cards)
     if answer_directive:
         result.cards = _ordered_cards(result.cards, answer_directive.target_product_ids)
     _write_runtime_trace_safely(
@@ -327,10 +347,22 @@ async def debug_retrieve(request: ChatRequest) -> dict:
         "retrieval_message": retrieval_message,
         "conversation_state": retrieval_build.trace,
         "products": [card.model_dump() for card in result.cards],
+        "constraints": [chip.model_dump(mode="json") for chip in constraint_chips_from_trace(result.trace.constraint_trace)],
         "answer_directive": answer_directive.model_dump() if answer_directive else None,
         "clarification_question": result.clarification_question,
         "trace": result.trace.model_dump(),
     }
+
+
+@app.post("/api/conversations/{conversation_id}/constraint-actions", response_model=ConstraintActionResponse)
+def apply_constraint_action(conversation_id: str, request: ConstraintActionRequest) -> ConstraintActionResponse:
+    user_id = (request.user_id or DEFAULT_MEMORY_USER_ID).strip() or DEFAULT_MEMORY_USER_ID
+    snapshot = constraint_override_store.remove(user_id, conversation_id, request.constraint_id)
+    return ConstraintActionResponse(
+        ok=True,
+        conversation_id=conversation_id,
+        removed_constraint_ids=snapshot.removed_constraint_ids,
+    )
 
 
 @app.post("/api/feedback", response_model=FeedbackResponse)
@@ -687,10 +719,68 @@ def _settings_trace_snapshot() -> dict[str, Any]:
 def _attach_conversation_trace(retrieval_trace, conversation_trace: dict) -> None:
     constraint_trace = conversation_trace.get("constraint_trace")
     if constraint_trace:
-        retrieval_trace.constraint_trace = ConstraintTrace(**constraint_trace)
+        retrieval_trace.constraint_trace = ConstraintTrace(
+            **_merge_constraint_traces(
+                retrieval_trace.constraint_trace.model_dump(mode="json"),
+                constraint_trace,
+            )
+        )
     planner_trace = conversation_trace.get("planner_trace")
     if planner_trace:
         retrieval_trace.planner_trace = PlannerTrace(**planner_trace)
+
+
+def _merge_constraint_traces(retrieval_trace: dict[str, object], conversation_trace: dict[str, object]) -> dict[str, object]:
+    return {
+        "current_turn": conversation_trace.get("current_turn", {}),
+        "inherited": conversation_trace.get("inherited", {}),
+        "relaxed": _unique_strings([
+            *_list(conversation_trace.get("relaxed")),
+            *_list(retrieval_trace.get("relaxed")),
+        ]),
+        "effective": _merge_constraint_dicts(
+            _dict(conversation_trace.get("effective")),
+            _dict(retrieval_trace.get("effective")),
+        ),
+        "actions": _unique_strings([
+            *_list(conversation_trace.get("actions")),
+            *_list(retrieval_trace.get("actions")),
+        ]),
+    }
+
+
+def _merge_constraint_dicts(primary: dict[str, object], secondary: dict[str, object]) -> dict[str, object]:
+    merged = dict(primary)
+    for key, value in secondary.items():
+        if value in (None, [], {}):
+            continue
+        existing = merged.get(key)
+        if isinstance(existing, list) and isinstance(value, list):
+            merged[key] = _unique_strings([*existing, *value])
+        elif isinstance(existing, dict) and isinstance(value, dict):
+            merged[key] = _merge_constraint_dicts(existing, value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _dict(value: object) -> dict[str, object]:
+    return value if isinstance(value, dict) else {}
+
+
+def _list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item) for item in value if str(item)]
+
+
+def _unique_strings(values: list[object]) -> list[str]:
+    output: list[str] = []
+    for value in values:
+        text = str(value).strip()
+        if text and text not in output:
+            output.append(text)
+    return output
 
 
 def _build_answer_directive(

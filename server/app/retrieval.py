@@ -26,9 +26,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
+from app.constraint_state import filter_removed_terms, is_constraint_removed
 from app.data_loader import CATEGORY_TO_CANONICAL, product_search_text
 from app.embeddings import sentence_model
 from app.models import (
+    ConstraintOverrideSnapshot,
     ConstraintTrace,
     FilteredProduct,
     GuardrailChecks,
@@ -699,6 +701,7 @@ def retrieve(
     index_dir: Path | None = None,
     memory_profile: UserMemoryProfile | None = None,
     recipient_profile: RecipientProfile | None = None,
+    constraint_overrides: ConstraintOverrideSnapshot | None = None,
 ) -> RetrievalResult:
     # RAG 主入口：确定性约束优先于语义召回。
     # 预算、类目、明确排除项和必要功效会先作为硬过滤生效，
@@ -711,6 +714,7 @@ def retrieve(
             memory_profile,
             now=datetime.now(UTC),
             recipient_profile=recipient_profile,
+            constraint_overrides=constraint_overrides,
         )
 
     _apply_catalog_product_references(intent, query, products)
@@ -924,24 +928,28 @@ def _apply_memory_profile(
     memory_profile: UserMemoryProfile,
     now: datetime,
     recipient_profile: RecipientProfile | None = None,
+    constraint_overrides: ConstraintOverrideSnapshot | None = None,
 ) -> tuple[QueryIntent, list[str]]:
     applied: list[str] = []
     recipient = recipient_profile or _recipient_for_profile(memory_profile)
     constraints = recipient.constraints
-    if constraints.budget_max is not None:
+    if constraints.budget_max is not None and not is_constraint_removed(constraint_overrides, "budget_max", constraints.budget_max):
         current_budget = intent.universal_constraints.budget_max
         if current_budget is None or constraints.budget_max < current_budget:
             intent.universal_constraints.budget_max = constraints.budget_max
             applied.append(f"budget_max:{constraints.budget_max:g}")
-    avoid_terms = _unique_lower_stripped(constraints.avoid_terms + constraints.allergies)
+    avoid_terms = _unique_lower_stripped(
+        filter_removed_terms(constraints.avoid_terms + constraints.allergies, constraint_overrides, "exclude_terms")
+    )
     if avoid_terms:
         for term in avoid_terms:
             if term not in intent.exclude_terms:
                 intent.exclude_terms.append(term)
         applied.append(f"avoid_terms:{','.join(dict.fromkeys(avoid_terms))}")
 
-    if constraints.brand_exclude:
-        cleaned_brand_exclude = _unique_lower_stripped(constraints.brand_exclude)
+    brand_exclude = filter_removed_terms(constraints.brand_exclude, constraint_overrides, "brand_exclude")
+    if brand_exclude:
+        cleaned_brand_exclude = _unique_lower_stripped(brand_exclude)
         if cleaned_brand_exclude:
             intent.universal_constraints.brand_exclude = _unique_lower_stripped(
                 intent.universal_constraints.brand_exclude + cleaned_brand_exclude
@@ -960,7 +968,11 @@ def _apply_memory_profile(
             applied.append(f"recent_interest:{interest['key']}:{interest['weight']:.2f}")
 
     for avoidance in _active_memory_snapshots(memory_profile.short_term_snapshots.recent_avoidance, now=now):
-        if avoidance["key"] and avoidance["key"] not in intent.exclude_terms:
+        if (
+            avoidance["key"]
+            and avoidance["key"] not in intent.exclude_terms
+            and not is_constraint_removed(constraint_overrides, "exclude_terms", avoidance["key"])
+        ):
             intent.exclude_terms.append(avoidance["key"])
             applied.append(f"recent_avoidance:{avoidance['key']}:{avoidance['weight']:.2f}")
 
@@ -1097,6 +1109,8 @@ def _constraints_from_intent(intent: QueryIntent) -> dict[str, object]:
         constraints["referenced_product_ids"] = intent.referenced_product_ids
     if intent.universal_constraints.budget_max is not None:
         constraints["budget_max"] = intent.universal_constraints.budget_max
+    if intent.universal_constraints.brand_exclude:
+        constraints["brand_exclude"] = intent.universal_constraints.brand_exclude
     if intent.facets:
         constraints["facets"] = intent.facets
     if intent.exclude_terms:

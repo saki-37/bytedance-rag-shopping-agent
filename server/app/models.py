@@ -20,6 +20,10 @@ class ChatImageRef(BaseModel):
     image_plan: dict[str, Any] = Field(default_factory=dict)
 
 
+class ConstraintOverrideSnapshot(BaseModel):
+    removed_constraint_ids: list[str] = Field(default_factory=list)
+
+
 class ChatRequest(BaseModel):
     message: str = ""
     images: list[ChatImageRef] = Field(default_factory=list)
@@ -27,6 +31,7 @@ class ChatRequest(BaseModel):
     recipient_id: str | None = None
     conversation_id: str | None = None
     history: list[ChatMessage] = Field(default_factory=list)
+    constraint_overrides: ConstraintOverrideSnapshot = Field(default_factory=ConstraintOverrideSnapshot)
 
     @model_validator(mode="after")
     def require_text_or_image(self) -> "ChatRequest":
@@ -278,6 +283,29 @@ class ConstraintTrace(BaseModel):
     relaxed: list[str] = Field(default_factory=list)
     effective: dict[str, object] = Field(default_factory=dict)
     actions: list[str] = Field(default_factory=list)
+
+
+class ConstraintChip(BaseModel):
+    id: str
+    type: Literal["budget_max", "exclude_terms", "brand_exclude"]
+    label: str
+    value: Any
+    source: Literal["current_turn", "inherited", "memory", "effective"] = "effective"
+    scope: Literal["turn", "session", "profile"] = "session"
+    removable: bool = True
+
+
+class ConstraintActionRequest(BaseModel):
+    user_id: str | None = None
+    recipient_id: str | None = None
+    action: Literal["remove"] = "remove"
+    constraint_id: str
+
+
+class ConstraintActionResponse(BaseModel):
+    ok: bool = True
+    conversation_id: str
+    removed_constraint_ids: list[str] = Field(default_factory=list)
 
 
 class SafetyTrace(BaseModel):

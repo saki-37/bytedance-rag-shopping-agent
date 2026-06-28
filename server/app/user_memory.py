@@ -21,8 +21,10 @@ from pathlib import Path
 from typing import Protocol
 
 from app.config import Settings
+from app.constraint_state import filter_removed_terms, is_constraint_removed
 from app.models import (
     ChatRequest,
+    ConstraintOverrideSnapshot,
     MemorySearchHit,
     MemorySnapshot,
     MemorySourceEvent,
@@ -157,14 +159,24 @@ def build_memory_augmented_request(
 ) -> tuple[ChatRequest, list[str], dict[str, object], list[str]]:
     now = datetime.now(UTC)
     resolved_recipient = recipient_profile or resolve_recipient_profile(memory_profile, request.recipient_id)
-    context_lines = memory_context_lines(memory_profile, recipient_profile=resolved_recipient, now=now)
+    overrides = request.constraint_overrides
+    context_lines = memory_context_lines(
+        memory_profile,
+        recipient_profile=resolved_recipient,
+        now=now,
+        constraint_overrides=overrides,
+    )
     if not context_lines:
         return request, [], {}, []
 
     prefix = "历史记忆约束（不直接向用户暴露）：\n" + "\n".join(context_lines) + "\n\n"
     augmented_message = f"{prefix}{request.message}"
-    applied_constraints = _collect_applied_constraints(memory_profile, recipient_profile=resolved_recipient)
-    applied_short_term_signals = _collect_applied_short_term_signals(memory_profile, now=now)
+    applied_constraints = _collect_applied_constraints(
+        memory_profile,
+        recipient_profile=resolved_recipient,
+        constraint_overrides=overrides,
+    )
+    applied_short_term_signals = _collect_applied_short_term_signals(memory_profile, now=now, constraint_overrides=overrides)
     request = request.model_copy(update={"recipient_id": resolved_recipient.recipient_id})
     return (
         request.model_copy(update={"message": augmented_message}),
@@ -178,17 +190,20 @@ def memory_context_lines(
     memory_profile: UserMemoryProfile,
     now: datetime | None = None,
     recipient_profile: RecipientProfile | None = None,
+    constraint_overrides: ConstraintOverrideSnapshot | None = None,
 ) -> list[str]:
     reference_time = now or datetime.now(UTC)
     recipient = recipient_profile or resolve_recipient_profile(memory_profile)
     lines: list[str] = []
     constraints = recipient.constraints
-    if constraints.budget_max is not None:
+    if constraints.budget_max is not None and not is_constraint_removed(constraint_overrides, "budget_max", constraints.budget_max):
         lines.append(f"- 硬约束：预算上限 {constraints.budget_max:g} 元")
-    if constraints.avoid_terms:
-        lines.append(f"- 硬约束：避免关键词 { '、'.join(constraints.avoid_terms)}")
-    if constraints.brand_exclude:
-        lines.append(f"- 硬约束：排除品牌 { '、'.join(constraints.brand_exclude)}")
+    avoid_terms = filter_removed_terms(constraints.avoid_terms + constraints.allergies, constraint_overrides, "exclude_terms")
+    if avoid_terms:
+        lines.append(f"- 硬约束：避免关键词 { '、'.join(avoid_terms)}")
+    brand_exclude = filter_removed_terms(constraints.brand_exclude, constraint_overrides, "brand_exclude")
+    if brand_exclude:
+        lines.append(f"- 硬约束：排除品牌 { '、'.join(brand_exclude)}")
     active_interests = _active_memory_snapshots(memory_profile.short_term_snapshots.recent_interests, now=reference_time)
     if active_interests:
         items = [snapshot.key for snapshot in active_interests[:3] if snapshot.key]
@@ -196,7 +211,11 @@ def memory_context_lines(
             lines.append(f"- 短期兴趣：{ '、'.join(items)}")
     active_avoidance = _active_memory_snapshots(memory_profile.short_term_snapshots.recent_avoidance, now=reference_time)
     if active_avoidance:
-        items = [snapshot.key for snapshot in active_avoidance[:3] if snapshot.key]
+        items = [
+            snapshot.key
+            for snapshot in active_avoidance[:3]
+            if snapshot.key and not is_constraint_removed(constraint_overrides, "exclude_terms", snapshot.key)
+        ]
         if items:
             lines.append(f"- 最近回避：{ '、'.join(items)}")
     if memory_profile.interaction_preferences.answer_length != "normal":
@@ -220,6 +239,7 @@ def memory_context_lines(
 def _collect_applied_short_term_signals(
     memory_profile: UserMemoryProfile,
     now: datetime | None = None,
+    constraint_overrides: ConstraintOverrideSnapshot | None = None,
 ) -> list[str]:
     reference_time = now or datetime.now(UTC)
     signals: list[str] = []
@@ -227,7 +247,7 @@ def _collect_applied_short_term_signals(
         if snapshot.key:
             signals.append(f"recent_interest:{snapshot.key}:{snapshot.weight:.2f}")
     for snapshot in _active_memory_snapshots(memory_profile.short_term_snapshots.recent_avoidance, now=reference_time):
-        if snapshot.key:
+        if snapshot.key and not is_constraint_removed(constraint_overrides, "exclude_terms", snapshot.key):
             signals.append(f"recent_avoidance:{snapshot.key}:{snapshot.weight:.2f}")
     return signals
 
@@ -261,15 +281,22 @@ def build_memory_trace(
 def _collect_applied_constraints(
     memory_profile: UserMemoryProfile,
     recipient_profile: RecipientProfile | None = None,
+    constraint_overrides: ConstraintOverrideSnapshot | None = None,
 ) -> dict[str, object]:
     recipient = recipient_profile or resolve_recipient_profile(memory_profile)
     constraints = recipient.constraints
+    allergies = filter_removed_terms(constraints.allergies, constraint_overrides, "exclude_terms")
+    avoid_terms = filter_removed_terms(constraints.avoid_terms, constraint_overrides, "exclude_terms")
+    brand_exclude = filter_removed_terms(constraints.brand_exclude, constraint_overrides, "brand_exclude")
+    budget_max = constraints.budget_max
+    if budget_max is not None and is_constraint_removed(constraint_overrides, "budget_max", budget_max):
+        budget_max = None
     return {
         "constraints": {
-            "allergies": constraints.allergies,
-            "avoid_terms": constraints.avoid_terms,
-            "brand_exclude": constraints.brand_exclude,
-            "budget_max": constraints.budget_max,
+            "allergies": allergies,
+            "avoid_terms": avoid_terms,
+            "brand_exclude": brand_exclude,
+            "budget_max": budget_max,
             "accessibility_needs": constraints.accessibility_needs,
         },
         "long_term_preferences": {

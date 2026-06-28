@@ -22,6 +22,7 @@ sealed interface StreamEvent {
     data class Status(val value: String) : StreamEvent
     data class Token(val value: String) : StreamEvent
     data class Products(val value: List<ProductCard>) : StreamEvent
+    data class Constraints(val value: List<ConstraintChip>) : StreamEvent
     data class QuickReply(val text: String, val ephemeral: Boolean, val source: String) : StreamEvent
     data object Done : StreamEvent
     data class Error(val message: String) : StreamEvent
@@ -262,6 +263,51 @@ class ShoppingAgentClient(
         }
     }
 
+    suspend fun removeConstraint(
+        conversationId: String,
+        constraintId: String,
+        userId: String = DEFAULT_USER_ID,
+        recipientId: String? = null,
+    ): List<String> {
+        return withContext(Dispatchers.IO) {
+            val encodedConversationId = encodeUserId(conversationId.ifBlank { DEFAULT_CONVERSATION_ID })
+            val requestPayload = JSONObject()
+                .put("user_id", userId.ifBlank { DEFAULT_USER_ID })
+                .put("action", "remove")
+                .put("constraint_id", constraintId)
+                .apply {
+                    if (!recipientId.isNullOrBlank()) {
+                        put("recipient_id", recipientId)
+                    }
+                }
+                .toString()
+            var lastError: IOException? = null
+            for (baseUrl in orderedBaseUrls()) {
+                val request = Request.Builder()
+                    .url("$baseUrl/api/conversations/$encodedConversationId/constraint-actions")
+                    .header("Connection", "close")
+                    .post(requestPayload.toRequestBody(jsonMediaType))
+                    .build()
+                try {
+                    okHttpClient.newCall(request).execute().use { response ->
+                        val body = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            val messageText = "HTTP ${response.code}"
+                            Log.w(TAG, "$messageText $body")
+                            throw IllegalStateException(messageText)
+                        }
+                        activeBaseUrl = baseUrl
+                        return@withContext parseStringList(JSONObject(body).optJSONArray("removed_constraint_ids"))
+                    }
+                } catch (exception: IOException) {
+                    Log.w(TAG, "Constraint action failed for $baseUrl", exception)
+                    lastError = exception
+                }
+            }
+            throw IllegalStateException(userFacingNetworkError(lastError))
+        }
+    }
+
     suspend fun submitFeedback(
         feedback: FeedbackType,
         userMessage: String,
@@ -412,6 +458,7 @@ class ShoppingAgentClient(
             "status" -> StreamEvent.Status(json.optString("status"))
             "token" -> StreamEvent.Token(json.optString("token"))
             "products" -> StreamEvent.Products(parseProducts(json.optJSONArray("products") ?: JSONArray()))
+            "constraints" -> StreamEvent.Constraints(parseConstraintChips(json.optJSONArray("constraints") ?: JSONArray()))
             "quick_reply" -> StreamEvent.QuickReply(
                 text = json.optString("text"),
                 ephemeral = json.optBoolean("ephemeral", true),
@@ -552,6 +599,25 @@ class ShoppingAgentClient(
                 )
             }
         }
+    }
+
+    private fun parseConstraintChips(array: JSONArray): List<ConstraintChip> {
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.getJSONObject(index)
+                add(
+                    ConstraintChip(
+                        id = item.optString("id"),
+                        type = item.optString("type"),
+                        label = item.optString("label"),
+                        value = item.opt("value")?.toString().orEmpty(),
+                        source = item.optString("source", "effective"),
+                        scope = item.optString("scope", "session"),
+                        removable = item.optBoolean("removable", true),
+                    )
+                )
+            }
+        }.filter { it.id.isNotBlank() && it.label.isNotBlank() }
     }
 
     private fun parseVariants(array: JSONArray?): List<ProductVariantCard> {

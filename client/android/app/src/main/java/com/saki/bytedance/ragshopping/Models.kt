@@ -62,6 +62,16 @@ data class ChatMessage(
     val id: String = UUID.randomUUID().toString(),
 )
 
+data class ConstraintChip(
+    val id: String,
+    val type: String,
+    val label: String,
+    val value: String,
+    val source: String = "effective",
+    val scope: String = "session",
+    val removable: Boolean = true,
+)
+
 data class AsrTranscriptionResult(
     val ok: Boolean,
     val text: String,

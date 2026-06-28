@@ -36,6 +36,8 @@ data class ChatUiState(
     val recipientsSaving: Boolean = false,
     val recipientError: String? = null,
     val messages: List<ChatMessage> = initialSessionMessages(),
+    val activeConstraintChips: List<ConstraintChip> = emptyList(),
+    val constraintStatusText: String? = null,
     val isLoading: Boolean = false,
     val statusText: String? = null,
     val isTranscribing: Boolean = false,
@@ -94,6 +96,8 @@ class ChatViewModel @JvmOverloads constructor(
                 conversationId = record.id,
                 messages = record.messages,
                 pendingProducts = emptyList(),
+                activeConstraintChips = emptyList(),
+                constraintStatusText = null,
                 statusText = null,
                 asrStatusText = null,
                 sessions = buildSessionSummaries(record.id),
@@ -115,6 +119,8 @@ class ChatViewModel @JvmOverloads constructor(
                 conversationId = target.id,
                 messages = target.messages,
                 pendingProducts = emptyList(),
+                activeConstraintChips = emptyList(),
+                constraintStatusText = null,
                 statusText = null,
                 asrStatusText = null,
                 sessions = buildSessionSummaries(target.id),
@@ -146,6 +152,8 @@ class ChatViewModel @JvmOverloads constructor(
                 conversationId = record.id,
                 messages = record.messages,
                 pendingProducts = emptyList(),
+                activeConstraintChips = emptyList(),
+                constraintStatusText = null,
                 statusText = null,
                 asrStatusText = null,
                 sessions = buildSessionSummaries(record.id),
@@ -245,6 +253,7 @@ class ChatViewModel @JvmOverloads constructor(
                 input = "",
                 isLoading = true,
                 statusText = null,
+                constraintStatusText = null,
                 asrStatusText = null,
                 pendingProducts = emptyList(),
                 messages = it.messages + ChatMessage(Role.User, fallbackMessage, images = listOf(localImage)) + ChatMessage(Role.Assistant, ""),
@@ -283,6 +292,7 @@ class ChatViewModel @JvmOverloads constructor(
                             is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
                             is StreamEvent.Status -> appendStatus(event.value)
                             is StreamEvent.Products -> rememberProducts(event.value)
+                            is StreamEvent.Constraints -> updateConstraintChips(event.value)
                             is StreamEvent.QuickReply -> appendQuickReply(event.text, event.ephemeral)
                             is StreamEvent.Token -> appendToken(event.value)
                             is StreamEvent.Error -> appendError(event.message)
@@ -414,6 +424,36 @@ class ChatViewModel @JvmOverloads constructor(
         }
     }
 
+    fun removeConstraint(chip: ConstraintChip) {
+        if (!chip.removable) return
+        val snapshot = state.value
+        val previousChips = snapshot.activeConstraintChips
+        val nextChips = previousChips.filterNot { it.id == chip.id }
+        _state.update {
+            it.copy(
+                activeConstraintChips = nextChips,
+                constraintStatusText = "已移除条件：${chip.label}",
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                client.removeConstraint(
+                    conversationId = snapshot.conversationId,
+                    constraintId = chip.id,
+                    userId = snapshot.userId,
+                    recipientId = snapshot.selectedRecipientId,
+                )
+            }.onFailure { error ->
+                _state.update {
+                    it.copy(
+                        activeConstraintChips = previousChips,
+                        constraintStatusText = "条件更新失败：${error.localizedMessage ?: "请稍后重试"}",
+                    )
+                }
+            }
+        }
+    }
+
     private fun sendMessage(message: String) {
         if (message.isEmpty() || state.value.isLoading) return
         cancelQuickReplyTyping()
@@ -430,6 +470,7 @@ class ChatViewModel @JvmOverloads constructor(
                 input = "",
                 isLoading = true,
                 statusText = null,
+                constraintStatusText = null,
                 asrStatusText = null,
                 pendingProducts = emptyList(),
                 messages = it.messages + ChatMessage(Role.User, message) + ChatMessage(Role.Assistant, ""),
@@ -450,6 +491,7 @@ class ChatViewModel @JvmOverloads constructor(
                         is StreamEvent.Connection -> _state.update { it.copy(backendBaseUrl = event.baseUrl) }
                         is StreamEvent.Status -> appendStatus(event.value)
                         is StreamEvent.Products -> rememberProducts(event.value)
+                        is StreamEvent.Constraints -> updateConstraintChips(event.value)
                         is StreamEvent.QuickReply -> appendQuickReply(event.text, event.ephemeral)
                         is StreamEvent.Token -> appendToken(event.value)
                         is StreamEvent.Error -> appendError(event.message)
@@ -618,6 +660,15 @@ class ChatViewModel @JvmOverloads constructor(
             current.copy(
                 pendingProducts = products,
                 messages = current.messages.mapLastAssistant { it.copy(products = products) },
+            )
+        }
+    }
+
+    private fun updateConstraintChips(chips: List<ConstraintChip>) {
+        _state.update {
+            it.copy(
+                activeConstraintChips = chips,
+                constraintStatusText = null,
             )
         }
     }

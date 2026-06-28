@@ -786,7 +786,9 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                         recipients = state.recipients,
                         selectedRecipientId = state.selectedRecipientId,
                         currentRecipientName = selectedRecipientName,
+                        activeConstraintChips = state.activeConstraintChips,
                         statusText = state.statusText,
+                        constraintStatusText = state.constraintStatusText,
                         asrStatusText = asrStatusDisplayText,
                         speechStatusText = speechHintText,
                         speechStatusIsError = speechHintText?.contains("失败") == true,
@@ -816,6 +818,7 @@ fun ShoppingAgentApp(viewModel: ChatViewModel = viewModel()) {
                         onAudioRecorded = viewModel::transcribeAudio,
                         onRecipientSelected = viewModel::selectRecipient,
                         onOpenRecipientManagement = { showRecipientManager = true },
+                        onConstraintRemove = viewModel::removeConstraint,
                     )
                 }
             }
@@ -3509,7 +3512,9 @@ private fun InputBar(
     recipients: List<RecipientProfile>,
     selectedRecipientId: String,
     currentRecipientName: String,
+    activeConstraintChips: List<ConstraintChip>,
     statusText: String?,
+    constraintStatusText: String?,
     asrStatusText: String?,
     speechStatusText: String?,
     speechStatusIsError: Boolean,
@@ -3522,6 +3527,7 @@ private fun InputBar(
     onAudioRecorded: (File) -> Unit,
     onRecipientSelected: (String) -> Unit,
     onOpenRecipientManagement: () -> Unit,
+    onConstraintRemove: (ConstraintChip) -> Unit,
 ) {
     val context = LocalContext.current
     var recordingSession by remember { mutableStateOf<VoiceRecordingSession?>(null) }
@@ -3665,6 +3671,7 @@ private fun InputBar(
         } else {
             asrStatusText?.let { add(InputStatusLine("asr:$it", it, it.startsWith("转写失败"))) }
             speechStatusText?.let { add(InputStatusLine("speech:$it", it, speechStatusIsError)) }
+            constraintStatusText?.let { add(InputStatusLine("constraint:$it", it, it.startsWith("条件更新失败"))) }
             attachmentStatusText?.let { add(InputStatusLine("attachment:$it", it, false)) }
         }
     }
@@ -3776,6 +3783,21 @@ private fun InputBar(
                                     }
                                 },
                             )
+                            if (activeConstraintChips.isNotEmpty()) {
+                                FlowRow(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    activeConstraintChips.forEach { chip ->
+                                        ConstraintInputChip(
+                                            chip = chip,
+                                            enabled = !isLoading && chip.removable,
+                                            onRemove = { onConstraintRemove(chip) },
+                                        )
+                                    }
+                                }
+                            }
                             if (inputStatusLines.isNotEmpty()) {
                                 Column(
                                     verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -4071,6 +4093,44 @@ private fun PendingInputImagePreview(
                 imageVector = TablerXIcon,
                 contentDescription = "移除图片",
                 tint = Ink,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConstraintInputChip(
+    chip: ConstraintChip,
+    enabled: Boolean,
+    onRemove: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .heightIn(min = 30.dp)
+            .background(AppGreenSoft.copy(alpha = 0.82f), RoundedCornerShape(999.dp))
+            .padding(start = 10.dp, end = 4.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = chip.label,
+            color = AccentGreenDark,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.labelMedium,
+        )
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(RoundedCornerShape(999.dp))
+                .clickable(enabled = enabled, onClick = onRemove),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = TablerXIcon,
+                contentDescription = "移除条件 ${chip.label}",
+                tint = AccentGreenDark.copy(alpha = if (enabled) 0.95f else 0.32f),
                 modifier = Modifier.size(14.dp),
             )
         }

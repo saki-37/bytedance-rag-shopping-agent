@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-from app.models import ChatRequest, QueryIntent
+from app.constraint_state import is_constraint_removed
+from app.models import ChatRequest, ConstraintOverrideSnapshot, QueryIntent
 from app.data_loader import load_raw_products
 from app.retrieval import CATEGORY_TO_RAW, FACET_LEXICON, RAW_TO_CATEGORY, category_exclusions, parse_query_intent
 
@@ -136,6 +137,7 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
             state = RuleConversationState()
             _merge_message(state, current_message, source="current")
             _apply_referenced_products(state, referenced_product_ids, source="current")
+            _apply_constraint_overrides_to_state(state, request.constraint_overrides)
             return RetrievalMessageBuildResult(
                 message=_format_merged_message(state=state, current_message=current_message),
                 applied=True,
@@ -176,6 +178,7 @@ def build_retrieval_message(request: ChatRequest) -> RetrievalMessageBuildResult
         _apply_referenced_products(state, referenced_product_ids, source="current")
     else:
         _inherit_active_product_context(state, request.history)
+    _apply_constraint_overrides_to_state(state, request.constraint_overrides)
 
     merged_message = _format_merged_message(
         state=state,
@@ -544,6 +547,40 @@ def _constraint_trace_from_state(state: RuleConversationState) -> dict:
     }
 
 
+def _apply_constraint_overrides_to_state(
+    state: RuleConversationState,
+    overrides: ConstraintOverrideSnapshot | None,
+) -> None:
+    if overrides is None or not overrides.removed_constraint_ids:
+        return
+    current_constraints = _constraints_from_actions([
+        action for action in state.actions if action.startswith("current:")
+    ])
+
+    current_budget = current_constraints.get("budget_max")
+    if (
+        state.budget_max is not None
+        and current_budget is None
+        and is_constraint_removed(overrides, "budget_max", state.budget_max)
+    ):
+        removed_budget = state.budget_max
+        state.budget_max = None
+        state.budget_relaxed = True
+        state.actions.append(f"override:remove_budget={removed_budget:g}")
+
+    current_exclusions = set(current_constraints.get("exclude_terms", []))
+    retained_exclusions: list[str] = []
+    removed_exclusions: list[str] = []
+    for term in state.exclude_terms:
+        if term in current_exclusions or not is_constraint_removed(overrides, "exclude_terms", term):
+            retained_exclusions.append(term)
+        else:
+            removed_exclusions.append(term)
+    if removed_exclusions:
+        state.exclude_terms = retained_exclusions
+        state.actions.append(f"override:remove_exclusions={','.join(removed_exclusions)}")
+
+
 def _constraints_from_intent(intent: QueryIntent) -> dict[str, object]:
     constraints: dict[str, object] = {}
     if intent.category_candidates:
@@ -552,6 +589,8 @@ def _constraints_from_intent(intent: QueryIntent) -> dict[str, object]:
         constraints["referenced_product_ids"] = intent.referenced_product_ids
     if intent.universal_constraints.budget_max is not None:
         constraints["budget_max"] = intent.universal_constraints.budget_max
+    if intent.universal_constraints.brand_exclude:
+        constraints["brand_exclude"] = intent.universal_constraints.brand_exclude
     if intent.facets:
         constraints["facets"] = intent.facets
     if intent.exclude_terms:
